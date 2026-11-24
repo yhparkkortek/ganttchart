@@ -257,8 +257,12 @@
                 //    ⚠️ 해석기는 js/59 `_dailyCatAssignee` 하나를 빌려 쓴다(두 벌이면 화면마다 다른 사람이 나온다).
                 pm: String((ctx.meta || {}).프로젝트담당자 || '').trim(),
                 // 👤 담당자 직접 지정(`row._담당자`)이 있으면 그 이름이 역할보다 먼저(js/04k setRowAssignee).
-                assignee: (row._담당자 && String(row._담당자).trim()) || roleOwner(cat, ctx.meta, ctx.members3),
+                // 📧 [2026-11-24] 그다음은 **상세내용**(`[요청][보낸이 → 받는이]` 줄) — 메일이 실제로 누구에게
+                //    일을 넘겼는지가 역할(HW·FW)→Summary 멤버보다 정확하다(사용자 지적: 검토요청 받은 사람이 아니라
+                //    HW 담당자가 나왔다). 못 찾으면 예전처럼 역할로.
+                assignee: (row._담당자 && String(row._담당자).trim()) || contentOwner(people, p) || roleOwner(cat, ctx.meta, ctx.members3),
                 manual: !!(row._담당자 && String(row._담당자).trim()),
+                fromContent: !(row._담당자 && String(row._담당자).trim()) && !!contentOwner(people, p),
                 project: ctx.project || '',
                 local: !!ctx.local,          // 열린 프로젝트의 행인가(#G 링크는 그때만 뜻이 있다)
                 status: (ci.status != null && ci.status !== -1) ? String(row[ci.status] || '').trim() : '',
@@ -270,6 +274,40 @@
         }
         return { facts: out, scanned: scanned };
     }
+
+    /**
+     * 상세내용에서 업무 담당자 — `[요청][보낸이 → 받는이]` 의 **받는이 중 사내 사람**.
+     * 받는이에 사내 사람이 없으면(우리가 고객에게 보낸 메일) **보낸이 중 사내 사람**.
+     * 사내 판정: 주소록 메일 주소에 `MAIL_ROUTING_SELF_ORG`(데이터, js/74) 단어가 있거나,
+     * 주소록에 없지만 한글 이름(2~4자)이면 사내로 본다. 영문/외부 주소는 담당자로 안 쓴다.
+     */
+    var _psSelfOrg = function () { return (window.MAIL_ROUTING_SELF_ORG || ['kortek', '코텍']).map(function (w) { return String(w).toLowerCase(); }); };
+    // 사람 이름이 아닌데 화살표 칸에 들어오는 말(데이터 — 늘면 여기 한 줄).
+    window.PS_OWNER_SKIP = window.PS_OWNER_SKIP || ['고객', '고객사', '업체', '협력사', '담당자', '팀원', '전원', '각위', '관계자', '수신자', '발신자'];
+    function isInternal(name) {
+        var n = String(name || '').trim(); if (!n) return false;
+        if (window.PS_OWNER_SKIP.indexOf(n) !== -1) return false;
+        var e = window._addrFindByName ? window._addrFindByName(n) : null;
+        if (e) {
+            var em = String(e.email || '').toLowerCase();
+            if (em) return _psSelfOrg().some(function (w) { return em.indexOf(w) !== -1; });
+            return /^[가-힣]{2,4}$/.test(n);
+        }
+        return /^[가-힣]{2,4}$/.test(n);
+    }
+    function cleanName(n) {
+        n = String(n || '').trim();
+        if (window._addrStripTitleSuffix) n = window._addrStripTitleSuffix(n);
+        return n.replace(/님$/, '').trim();
+    }
+    function contentOwner(people, p) {
+        var split = function (s) { return (window._addrSplitNames ? window._addrSplitNames(s) : String(s || '').split(',')).map(cleanName).filter(Boolean); };
+        var to = split((people && people.receiver) || (p && p.to)).filter(isInternal);
+        if (to.length) return uniq(to).join(', ');
+        var fr = split((people && people.sender) || (p && p.from)).filter(isInternal);
+        return fr.length ? uniq(fr).join(', ') : '';
+    }
+    window._psContentOwner = contentOwner;   // 하네스용
 
     /** 역할 → 그 프로젝트의 담당자 이름. 못 풀면 빈 값(=미지정, 거르지 않는다). */
     function roleOwner(cat, meta, members3) {
@@ -1121,13 +1159,15 @@
         }
         var meta = window.projectMeta || {}, m3 = (window.tabData && window.tabData.projectMembers3) || [];
         var manualNow = liveFacts(r).some(function (f) { return f.manual; });
-        var cur = (!manualNow && roles.length === 1) ? roles[0] : '';
+        // 📧 상세내용에서 나온 담당자면 역할 칸을 고른 채로 두지 않는다 — 그러면 "HW · 역할 담당자" 가 보여 틀려 보인다.
+        var contentNow = !manualNow && liveFacts(r).some(function (f) { return f.fromContent; });
+        var cur = (!manualNow && !contentNow && roles.length === 1) ? roles[0] : '';
         var opts = (window.WBS_DISCIPLINE_CATEGORIES || []).map(function (c) {
             var who = roleOwner(c, meta, m3);
             return '<option value="' + esc(c) + '"' + (c === cur ? ' selected' : '') + '>' + esc(c + (who ? ' · ' + who : '')) + '</option>';
         }).join('');
         // 첫 칸 — 직접 지정이면 "👤 이름", 역할이 여럿이면 그대로(고르면 전부 그 역할로 맞춘다).
-        if (cur === '') opts = '<option value="" selected>' + esc(manualNow ? '👤 ' + ppl.join(', ') : ((roles.length ? roles.join(', ') : T('(없음)', '(none)')) + (ppl.length ? ' · ' + ppl.join(', ') : ''))) + '</option>' + opts;
+        if (cur === '') opts = '<option value="" selected>' + esc(manualNow ? '👤 ' + ppl.join(', ') : contentNow ? '📧 ' + (roles.length ? roles.join(', ') + ' · ' : '') + ppl.join(', ') : ((roles.length ? roles.join(', ') : T('(없음)', '(none)')) + (ppl.length ? ' · ' + ppl.join(', ') : ''))) + '</option>' + opts;
         // 👤 [2026-11-23] 담당자 직접 입력 / 해제 — 간트 행의 `_담당자` 에 쓴다(js/04k setRowAssignee).
         opts += '<option value="__manual__">' + esc(T('✏️ 담당자 직접 입력…', '✏️ Type assignee…')) + '</option>';
         if (manualNow) opts += '<option value="__clear__">' + esc(T('↺ 직접 지정 해제(역할로)', '↺ Clear (use role)')) + '</option>';

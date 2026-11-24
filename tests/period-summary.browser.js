@@ -132,7 +132,9 @@
             ok('고르면 근거 간트 행의 담당 구분이 바뀐다', discCalls.length >= 1 && discCalls[0][0] === 1 && window.globalData[1]._담당구분 === 'FW', discCalls);
             // ⚠️ textContent 로 보면 고르기 상자의 **모든 선택지** 글자가 잡혀 늘 통과한다 — 고른 값을 본다.
             var sel2 = document.querySelector('#ps-ai-tr0-who select') || document.querySelector('#ps-row-0 td:nth-child(3) select');
-            ok('표가 바뀐 담당 구분을 바로 보여 준다', !!sel2 && sel2.value === 'FW', sel2 && sel2.value);
+            // 📧 [2026-11-24] 1행은 상세내용에 `[고객→박용훈]` 이 있어 담당자가 상세내용에서 온다 — 고른 칸은 "📧 FW · 박용훈".
+            ok('표가 바뀐 담당 구분을 바로 보여 준다', !!sel2 && /FW/.test(sel2.selectedOptions[0].textContent), sel2 && sel2.selectedOptions[0].textContent);
+            ok('📧 상세내용의 받는이가 담당자로 보인다(역할 담당자가 아니라)', !!sel2 && /📧/.test(sel2.selectedOptions[0].textContent) && /박용훈/.test(sel2.selectedOptions[0].textContent), sel2 && sel2.selectedOptions[0].textContent);
             // 👤 담당자 직접 입력 → 간트 행 `_담당자` → 사실·표가 그 이름을 쓴다(역할보다 먼저)
             var realSetAsg = window.setRowAssignee, realPrompt = window.prompt, asgCalls = [];
             window.setRowAssignee = function (ri, v) { asgCalls.push([ri, v]); var t = String(v || '').trim(); if (t) window.globalData[ri]._담당자 = t; else delete window.globalData[ri]._담당자; return true; };
@@ -180,13 +182,23 @@
         // 👤 담당자 — 역할(`_담당구분`)을 그 프로젝트의 projectMeta 로 푼다.
         window.projectMeta.HW담당자 = '조익현';
         var cm = window._psCollectFacts('month');
-        ok('담당자를 역할에서 푼다', cm.facts.length > 0 && cm.facts.every(function (f) { return f.assignee === '조익현'; }),
-           JSON.stringify(cm.facts.map(function (f) { return f.assignee; })));
+        // 📧 [2026-11-24] 상세내용에 `[보낸이 → 받는이]` 가 있으면 받는이(사내)가 먼저, 없으면 역할.
+        ok('담당자를 역할에서 푼다(상세내용에 받는이가 없는 행)', cm.facts.length > 1 && cm.facts.every(function (f) { return f.task === '오늘 메일 업무' ? f.assignee === '박용훈' && f.fromContent : f.assignee === '조익현' && !f.fromContent; }),
+           JSON.stringify(cm.facts.map(function (f) { return f.task + ':' + f.assignee; })));
+        var ex = window._extractMailSenderReceiver, mp = window._mailContentParse;
+        var own = function (c) { return window._psContentOwner(ex(c), mp(c)); };
+        var NL = String.fromCharCode(10);
+        var c1 = '[검토요청][박용훈 → 김종진, 박예빈] 2026-11-23' + NL + '[핵심내용]x';
+        ok('상세내용: 받는이 중 사내 사람들', own(c1) === '김종진, 박예빈', own(c1));
+        ok('상세내용: 받는이가 외부면 보낸이(사내)', own('[회신][박용훈 → John Smith]' + NL + '[핵심내용]x') === '박용훈');
+        ok('상세내용: 외부→사내+외부면 사내 받는이만', own('[문의][John Smith → 박용훈, Mike]' + NL + '[핵심내용]x') === '박용훈');
+        ok('상세내용: "고객" 같은 말은 사람으로 안 본다', own('[문의][고객 → Mike]' + NL + '[핵심내용]x') === '');
         ok('고를 거리에 그 담당자가 있다', cm.people.indexOf('조익현') >= 0, JSON.stringify(cm.people));
 
         window._psSetFilter({ who: '조익현' });
         var cw = window._psCollectFacts('month');
-        ok('담당자로 고르면 그 사람 것만', cw.total === cm.total && cw.filtered === true, cw.total + '/' + cm.total);
+        var nJo = cm.facts.filter(function (f) { return f.assignee === '조익현'; }).length;
+        ok('담당자로 고르면 그 사람 것만', cw.total === nJo && nJo > 0 && cw.filtered === true, cw.total + '/' + nJo);
         window._psSetFilter({ who: '없는사람' });
         var cz = window._psCollectFacts('month');
         ok('없는 담당자를 고르면 0건(조용히 전부 보여주지 않는다)', cz.total === 0, cz.total);
