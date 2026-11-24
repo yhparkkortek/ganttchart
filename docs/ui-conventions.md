@@ -212,6 +212,10 @@ window.bringModalToFront('outer-wrap-id');                  // 열릴 때 즉시
   같은 헤더 줄 안에서 키가 달라졌다(14개 페이지 실측). 자동으로 붙이는 곳은 js/42 `BTN`·js/53 `BTN` 둘이고,
   js/22f 📜 이전 버전·js/67 `OPT`·Project list 📁 NAS(HTML)가 같은 값을 쓴다.
 - 모델 넘기기(◀ PTD ▶)·날짜 이동(◀ 이전/오늘/다음 ▶)·보기 전환 같은 **작은 조작 버튼**은 성격이 달라 예외.
+- 헤더 안 **드롭다운·입력칸도 31px**(2026-11-24) — Project list 팀(`#pl-team`)·Summary 진행 단계(`#sum-project-status`)·
+  BOM 자재번호/전개/레이아웃/환율(`#bom-material`·`#bom-explosion`·`#bom-layout`·`#bom-usd-rate`)이 28·26px 로
+  옆 버튼보다 낮았다. 색·글자 굵기는 역할마다 달라도 되지만 **키는 같게**. ⚠️ `width` 를 준 칸에 `box-sizing:border-box`
+  를 더하면 보이는 폭이 패딩+테두리만큼 준다 — BOM 헤더는 여유가 7px 뿐이라 폭을 그만큼 늘려 맞췄다(환율 64→76px).
 
 #### 표 위 줄(필터·칩·검색) — 앱 공용 22px 한 벌 (2026-11-24)
 - 헤더 밑, 표 바로 위에 두는 **표 보기 조작**(열 그룹 칩·필터 드롭다운·검색칸·↺ 초기화)은 js/04a 공용 함수로만 그린다:

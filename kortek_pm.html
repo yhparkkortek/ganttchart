@@ -1205,7 +1205,7 @@
         <div class="concept-header-box" id="pl-header-box">
             <h2 style="margin:0; font-size:15px;">📒 Project list</h2>
             <select id="pl-team" onchange="window.plSwitchTeam(this.value)"
-                style="margin-left:10px; padding:5px 8px; border:1px solid #a3d9e0; border-radius:6px; font-size:12px; font-weight:bold; color:#00707d; background:#fff; cursor:pointer;"></select>
+                style="margin-left:10px; height:31px; box-sizing:border-box; padding:0 8px; border:1px solid #a3d9e0; border-radius:6px; font-size:12px; font-weight:bold; color:#00707d; background:#fff; cursor:pointer;"></select>
             <span style="display:inline-block; width:1px; height:16px; background:#ddd; margin:0 10px;"></span>
             <input id="pl-search" type="text" oninput="window.plSearch(this.value)"
                 onkeydown="if(event.key==='Enter'){event.preventDefault();window.plSearchNow();}"
@@ -1268,7 +1268,7 @@
             <!-- 💡 [2026-09-03] 3-State 순환: DV → EOL → MP(EC) → DV
                  기존 근육기억(DV↔EOL 한 클릭) 보존하면서 MP(EC)도 수동 설정 가능.
                  값: ''=DV, '완료'=EOL, 'MP(EC)'=MP(EC). 기존 저장 파일 호환 유지. -->
-            <select id="sum-project-status" title="EOL로 표시하면 '프로젝트 불러오기' 목록에서 흐리게 구분 표시되고, [설정 → 메일 자동배치 설정]에서 끄지 않는 한 새 메일 자동매칭 대상에서도 제외됩니다. MP(EC)는 메일 분석 생성 임시 프로젝트 — 메일 자동매칭 포함, 완료 처리 시 EOL로 전환하세요." data-i18n-title="eol-hint" onmousedown="event.preventDefault(); window._toggleProjectStatus();" onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='transparent';" style="border:none; background:transparent; box-shadow:none; font-size:14px; font-weight:bold; color:#00707d; cursor:pointer; padding:6px 12px; margin:0; border-radius:6px; -webkit-appearance:none; -moz-appearance:none; appearance:none; outline:none; transition:background .15s;">
+            <select id="sum-project-status" title="EOL로 표시하면 '프로젝트 불러오기' 목록에서 흐리게 구분 표시되고, [설정 → 메일 자동배치 설정]에서 끄지 않는 한 새 메일 자동매칭 대상에서도 제외됩니다. MP(EC)는 메일 분석 생성 임시 프로젝트 — 메일 자동매칭 포함, 완료 처리 시 EOL로 전환하세요." data-i18n-title="eol-hint" onmousedown="event.preventDefault(); window._toggleProjectStatus();" onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='transparent';" style="border:none; background:transparent; box-shadow:none; font-size:14px; font-weight:bold; color:#00707d; cursor:pointer; height:31px; box-sizing:border-box; padding:0 12px; margin:0; border-radius:6px; -webkit-appearance:none; -moz-appearance:none; appearance:none; outline:none; transition:background .15s;">
                 <option value="">🔵 DV</option>
                 <option value="MP(EC)">🟢 MP(EC)</option>
                 <option value="완료">🔴 EOL</option>
@@ -1500,19 +1500,19 @@
                  (툴팁 문구는 bomRefreshLang에서 언어별로 설정 — 정적 HTML에 박으면 영문 전환이 안 됨).
                  ⚠️ 여기 폭/여백을 다시 늘리면 줄바꿈이 재발한다. 요소를 추가할 땐 다른 칸을 줄일 것. -->
             <input type="text" id="bom-material" class="u-input" placeholder="예: 502572" data-i18n-placeholder="bom-material"
-                   style="width:92px; margin:0 4px; font-family:monospace; font-size:12.5px; font-weight:bold; color:#00707d; border:1px solid #cfe3e5; border-radius:6px; padding:5px 6px;"
+                   style="width:92px; margin:0 4px; font-family:monospace; font-size:12.5px; font-weight:bold; color:#00707d; border:1px solid #cfe3e5; border-radius:6px; height:31px; box-sizing:border-box; padding:0 6px;"
                    oninput="window.bomMarkManualMaterial()" onkeydown="if(event.key==='Enter'){event.preventDefault();window.bomFetchFromSap();}">
-            <select id="bom-explosion" class="u-input" style="width:92px; margin-right:4px; font-size:12.5px; border:1px solid #cfe3e5; border-radius:6px; padding:5px 6px;">
+            <select id="bom-explosion" class="u-input" style="width:92px; margin-right:4px; font-size:12px; border:1px solid #cfe3e5; border-radius:6px; height:31px; box-sizing:border-box; padding:0 6px;">
                 <option value="multi">다단계</option>
                 <option value="single">단일 레벨</option>
             </select>
-            <select id="bom-layout" class="u-input" style="width:140px; margin-right:4px; font-size:12px; border:1px solid #cfe3e5; border-radius:6px; padding:5px 6px;"></select>
+            <select id="bom-layout" class="u-input" style="width:140px; margin-right:4px; font-size:12px; border:1px solid #cfe3e5; border-radius:6px; height:31px; box-sizing:border-box; padding:0 6px;"></select>
             <button id="bom-fetch-btn" onclick="window.bomFetchFromSap()" onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';"
-                    style="white-space:nowrap; padding:6px 8px; background:#e0f5f7; color:#00707d; border:none; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s;">🔄 SAP 조회</button>
+                    style="white-space:nowrap; height:31px; box-sizing:border-box; padding:0 8px; display:inline-flex; align-items:center; background:#e0f5f7; color:#00707d; border:none; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s;">🔄 SAP 조회</button>
             <span style="display:inline-block; width:1px; height:16px; background:#ddd; margin:0 4px;"></span>
             <label style="font-size:12px; color:#5b8a90; font-weight:bold; white-space:nowrap;" title="USD 열 = KRW 단가 ÷ 이 환율" data-i18n-title="bom-usd-rate">$ 환율</label>
             <input type="number" id="bom-usd-rate" step="0.1" min="0.01" oninput="window._bomSetUsdRate(this)"
-                   style="width:64px; margin:0 4px; font-size:12.5px; text-align:right; border:1px solid #cfe3e5; border-radius:6px; padding:5px 5px; color:#00707d; font-weight:bold;">
+                   style="width:76px; margin:0 4px; font-size:12.5px; text-align:right; border:1px solid #cfe3e5; border-radius:6px; height:31px; box-sizing:border-box; padding:0 5px; color:#00707d; font-weight:bold;">
             <span style="display:inline-block; width:1px; height:16px; background:#ddd; margin:0 4px;"></span>
             <button id="bom-toggle-btn" class="concept-add-row-btn" onclick="window.bomToggleAll()" title="하위 구성품 모두 접기" data-i18n-title="bom-toggle-all" style="margin:0; padding:6px 8px; min-width:auto; background:#e0f5f7; color:#00707d; border:none; border-radius:5px; font-size:12.5px; font-weight:bold; white-space:nowrap;">▸ 접기</button>
             <div class="btn-group"></div>
