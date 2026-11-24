@@ -8514,9 +8514,18 @@ def _guard_project_index_write(data):
         return None, {'dropped': len(dropped), 'restored': 0,
                       'note': 'NAS 존재 확인에 실패해 검사하지 못했습니다: %s' % e}
 
+    # 🧹 [2026-11-24 실측 — AMUSNET FLAT 색인 항목 셋이 지워지지 않음] 같은 파일을 가리키는 항목이
+    #    **들어오는 색인에 이미 하나 남아 있으면** 그건 손실이 아니라 중복 정리다(앱 js/04c 도 이렇게 합친다).
+    #    예전엔 그것까지 되살려, 이름이 바뀐 프로젝트의 중복 항목이 영영 안 없어졌다.
+    kept_rels = set()
+    for p in incoming['projects']:
+        if isinstance(p, dict):
+            r = _index_entry_rel(p.get('drive_file_id'), id_map)
+            if r:
+                kept_rels.add(r)
     back = []
     for r, entries in by_rel.items():
-        if abs_of.get(r) in alive:
+        if abs_of.get(r) in alive and r not in kept_rels:
             back.extend(entries)
     if not back:
         return None, {'dropped': len(dropped), 'restored': 0}

@@ -240,6 +240,17 @@ sc, body, out = run(nas, {'rel': IDX, 'text': json.dumps({'projects': [ent(A, 'S
 check('새 항목 + 되살린 2건 = 4건', len(out['projects']) == 4, names_of(out))
 check('새 항목이 살아 있다', '새프로젝트.json' in names_of(out), names_of(out))
 
+print('\n=== 11b) 같은 파일을 가리키는 중복 항목 정리는 막지 않는다 (2026-11-24 AMUSNET FLAT) ===')
+D1, D2 = '1dupOLD', nas_f('개발3팀/POLED_NEW.json')
+CURD = {'projects': [ent(A, 'STELLAR32.json'), ent(D1, 'POLED_OLD.json'), ent(D2, 'POLED_NEW.json')]}
+MAPD = {A: '개발3팀/STELLAR32.json', D1: '개발3팀/POLED_NEW.json', D2: '개발3팀/POLED_NEW.json'}
+nas = FakeNas(index=CURD, id_map=MAPD, live=['개발3팀/STELLAR32.json', '개발3팀/POLED_NEW.json'])
+sc, body, out = run(nas, {'rel': IDX, 'text': json.dumps({'projects': [ent(A, 'STELLAR32.json'), ent(D2, 'POLED_NEW.json')]})})
+check('중복이 안 돌아온다(2건)', names_of(out) == ['POLED_NEW.json', 'STELLAR32.json'], names_of(out))
+nas = FakeNas(index=CURD, id_map=MAPD, live=['개발3팀/STELLAR32.json', '개발3팀/POLED_NEW.json'])
+sc, body, out = run(nas, {'rel': IDX, 'text': json.dumps({'projects': [ent(A, 'STELLAR32.json')]})})
+check('둘 다 빠지면 여전히 되살린다', 'POLED_NEW.json' in names_of(out) and 'POLED_OLD.json' in names_of(out), names_of(out))
+
 print('\n=== 12) 가드가 터져도 저장은 된다 ===')
 
 
