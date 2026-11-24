@@ -1442,6 +1442,16 @@ window._ibAutoPlaceSweep = async function(opts) {
                     target.file_name, it.mailRaw, 0, !!it.alarmWorthy, { deferRefresh: isCurrent });
             } catch (e) { result = { ok: false, reason: e.message }; }
             if (result && result.ok) {
+                // 👨‍👩‍👧 [2026-11-24 실측 — SHUFFLER 3.0·4.3 신청서가 4.3 에만 들어감] 판정이 형제 여럿(extraCandidates)을 정했으면
+                //    스윕도 나머지에 같이 넣는다 — 재판정(js/74 placeExtras)과 같은 길. 예전엔 첫 후보만 넣고 나머지는 조용히 빠졌다.
+                const ex = ((it.matchedProject && it.matchedProject.extraCandidates) || [])
+                    .filter(function(c) { return c && c.drive_file_id && c.drive_file_id !== target.drive_file_id; });
+                if (ex.length && typeof window._msRegisterToProjectTargets === 'function') {
+                    try {
+                        window._msRegisterToProjectTargets([null].concat(ex), Object.assign({}, it.task, { _routing: { basis: 'extra', decision: 'auto', reason: 'sweep extra' } }),
+                            it.mailRaw, '🔁 자동배치 스윕', !!it.alarmWorthy, '형제 모두 배치(스윕)');
+                    } catch (eEx) { console.warn('[자동배치 스윕] 형제 추가 배치 실패:', eEx && eEx.message); }
+                }
                 if (result.deferred) {
                     // 저장이 끝난 뒤에 상태를 확정한다(저장 실패 시 '대기'로 남겨야 하므로)
                     deferredUids.push({ uid: it.uid, name: target.file_name, task: it.task, fileId: target.drive_file_id, raw: it.mailRaw });
