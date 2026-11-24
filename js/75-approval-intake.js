@@ -185,7 +185,7 @@
     function shortTitleOf(title, formName) {
         var d = { title: title, formName: formName || '' };
         var t = stripTags(d.title), f = stripTags(d.formName).replace(/\s/g, '');
-        var m = /^\s*\[([^\]]{1,40})\]\s*/.exec(t);
+        var m = /^\s*\[([^\]]{1,40})\][\s_\-]*/.exec(t);   // '[개발 완료 보고서]_LNW…' 의 밑줄까지 뗀다
         if (m) {
             var b = m[1].replace(/\s/g, '');
             if ((f && (b.indexOf(f) !== -1 || f.indexOf(b) !== -1)) || /(서|요청|신청|의뢰|회의록)$/.test(b)) {
