@@ -722,6 +722,9 @@
         //    만들지 않고 조용히 건너뛴다 — 어차피 사용자에게 새로 전달할 정보가 없는 반복 알림이므로.
         if (window._toastStack.some(function(el) { return el.dataset.msg === message; })) return;
         type = type || 'success';
+        // 🔔 [2026-11-24 "토스트 통일"] 모르는 종류는 조용히 success(파랑)로 떨어진다 — 실측: js/14c 가 'warn' 을 3곳에서 넘겨
+        //    경고가 성공색으로 떴다. 흔한 줄임말은 여기서 정식 이름으로 받는다(호출하는 곳마다 고치지 않아도 되게).
+        type = ({ warn: 'warning', err: 'error', danger: 'error', ok: 'success', done: 'success' })[type] || type;
         // 💡 [2026-08-29 파스텔 통일] 채도 높은 solid 배경(빨강/주황/진남색)+흰 글자 대신, 다른 곳과 동일한
         //    4색 파스텔 기준(옅은 배경 + 진한 글자 + 옅은 테두리)으로 교체.
         const themeMap = {
