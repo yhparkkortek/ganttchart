@@ -77,6 +77,10 @@
         'cert.r2.c0': ['fn:cert:certCb'], 'cert.r2.c1': ['fn:cert:certUl'],
         'cert.r2.c2': ['fn:cert:certCe'], 'cert.r2.c3': ['fn:cert:certFcc'],
         pwrVoltage: ['pl:power1', SPEC.power],
+        // [2026-11-24] 전원 소비·커넥터 — Customer SPEC 'Power estimation'(LCD Monitor 줄)·'Input voltage' 의 '/' 뒤
+        //   (실측: 'DC 24V / <제조사> 6P_<품번>' → 원본 사양서 '<제조사> <품번>' 과 글자까지 같았다)
+        pwrConsumption: ['fn:pwrCons'],
+        pwrConnPn: ['fn:pwrConn'],
         // 패널 화면 사양 — 표 행 순서 그대로(Display Area … Brightness Uniformity)
         'scr.r1.c1': ['panel:Active Area (HxV)'],
         'scr.r2.c1': ['panel:Display Color'],
@@ -185,7 +189,8 @@
     // 글 틀(데이터) — {자리}는 앱 값으로
     window.PS_TEXT = window.PS_TEXT || {
         scope: 'This document is the specification of {inch}” TFT-LCD MONITOR. {model} is a High quality TFT-LCD display solution for industrial display device having RoHS conformity.',
-        feat1: '- Supports up to {res}, {hz}Hz for {inch}”'
+        feat1: '- Supports up to {res}, {hz}Hz for {inch}”',
+        pwrCons: '{w}[W] Max (Display only)'
     };
 
     // ── 📋 칸 목록(양식에서 뽑은 JSON) ──────────────────────────────────
@@ -342,6 +347,8 @@
     window.PS_BOM_CONN_SEPS = window.PS_BOM_CONN_SEPS || ['CON', 'JACK', 'SWC'];
     // 제조사 한글 이름 → 문서 표기(데이터) — **원본 사양서에서 확인된 것만**. 없는 이름은 그대로 둔다.
     window.PS_MAKER_EN = window.PS_MAKER_EN || { '연호전자': 'YEON-HO', '후성테크': 'FUSUNG', 'CT 전자': 'CT', 'CT전자': 'CT' };
+    // PARTS 라이브러리에서 그대로 못 찾을 때 떼어 볼 이름 꼬리(데이터) — 끝 괄호(패널 리비전 '(B10)' 등)
+    window.PS_LIB_NAME_TRIM = window.PS_LIB_NAME_TRIM || [/\s*\([^()]*\)\s*$/];
     var _maker = function (m) {
         var x = String(m || '').trim(), t = window.PS_MAKER_EN || {};
         return t[x] || t[x.replace(/\s+/g, '')] || x;
@@ -438,10 +445,25 @@
         if (mat) { if (mat.ktkPn) names.push(String(mat.ktkPn).trim()); if (mat.description) names.push(mat.description); }
         if (!_isNone(row[L.pl])) names.push(String(row[L.pl]).trim());
         if (!names.length) { var md = _matDesc(ctx, L.cat); if (md) names.push(md); }
+        var find = function (nm) {
+            return which === 'panel' ? (window.findPanelInLibrary && window.findPanelInLibrary(lib, nm))
+                                     : (window.findElecPartInLibrary && window.findElecPartInLibrary(lib, nm));
+        };
         for (var i = 0; i < names.length; i++) {
-            var rec = which === 'panel' ? (window.findPanelInLibrary && window.findPanelInLibrary(lib, names[i]))
-                                        : (window.findElecPartInLibrary && window.findElecPartInLibrary(lib, names[i]));
+            var rec = find(names[i]);
             if (rec && rec.specs) return rec;
+        }
+        // 🔁 [2026-11-24 실측] 그대로는 못 찾으면 **이름 꼬리를 뗀 이름**으로 한 번 더 — BOM 패널 이름은
+        //    'XXX-N20(B10)' 처럼 끝에 패널 리비전이 붙는데 라이브러리는 기본 이름('XXX-N20')으로 적혀 있어
+        //    패널 사양 칸 9개가 통째로 비었다. 뗀 규칙은 데이터(PS_LIB_NAME_TRIM), 그렇게 찾은 건
+        //    출처에 '(찾은 이름)' 을 붙여 사람이 볼 수 있게 한다(캐시 객체는 건드리지 않는다).
+        for (var j = 0; j < names.length; j++) {
+            var base = String(names[j]);
+            (window.PS_LIB_NAME_TRIM || []).forEach(function (re) { base = base.replace(re, ''); });
+            base = base.trim();
+            if (!base || base === String(names[j]).trim()) continue;
+            var r2 = find(base);
+            if (r2 && r2.specs) { var w = Object.create(r2); w._psVia = base; return w; }
         }
         return null;
     };
@@ -583,6 +605,22 @@
             return { v: window.PS_TEXT.scope.replace('{inch}', inch).replace('{model}', model),
                      src: 'Summary ▸ KTK ' + _t('모델명·인치', 'model/inch') };
         },
+        // 'Consumption' — Customer SPEC 소비전력(첫 줄 = LCD Monitor, 디스플레이만)의 숫자만 원본 문장 모양으로
+        pwrCons: function (ctx) {
+            //   ⚠️ Customer SPEC 은 이 항목을 하위 줄로 나눠 적고(LCD Monitor·Light·Total·Touch) 라벨은 **하위 이름**이다(js/66)
+            var s = _specVal(ctx, ['LCD Monitor', 'Power estimation (Max. W)', 'Power estimation', 'Power Consumption']);
+            var m = s && String(s.v).match(/([\d.]+)\s*\[?\s*W/i);
+            if (!m) return { v: '', src: s ? 'Customer SPEC ▸ ' + s.label : '' };
+            return { v: window.PS_TEXT.pwrCons.replace('{w}', m[1]), src: 'Customer SPEC ▸ ' + s.label };
+        },
+        // 'Connector PN' — 'DC 24V / Acme 6P_11-22-3344' 의 '/' 뒤에서 핀 수 표기('6P_')를 떼고 '제조사 품번'
+        pwrConn: function (ctx) {
+            var s = _specVal(ctx, ['Input voltage', 'Input Voltage', '입력 전압']);
+            var tail = s ? String(s.v).split('/').slice(1).join('/').trim() : '';
+            var m = tail.match(/^([A-Za-z][A-Za-z.&\-]*)\s+(?:\d+\s*P(?:IN)?[_\s-]+)?([0-9A-Za-z][\w.\-]*)\s*$/i);
+            if (!m) return { v: '', src: s ? 'Customer SPEC ▸ ' + s.label : '' };
+            return { v: m[1] + ' ' + m[2], src: 'Customer SPEC ▸ ' + s.label };
+        },
         feat1: function (ctx) {
             // "Supports up to" = **패널 원래 해상도**(PARTS 패널 Dot Resolution → Customer SPEC Native Resolution).
             //   ⚠️ 지원 해상도 중 최대를 쓰면 안 된다 — 실측 프로젝트는 4K@30 을 '받기만' 하는데
@@ -680,7 +718,7 @@
         if (LIB[kind]) {
             var rec = _libRec(ctx, kind);
             var lv = rec ? String(rec.specs[arg] || '').trim() : '';
-            return { v: lv, src: 'PARTS ▸ ' + LIB[kind].cat + ' ▸ ' + arg };
+            return { v: lv, src: 'PARTS ▸ ' + LIB[kind].cat + (rec && rec._psVia ? ' (' + rec._psVia + ')' : '') + ' ▸ ' + arg };
         }
         if (kind === 'fn') {
             var a = arg.split(':');

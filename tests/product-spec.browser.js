@@ -135,7 +135,23 @@ window.__psTest = async function (opt) {
         delete window.tabData.bomByUnit;
         check(pL.values['blu.r2.c3'] === '70', '보이는 이름으로 못 찾으면 주요자재로 — 패널 LED 전류 Typ (' + pL.values['blu.r2.c3'] + ')');
         check(pL.values.convIn === '11111WR-12A', '컨버터 입력 커넥터 모델명 (' + pL.values.convIn + ')');
+        // 🔁 이름 끝 괄호(패널 리비전 '(B10)')를 떼면 찾힌다 — 2026-11-24 실측: 패널 사양 칸 9개가 통째로 비었다
+        window.tabData.projectModels[0].materials[0].description = 'PNL-TEST-01B(B10)';
+        var pT = window._psPayload();
+        var sT = window.DOC_AUTO_HOOKS.ps(window._dgCollect(), 'blu.r2.c3');
+        check(pT.values['blu.r2.c3'] === '70' && /\(PNL-TEST-01B\)/.test(sT.src),
+              '이름 꼬리 "(B10)" 떼고 라이브러리 기록 + 출처에 찾은 이름 (' + pT.values['blu.r2.c3'] + ', ' + sT.src + ')');
+        check(!window._epLibCache.panel.panels[0]._psVia, '꼬리 떼고 찾아도 라이브러리 캐시 객체는 그대로');
+        window.tabData.projectModels[0].materials[0].description = 'PNL-TEST-01B';
         window._epLibCache = libSaved;
+        // 🔌 전원 — Customer SPEC 의 소비전력(하위 줄 'LCD Monitor')·입력 커넥터('/' 뒤, 핀 수 표기 떼기)
+        var bs0 = window.tabData.briefSpec;
+        window.tabData.briefSpec = bs0.concat([{ type: 'Input voltage', sub: '', modelA: 'DC 24V / Acme 6P_11-22-3344' },
+            { type: 'Power estimation (Max. W)', sub: 'LCD Monitor', modelA: '45W' }, { type: '', sub: 'Total', modelA: '60W' }]);
+        var cP = window._dgCollect();
+        var pc = window.DOC_AUTO_HOOKS.ps(cP, 'pwrConsumption').v, pn = window.DOC_AUTO_HOOKS.ps(cP, 'pwrConnPn').v;
+        check(pc === '45[W] Max (Display only)' && pn === 'Acme 11-22-3344', '전원 소비·커넥터 (' + pc + ' / ' + pn + ')');
+        window.tabData.briefSpec = bs0;
         window.tabData.projectModels[0].materials = mats0;
         window._plData.rows[0].touchCtrl = 'TCTRL-TEST';
         // 다른 서식이 안 깨지는가
