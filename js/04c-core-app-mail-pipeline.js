@@ -2536,29 +2536,19 @@
             listContainer.parentNode.insertBefore(_searchBar, listContainer);
         }
         const _st = window._driveModalSearchState = window._driveModalSearchState || { q: '', field: 'all' };
-        const _pill = window._uiPillStyle || function(on) { return 'padding:0 9px; border:1px solid #1971c2; border-radius:11px; cursor:pointer; background:' + (on ? '#1971c2' : '#fff') + '; color:' + (on ? '#fff' : '#1971c2') + ';'; };
         _searchBar.innerHTML =
             '<div style="display:flex; gap:6px; align-items:center;">' +
               '<input id="drive-modal-search-input" type="search" autocomplete="off" placeholder="' +
                 (_dmEn ? '🔍 Search projects — name, keyword, member, inch, family, customer…' : '🔍 프로젝트 검색 — 이름·연관 검색어·멤버·인치·제품군·고객사…') + '" ' +
                 'style="flex:1; height:31px; box-sizing:border-box; padding:0 12px; border:1px solid #cfd8e3; border-radius:16px; font-size:13px; outline:none;">' +
               '<span id="drive-modal-search-count" style="font-size:12px; color:#868e96; white-space:nowrap;"></span>' +
-            '</div>' +
-            '<div id="drive-modal-search-fields" style="display:flex; gap:5px; flex-wrap:wrap; align-items:center;"></div>';
+            '</div>';
+        // ✂️ [2026-11-24 사용자 결정] 검색 범위 칩(전체·프로젝트명·멤버…)은 뺐다 — '전체' 하나로 충분하고,
+        //    어디서 걸렸는지는 결과 행의 강조(_searchInfoHtml)가 보여 준다. 범위 좁히기(_st.field)는
+        //    안쪽에 그대로 두어(기본 'all') 프로젝트가 많아지면 칩만 다시 그리면 된다.
         const _sInput = document.getElementById('drive-modal-search-input');
-        const _sFields = document.getElementById('drive-modal-search-fields');
         const _sCount = document.getElementById('drive-modal-search-count');
         _sInput.value = _st.q;
-        function _drawFieldPills() {
-            _sFields.innerHTML = '';
-            window.PROJECT_SEARCH_FIELDS.forEach(function(f) {
-                const b = document.createElement('span');
-                b.style.cssText = _pill(_st.field === f.key) + ' font-size:11.5px;';
-                b.textContent = _dmEn ? f.en : f.ko;
-                b.onclick = function() { _st.field = f.key; _drawFieldPills(); _renderList(); };
-                _sFields.appendChild(b);
-            });
-        }
         let _sTimer = null;
         _sInput.oninput = function() {
             clearTimeout(_sTimer);
@@ -2572,7 +2562,6 @@
                 if (_st.q.trim() && hit.length === 1) window.executeLoadFile(hit[0].id, hit[0].name);
             }
         };
-        _drawFieldPills();
 
         // ── 팀 아코디온 렌더링 ─────────────────────────────────────────────────────────
         // 팀이 1개(또는 모두 미지정)이면 팀 헤더를 열어서 보여줌, 여러 팀이면 기본 열림(▾)
