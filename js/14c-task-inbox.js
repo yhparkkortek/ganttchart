@@ -94,6 +94,14 @@ window.TaskInbox = {
     },
     add: function(task, meta) {
         const list = this.load();
+        // 🪞 [2026-11-24 실측 — 같은 결재 문서가 대기 카드로 두 장씩(9쌍)] 가져오기가 두 번 돌며 같은 문서를 또 넣었다.
+        //    같은 메일 열쇠(mailRaw.key) + 같은 출처(source) 로 이미 '대기' 카드가 있으면 넣지 않는다.
+        //    출처까지 보는 이유: 형제 여러 곳에 배치할 땐 출처가 '… → 프로젝트명' 으로 카드마다 달라 정상적으로 여러 장이다.
+        const _k = meta && meta.mailRaw && meta.mailRaw.key, _src = (meta && meta.source) || '메일분석';
+        if (_k && list.some(function(x) { return x && x.status === '대기' && x.mailRaw && x.mailRaw.key === _k && (x.source || '메일분석') === _src; })) {
+            console.info('[업무 보관함] 같은 메일/문서의 대기 카드가 이미 있어 넣지 않음:', _k);
+            return;
+        }
         list.unshift({
             uid: 'ib_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
             task: JSON.parse(JSON.stringify(task)),
@@ -175,6 +183,24 @@ window.TaskInbox = {
         const set = {};
         merged.forEach(function(t) { set[t.uid] = true; });
         return set;
+    },
+
+    /** 🪞 [2026-11-24] 이미 들어온 중복 대기 카드 정리 — 같은 열쇠+같은 출처의 '대기' 카드는 가장 먼저 들어온 것만 남긴다.
+     *  지운 건 묘비를 남겨 다른 기기에서도 되살아나지 않게. 반환: 지운 장수 */
+    dedupePending: function() {
+        const list = this.load(), keep = {}, drop = [];
+        list.slice().sort(function(a, b) { return String(a.addedAt || '').localeCompare(String(b.addedAt || '')); }).forEach(function(x) {
+            const k = x && x.status === '대기' && x.mailRaw && x.mailRaw.key;
+            if (!k) return;
+            const sig = k + '|' + (x.source || '메일분석');
+            if (keep[sig]) drop.push(x.uid); else keep[sig] = x.uid;
+        });
+        if (!drop.length) return 0;
+        const dset = {}; drop.forEach(function(u) { dset[u] = 1; });
+        this.markDeleted(drop);
+        this.save(list.filter(function(x) { return !(x && dset[x.uid]); }));
+        console.info('[업무 보관함] 중복 대기 카드 ' + drop.length + '장 정리');
+        return drop.length;
     },
 
     remove: function(uid) {
@@ -332,6 +358,11 @@ window.openTaskInbox = function() {
         const has = dv && window.TaskInbox.load().some(function(it) { return it && it.status === dv; });
         window._tiFilter = has ? { status: dv, project: null } : null;
     }
+    // 🪞 [2026-11-24] 중복 대기 카드는 열 때 정리한다(같은 열쇠+같은 출처, 가장 먼저 들어온 것만 남김)
+    try {
+        const n = window.TaskInbox.dedupePending();
+        if (n && window.showToast) window.showToast(window._t('🪞 중복 대기 카드 ' + n + '장을 정리했습니다', '🪞 Removed ' + n + ' duplicate pending card(s)'), 'info');
+    } catch (e) { console.warn('[업무 보관함] 중복 정리 실패:', e.message); }
     window.renderTaskInbox();
     if (window._msRefreshQueueBadges) window._msRefreshQueueBadges(); // 💡 미분류/신규발신자 배지가 이제 여기 있음
     if (window.refreshInboxCleanupModeButton) window.refreshInboxCleanupModeButton(); // 💡 처리됨 자동삭제/보관 토글 버튼 상태 갱신
