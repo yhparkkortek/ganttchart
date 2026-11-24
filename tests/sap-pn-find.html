@@ -97,6 +97,25 @@ f.onload = async function () {
     if (W.plClosePopup) W.plClosePopup();
     PD.rows = PD.rows.filter(function (x) { return x._id !== 'zz_sappn_test'; });
     PD.history = PD.history.slice(0, h0);
+    // 6) Document — 모델명세서의 MODEL NAME(meta.모델풀네임)·PART NUMBER(meta.제품코드) 칸, 진짜 _docRender 가 그린 링크
+    W.switchTab('document'); await sleep(200);
+    W._docState.formId = 'model-spec'; W._docRender(); await sleep(200);
+    var body = D.getElementById('doc-page-body');
+    var links = body.querySelectorAll('a[onclick*="_docSapPnFind"]');
+    var keysWithLink = [].map.call(links, function (a) { return (a.getAttribute('onclick').match(/,'([^']+)'\)/) || [])[1]; });
+    chk(keysWithLink.indexOf('MODEL NAME') !== -1 && keysWithLink.indexOf('PART NUMBER') !== -1, '[Document] 모델명·제품코드 칸에만 🏭 링크 — ' + keysWithLink.join(','));
+    chk(!body.querySelector('[data-doc-key="BUYER NAME"]') || !/_docSapPnFind\([^)]*BUYER/.test(body.innerHTML), '[Document] 다른 칸엔 링크 없음');
+    calls.length = 0;
+    [].filter.call(links, function (a) { return /MODEL NAME/.test(a.getAttribute('onclick')); })[0].click();
+    await sleep(150);
+    D.getElementById('sap-pn-find-q').value = '502574';
+    D.getElementById('sap-pn-find-go').click(); await sleep(300);
+    D.querySelector('#sap-pn-find-list [data-i="0"]').click(); await sleep(200);
+    var mn = body.querySelector('[data-doc-key="MODEL NAME"]'), pnIn = body.querySelector('[data-doc-key="PART NUMBER"]');
+    chk(mn && mn.value === '502574_MAIN>KTS320DPS01,LNW' && pnIn && pnIn.value === '502574',
+        '[Document] 고르면 두 칸을 함께 — MODEL NAME=' + (mn && mn.value) + ' / PART NUMBER=' + (pnIn && pnIn.value));
+    chk(/직접 적음|edited/.test(mn.parentNode.textContent), '[Document] "직접 적음" 으로 표시되어 ↺ 로 되돌릴 수 있다');
+    W._docResetField('model-spec', 'MODEL NAME'); W._docResetField('model-spec', 'PART NUMBER');
   } catch (e) { out.push('ERROR ' + e.message); }
   out.push(pass + '/' + (pass + fail));
   document.getElementById('out').textContent = out.join('\n');
