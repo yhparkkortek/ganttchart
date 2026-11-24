@@ -763,10 +763,13 @@ window._sapPnFind = function (target, hint) {
           +   '<div style="padding:12px 16px; display:flex; flex-direction:column; gap:8px; min-height:0; flex:1;">'
           +     '<div style="display:flex; gap:6px;">'
           +       '<input id="sap-pn-find-q" type="text" style="flex:1; min-width:0; height:31px; box-sizing:border-box; padding:0 10px; border:1px solid #cfd8e3; border-radius:6px; font-size:13px;">'
-          +       '<button type="button" id="sap-pn-find-go" class="concept-add-row-btn" style="margin:0; height:31px; padding:0 14px;">🔍 ' + T('찾기', 'Search') + '</button>'
+          +       '<button type="button" id="sap-pn-find-go" class="concept-add-row-btn" style="margin:0; height:31px; padding:0 12px;" title="' + T('6자리 숫자가 있으면 코드로, 없으면 내역으로', 'Code if it has 6 digits, otherwise description') + '">🔍 ' + T('찾기', 'Search') + '</button>'
+          // 🔤 [2026-11-24 사용자 지적 "내역으로도 PN 을 찾을 수 있어야"] 자동 판단에 맡기지 않고 **내역으로** 를 고를 수 있게 —
+          //    내역에 6자리 숫자가 섞여 있으면 자동 판단이 코드로 가 버린다.
+          +       '<button type="button" id="sap-pn-find-desc" class="concept-add-row-btn" style="margin:0; height:31px; padding:0 12px;" title="' + T('자재내역(MAKTX)에 이 글자가 든 자재를 찾습니다 — 띄어 쓴 낱말은 순서대로 모두 든 것', 'Materials whose description contains these words, in order') + '">📝 ' + T('내역으로', 'By description') + '</button>'
           +     '</div>'
-          +     '<div style="font-size:11.5px; color:#777; line-height:1.5;">' + T('6자리 KTK PN 이면 그 자재의 내역을, 글자(예: KTS320, STELLAR)면 내역에 그 글자가 든 자재를 찾습니다. SAP 을 읽기만 합니다.',
-                  'A 6-digit KTK PN looks up that material; text (e.g. KTS320) lists materials whose description contains it. Read-only.') + '</div>'
+          +     '<div style="font-size:11.5px; color:#777; line-height:1.5;">' + T('6자리 KTK PN 이면 그 자재를, 글자면 <b>자재내역</b>에 그 글자가 든 자재를 찾습니다(예: <code>KTS320</code>, <code>MAIN KTS320 LNW</code> — 띄어 쓴 낱말은 순서대로 모두). 내역만으로 찾으려면 📝 내역으로. SAP 을 읽기만 합니다.',
+                  'A 6-digit KTK PN finds that material; text finds materials whose <b>description</b> contains it (e.g. <code>MAIN KTS320 LNW</code> — words in order). Use 📝 to force a description search. Read-only.') + '</div>'
           +     '<div id="sap-pn-find-status" style="font-size:12px; color:#555;"></div>'
           +     '<div id="sap-pn-find-list" style="overflow-y:auto; min-height:0; flex:1; border:1px solid #eef1f4; border-radius:6px;"></div>'
           +   '</div>'
@@ -800,19 +803,32 @@ window._sapPnFind = function (target, hint) {
         ov.style.display = 'none';
         if (window.showToast) window.showToast('🏭 ' + T('넣었습니다: ', 'Filled: ') + v, 'info');
     };
-    var run = async function () {
+    // 🔤 내역 패턴 — 띄어 쓴 낱말은 `*` 로 잇는다("MAIN KTS320 LNW" → *MAIN*KTS320*LNW*, 순서대로 모두 든 것).
+    //    `code_내역` 을 통째로 붙여 넣었으면 앞의 코드는 떼고 내역만 쓴다.
+    var descPattern = function (s, upper) {
+        var body = String(s).replace(/^\d{6}_/, '').replace(/^\*+|\*+$/g, '').trim().replace(/\s+/g, '*');
+        return '*' + (upper ? body.toUpperCase() : body) + '*';
+    };
+    var run = async function (mode) {
         var s = String(q.value || '').trim();
         if (!s) return;
-        var code = (s.match(/^\D*(\d{6})(?!\d)/) || [])[1];
+        var code = mode === 'desc' ? null : (s.match(/^\D*(\d{6})(?!\d)/) || [])[1];
+        var patUp = descPattern(s, true), patRaw = descPattern(s, false);
         var url = code ? ('http://127.0.0.1:5000/sap-material-rows?materials=' + encodeURIComponent(code))
-                       : ('http://127.0.0.1:5000/sap-material-pattern?pattern=' + encodeURIComponent('*' + s.replace(/^\*+|\*+$/g, '').toUpperCase() + '*'));
+                       : ('http://127.0.0.1:5000/sap-material-pattern?pattern=' + encodeURIComponent(patUp));
         list.innerHTML = '';
         status.style.color = '#555';
-        status.textContent = '⏳ ' + T('SAP 조회 중… (수십 초 걸릴 수 있습니다)', 'Querying SAP… (may take tens of seconds)');
+        status.textContent = '⏳ ' + T('SAP 조회 중… (수십 초 걸릴 수 있습니다)', 'Querying SAP… (may take tens of seconds)')
+                           + (code ? '' : '  ' + T('내역 ', 'description ') + patUp);
         go.disabled = true;
         try {
             var r = await fetch(url);
             var d = await r.json().catch(function () { return null; });
+            // SAP 내역 검색은 대소문자를 가린다 — 대문자로 0건이고 원래 글자가 달랐으면 원래 글자로 한 번 더
+            if (!code && d && d.ok && !(d.materials || []).length && patRaw !== patUp) {
+                r = await fetch('http://127.0.0.1:5000/sap-material-pattern?pattern=' + encodeURIComponent(patRaw));
+                d = await r.json().catch(function () { return null; });
+            }
             if (!d || !d.ok) {
                 status.style.color = '#b1432f';
                 status.textContent = '⚠️ ' + ((d && d.error) || T('SAP 조회에 실패했습니다 — SAP 이 열려 있는지(로그인) 확인해 주세요.', 'SAP lookup failed — check SAP is open and logged in.'));
@@ -842,9 +858,10 @@ window._sapPnFind = function (target, hint) {
             status.textContent = '⚠️ ' + T('백엔드에 연결하지 못했습니다 — kortek_backend 가 켜져 있는지 확인해 주세요.', 'Could not reach the backend — is kortek_backend running?');
         } finally { go.disabled = false; }
     };
-    go.onclick = run;
-    q.onkeydown = function (e) { if (e.key === 'Enter') { e.preventDefault(); run(); } else if (e.key === 'Escape') ov.style.display = 'none'; };
-    if (code0) run();   // 칸에 이미 6자리 코드가 있으면 바로 찾는다(조회만, 넣는 건 사람이 고른다)
+    go.onclick = function () { run('auto'); };
+    document.getElementById('sap-pn-find-desc').onclick = function () { run('desc'); };
+    q.onkeydown = function (e) { if (e.key === 'Enter') { e.preventDefault(); run('auto'); } else if (e.key === 'Escape') ov.style.display = 'none'; };
+    if (code0) run('auto');   // 칸에 이미 6자리 코드가 있으면 바로 찾는다(조회만, 넣는 건 사람이 고른다)
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -891,25 +908,38 @@ window._sapPnFind = function (target, hint) {
             }
         }, cur ? '' : String(m.고객모델명 || '').trim());
     };
-    var btn = null;
+    // 버튼을 붙일 페이지 — **데이터**. 둘 다 제품구분자(모델)별로 보이는 페이지다. 같은 꼴 페이지가 늘면 한 줄.
+    //   before: 이 요소 **앞**에 / after: 이 요소 **뒤**에 (없으면 헤더 오른쪽 버튼 묶음 앞)
+    window.MODEL_PN_HEADER_TARGETS = window.MODEL_PN_HEADER_TARGETS || [
+        { tab: 'tab-briefspec', id: 'bs-sap-pn-btn', before: 'bs-resolution-btn' },   // 🖥 지원 해상도 옆
+        { tab: 'tab-mctable',   id: 'mc-sap-pn-btn', after: 'mc-unit-bar' }           // 제품구분자 바 바로 뒤
+    ];
+    var btns = [];
     function sync() {
-        if (!btn) return;
+        if (!btns.length) return;
         var a = activeModel(), cur = curText(a.m);
-        btn.title = T('지금 모델' + (a.unit ? '(' + a.unit + ')' : '') + '의 KTK PN_모델명을 SAP 에서 찾아 Summary 모델 카드에 넣습니다', 'Find this model\'s KTK PN_Model in SAP and fill its Summary card')
-                  + '\n' + T('지금 값: ', 'Now: ') + (cur || T('(비어 있음)', '(empty)'));
+        var tip = T('지금 모델' + (a.unit ? '(' + a.unit + ')' : '') + '의 KTK PN_모델명을 SAP 에서 찾아 Summary 모델 카드에 넣습니다', 'Find this model\'s KTK PN_Model in SAP and fill its Summary card')
+                + '\n' + T('지금 값: ', 'Now: ') + (cur || T('(비어 있음)', '(empty)'));
+        btns.forEach(function (b) { b.title = tip; });
     }
     function boot() {
-        var tab = document.getElementById('tab-briefspec');
-        var hdr = tab && tab.querySelector('.concept-header-box');
-        if (!hdr || document.getElementById('bs-sap-pn-btn')) return;
-        btn = document.createElement('button');
-        btn.type = 'button'; btn.id = 'bs-sap-pn-btn'; btn.className = 'ep-theme-hover-btn';
-        btn.setAttribute('style', 'margin:0 6px 0 0; height:31px; box-sizing:border-box; padding:0 12px; background:#e0f5f7; color:#00707d; border:none; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; white-space:nowrap;');
-        btn.textContent = '🏭 KTK PN';
-        btn.onclick = function () { window._bsSapPnFind(); };
-        btn.onmouseenter = sync;
-        var res = document.getElementById('bs-resolution-btn');   // 🖥 지원 해상도 옆(모델별 정보 버튼끼리)
-        if (res && res.parentNode === hdr) hdr.insertBefore(btn, res); else hdr.insertBefore(btn, hdr.querySelector(':scope > .btn-group'));
+        window.MODEL_PN_HEADER_TARGETS.forEach(function (cfg) {
+            var tab = document.getElementById(cfg.tab);
+            var hdr = tab && tab.querySelector('.concept-header-box');
+            if (!hdr || document.getElementById(cfg.id)) return;
+            var b = document.createElement('button');
+            b.type = 'button'; b.id = cfg.id; b.className = 'ep-theme-hover-btn';
+            b.setAttribute('style', 'margin:0 6px 0 0; height:31px; box-sizing:border-box; padding:0 12px; background:#e0f5f7; color:#00707d; border:none; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; white-space:nowrap;');
+            b.textContent = '🏭 KTK PN';
+            b.onclick = function () { window._bsSapPnFind(); };
+            b.onmouseenter = sync;
+            var before = cfg.before && document.getElementById(cfg.before);
+            var after = cfg.after && document.getElementById(cfg.after);
+            if (before && before.parentNode === hdr) hdr.insertBefore(b, before);
+            else if (after && after.parentNode === hdr) hdr.insertBefore(b, after.nextSibling);
+            else hdr.insertBefore(b, hdr.querySelector(':scope > .btn-group'));
+            btns.push(b);
+        });
         sync();
     }
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();

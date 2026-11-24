@@ -23,7 +23,11 @@ f.onload = async function () {
       body = /materials=999999/.test(url) ? { ok: false, error: 'SAP 로그인이 필요합니다' }
            : { ok: true, materials: [{ MATNR: '000000502574', MAKTX: 'MAIN>KTS320DPS01,LNW' }] };
     } else if (url.indexOf('/sap-material-pattern') !== -1) {
-      body = { ok: true, materials: [{ MATNR: '502574', MAKTX: 'MAIN>KTS320DPS01,LNW' }, { MATNR: '502573', MAKTX: 'UPPER>KTS320DGS01,LNW' }] };
+      var pat = decodeURIComponent((url.split('pattern=')[1] || ''));
+      // 대소문자 재시도 시험용: 'OBSIDIAN'(대문자)은 0건, 'Obsidian'(원래 글자)은 1건
+      if (/OBSIDIAN/.test(pat)) body = { ok: true, materials: [] };
+      else if (/Obsidian/.test(pat)) body = { ok: true, materials: [{ MATNR: '502700', MAKTX: 'Obsidian 27 MAIN' }] };
+      else body = { ok: true, materials: [{ MATNR: '502574', MAKTX: 'MAIN>KTS320DPS01,LNW' }, { MATNR: '502573', MAKTX: 'UPPER>KTS320DGS01,LNW' }] };
     } else return Promise.reject(new Error('offline'));
     return Promise.resolve({ ok: true, json: function () { return Promise.resolve(body); } });
   };
@@ -143,6 +147,35 @@ f.onload = async function () {
     W.mcActiveUnit = 'BTN'; D.getElementById('sap-pn-find-overlay').style.display = 'none';
     bsBtn.click(); await sleep(100);
     chk(D.getElementById('sap-pn-find-overlay').style.display === 'none', '[Customer SPEC] 그 모델 카드가 없으면 창을 안 열고 알린다');
+    // 8) M.C Table — 같은 헤더 버튼(데이터 MODEL_PN_HEADER_TARGETS), 제품구분자 바 바로 뒤
+    var mcBtn = D.getElementById('mc-sap-pn-btn');
+    chk(!!mcBtn && mcBtn.closest('#tab-mctable .concept-header-box') && mcBtn.previousElementSibling && mcBtn.previousElementSibling.id === 'mc-unit-bar',
+        '[M.C Table] 헤더 제품구분자 바 바로 뒤에 🏭 KTK PN');
+    W.tabData.projectModels = [
+      { unitId: 'MVD', 고객모델명: 'STELLAR32', KTKPN: '', KTK모델명: '', 고객모델내역: '', 프로젝트코드: '', 프로젝트명칭: '' },
+      { unitId: 'TPR', 고객모델명: 'TOPPER32',  KTKPN: '', KTK모델명: '', 고객모델내역: '', 프로젝트코드: '', 프로젝트명칭: '' }];
+    W.renderProjectModels(); W.mcActiveUnit = 'MVD';
+    D.getElementById('sap-pn-find-overlay').style.display = 'none';
+    mcBtn.click(); await sleep(150);
+    chk(D.getElementById('sap-pn-find-q').value === 'STELLAR32', '[M.C Table] 지금 모델(MVD)의 고객 모델명이 검색어');
+    D.getElementById('sap-pn-find-go').click(); await sleep(300);
+    D.querySelector('#sap-pn-find-list [data-i="1"]').click(); await sleep(150);
+    chk(W.tabData.projectModels[0].KTKPN === '502573' && W.tabData.projectModels[1].KTKPN === '', '[M.C Table] MVD 카드에만 넣는다');
+    // 9) 내역으로 찾기 — 📝 버튼은 6자리가 섞여 있어도 내역 패턴, 낱말은 * 로, code_내역 은 코드 떼고
+    var dkt = D.createElement('input'); D.body.appendChild(dkt);
+    W._sapPnFind(dkt, ''); await sleep(80);
+    var qq = D.getElementById('sap-pn-find-q'), descBtn = D.getElementById('sap-pn-find-desc');
+    chk(!!descBtn, '[내역] 📝 내역으로 버튼');
+    calls.length = 0; qq.value = 'MAIN KTS320 LNW'; descBtn.click(); await sleep(300);
+    chk(/pattern=\*MAIN\*KTS320\*LNW\*$/.test(decodeURIComponent(calls[0] || '')), '[내역] 띄어 쓴 낱말은 * 로 — ' + decodeURIComponent(calls[0] || ''));
+    calls.length = 0; qq.value = '502574_MAIN>KTS320'; descBtn.click(); await sleep(300);
+    chk(/sap-material-pattern\?pattern=\*MAIN>KTS320\*$/.test(decodeURIComponent(calls[0] || '')), '[내역] code_내역 을 붙여 넣으면 코드 떼고 내역만 — ' + decodeURIComponent(calls[0] || ''));
+    calls.length = 0; qq.value = 'PANEL 123456 ASSY'; descBtn.click(); await sleep(300);
+    chk(calls.length === 1 && /sap-material-pattern/.test(calls[0]), '[내역] 6자리가 섞여 있어도 📝 는 내역으로(코드 조회 안 함)');
+    calls.length = 0; qq.value = 'Obsidian'; D.getElementById('sap-pn-find-go').click(); await sleep(400);
+    chk(calls.length === 2 && /OBSIDIAN/.test(decodeURIComponent(calls[0])) && /Obsidian/.test(decodeURIComponent(calls[1]))
+        && D.querySelectorAll('#sap-pn-find-list [data-i]').length === 1, '[내역] 대문자로 0건이면 원래 글자로 한 번 더 찾는다');
+    D.getElementById('sap-pn-find-overlay').style.display = 'none'; dkt.remove();
     W.tabData.projectModels = savedModels; W.mcActiveUnit = savedUnit; if (savedModels) W.renderProjectModels();
   } catch (e) { out.push('ERROR ' + e.message); }
   out.push(pass + '/' + (pass + fail));
