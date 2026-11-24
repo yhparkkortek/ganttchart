@@ -1369,3 +1369,149 @@ window.alarmFormatContent = function(text) {
 };
 
 // 📌 알람 행 데이터 수집 — globalData 직접 참조
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 🔍 [2026-11-24 사용자 요청] Summary 검색 — 다른 페이지와 **같은 규칙**(js/04a `_searchTokens`/
+//    `_searchMatchAll`/`_searchMatchAny`: 낱말 AND·공백/기호 무시).
+//    Summary 는 표 하나가 아니라 **입력 양식**(마일스톤·개요·모델 카드·멤버·주요자재…)이라 행을 숨기지 않고
+//    "페이지 안 찾기"로 한다 — 걸린 칸을 강조하고 ▲▼/Enter 로 하나씩 옮겨 가며 그 자리로 스크롤한다.
+//    ⚠️ 아무것도 숨기지 않는다(저장이 입력칸을 읽으므로 화면 모양을 바꾸지 않는 게 가장 안전하다).
+//    묶음 단위: 표 안이면 **행(tr)** — 낱말이 그 행의 서로 다른 칸에 있어도 걸린다(다른 페이지와 같다).
+//    멤버 칸은 역할·이름·이메일 세 칸이 한 줄이라 그 셋을 한 묶음으로 본다. 그 밖은 칸 하나.
+//    다시 그려지는 부분(모델 카드·주요자재·진척 현황)은 바뀌면 다시 건다(감시기).
+// ─────────────────────────────────────────────────────────────────────────────
+(function () {
+    var _en = function () { return window._currentLang === 'en'; };
+    var st = window._sumSearch = { term: '', groups: [], cur: -1 };
+
+    function root() { return document.getElementById('tab-summary'); }
+    function fieldText(el) {
+        var tag = el.tagName;
+        if (tag === 'SELECT') { var o = el.options && el.options[el.selectedIndex]; return o ? o.text : ''; }
+        if (tag === 'INPUT' || tag === 'TEXTAREA') return el.value || '';
+        return el.textContent || '';
+    }
+    // 찾을 칸 모으기 — 입력칸 + 입력칸이 없는 글 칸(표 칸·라벨·소제목). 헤더·변경 이력·검색칸 자신은 뺀다.
+    function collect() {
+        var r = root(); if (!r) return [];
+        var out = [];
+        var skip = function (el) {
+            return el.closest('.concept-header-box') || el.closest('#sum-history-box') || el.closest('#sum-search-bar');
+        };
+        r.querySelectorAll('input, textarea, select').forEach(function (el) {
+            var ty = String(el.type || '').toLowerCase();
+            if (ty === 'hidden' || ty === 'checkbox' || ty === 'radio' || ty === 'button' || ty === 'file' || ty === 'password') return;
+            if (skip(el)) return;
+            out.push(el);
+        });
+        r.querySelectorAll('td, th, label, h3').forEach(function (el) {
+            if (skip(el) || el.querySelector('input, textarea, select, td, th')) return;
+            if (!String(el.textContent || '').trim()) return;
+            out.push(el);
+        });
+        return out;
+    }
+    // 묶음 열쇠 — 표 행이면 그 tr, 멤버 줄이면 역할 칸(mem-label), 그 밖은 칸 자신
+    function groupKeyOf(el) {
+        var tr = el.closest('tr');
+        if (tr) return tr;
+        if (el.tagName === 'INPUT' && el.parentNode && el.parentNode.classList && el.parentNode.classList.contains('concept-grid')) {
+            var p = el;
+            for (var k = 0; k < 3 && p; k++) {
+                if (p.classList && p.classList.contains('mem-label')) return p;
+                p = p.previousElementSibling;
+            }
+        }
+        return el;
+    }
+
+    function clear() {
+        var r = root(); if (!r) return;
+        r.querySelectorAll('.search-hit, .search-cur').forEach(function (el) { el.classList.remove('search-hit', 'search-cur'); });
+    }
+    function setCount() {
+        var c = document.getElementById('sum-search-count');
+        if (!c) return;
+        if (!String(st.term || '').trim()) { c.textContent = ''; return; }
+        c.textContent = st.groups.length ? ((st.cur + 1) + ' / ' + st.groups.length) : (_en() ? 'No match' : '없음');
+    }
+    function focusCur(scroll) {
+        var r = root(); if (!r) return;
+        r.querySelectorAll('.search-cur').forEach(function (el) { el.classList.remove('search-cur'); });
+        var g = st.groups[st.cur];
+        if (!g) { setCount(); return; }
+        g.hits.forEach(function (el) { el.classList.add('search-cur'); });
+        if (scroll && g.hits[0] && g.hits[0].scrollIntoView) g.hits[0].scrollIntoView({ block: 'center', behavior: 'smooth' });
+        setCount();
+    }
+
+    window._sumSearchApply = function (opts) {
+        opts = opts || {};
+        clear();
+        var toks = window._searchTokens ? window._searchTokens(st.term) : [];
+        st.groups = [];
+        if (!toks.length) { st.cur = -1; setCount(); return; }
+        var map = new Map(), order = [];
+        collect().forEach(function (el) {
+            var key = groupKeyOf(el);
+            if (!map.has(key)) { map.set(key, []); order.push(key); }
+            map.get(key).push(el);
+        });
+        order.forEach(function (key) {
+            var els = map.get(key);
+            if (!window._searchMatchAll(els.map(fieldText).join(' \u0001 '), toks)) return;
+            var hits = els.filter(function (el) { return window._searchMatchAny(fieldText(el), toks); });
+            if (!hits.length) return;
+            hits.forEach(function (el) { el.classList.add('search-hit'); });
+            st.groups.push({ hits: hits });
+        });
+        if (opts.keepCur && st.cur >= 0 && st.cur < st.groups.length) focusCur(false);
+        else { st.cur = st.groups.length ? 0 : -1; focusCur(!opts.noScroll); }
+    };
+    window._sumSearchStep = function (d) {
+        if (!st.groups.length) return;
+        st.cur = (st.cur + d + st.groups.length) % st.groups.length;
+        focusCur(true);
+    };
+
+    function ensureBar() {
+        if (document.getElementById('sum-search-input')) return true;
+        var r = root(); if (!r) return false;
+        var hdr = r.querySelector('.concept-header-box');
+        if (!hdr) return false;
+        var bar = document.createElement('span');
+        bar.id = 'sum-search-bar';
+        bar.style.cssText = 'display:inline-flex; align-items:center; gap:4px; margin-left:12px; flex-shrink:0;';
+        var btn = 'height:31px; box-sizing:border-box; padding:0 8px; border:1px solid #cfe3e5; border-radius:6px; background:#fff; color:#00707d; cursor:pointer; font-size:12px;';
+        bar.innerHTML = '<input id="sum-search-input" type="search" autocomplete="off" style="width:200px; height:31px; box-sizing:border-box; padding:0 12px; border:1px solid #ccc; border-radius:16px; font-size:12px; outline:none;">'
+            + '<button type="button" id="sum-search-prev" style="' + btn + '">▲</button>'
+            + '<button type="button" id="sum-search-next" style="' + btn + '">▼</button>'
+            + '<span id="sum-search-count" style="font-size:12px; color:#888; white-space:nowrap; min-width:40px;"></span>';
+        var anchor = hdr.querySelector('.btn-group');
+        if (anchor) hdr.insertBefore(bar, anchor); else hdr.appendChild(bar);
+        var inp = document.getElementById('sum-search-input');
+        inp.placeholder = _en() ? '🔍 Find in Summary' : '🔍 Summary 에서 찾기';
+        inp.title = _en() ? 'Several words OK — Enter/▼ next, Shift+Enter/▲ previous' : '여러 낱말 가능 — Enter·▼ 다음, Shift+Enter·▲ 이전';
+        var t = null;
+        inp.oninput = function () { clearTimeout(t); t = setTimeout(function () { st.term = inp.value; window._sumSearchApply(); }, 200); };
+        inp.onkeydown = function (e) {
+            if (e.key === 'Enter') { e.preventDefault(); window._sumSearchStep(e.shiftKey ? -1 : 1); }
+            else if (e.key === 'Escape' && inp.value) { inp.value = ''; st.term = ''; window._sumSearchApply(); }
+        };
+        document.getElementById('sum-search-prev').onclick = function () { window._sumSearchStep(-1); };
+        document.getElementById('sum-search-next').onclick = function () { window._sumSearchStep(1); };
+        // 다시 그려지는 부분이 바뀌면 다시 건다(스크롤은 하지 않고 지금 위치 유지)
+        if (window.MutationObserver) {
+            var pending = false;
+            new MutationObserver(function () {
+                if (pending || !String(st.term || '').trim()) return;
+                pending = true;
+                setTimeout(function () { pending = false; window._sumSearchApply({ keepCur: true, noScroll: true }); }, 50);
+            }).observe(r, { childList: true, subtree: true });
+        }
+        return true;
+    }
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', ensureBar);
+    else ensureBar();
+})();

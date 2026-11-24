@@ -259,4 +259,58 @@ const reset = window._driveModalSearchState.q === '';
   chk(ids['bs-search-count'].textContent === '2 / 3행' && ids['mc-search-count'].textContent === '', '[Customer SPEC] 개수는 제 표에만 ' + ids['bs-search-count'].textContent);
   chk(W._tblSearchTerms.mc === '' && rows.every(r => !r.classList.has('parts-search-hide')), '[Customer SPEC] M.C 표 검색 상태와 섞이지 않음');
 }
+// ── Summary(js/22b _sumSearchApply) — 페이지 안 찾기. 작은 가짜 DOM 나무 위에서 진짜 소스를 돌린다 ──
+{
+  const s22b = fs.readFileSync(path.join(__dirname, '..', 'js', '22b-summary-mctable-core1.js'), 'utf8');
+  const sa = s22b.indexOf('// 🔍 [2026-11-24 사용자 요청] Summary 검색');
+  if (sa < 0) { console.log('FAIL js/22b 소스 자르기'); process.exit(1); }
+  // 아주 작은 DOM: tag/id/class 선택자와 쉼표 목록만
+  const N = (tag, attrs, kids) => {
+    const n = Object.assign({ tagName: tag.toUpperCase(), children: [], parentNode: null, type: '', value: '', id: '', _text: '' }, attrs || {});
+    const cls = new Set(String((attrs && attrs.className) || '').split(/\s+/).filter(Boolean));
+    n.classList = { add: (...c) => c.forEach(x => cls.add(x)), remove: (...c) => c.forEach(x => cls.delete(x)), contains: c => cls.has(c), has: c => cls.has(c) };
+    (kids || []).forEach(k => { k.parentNode = n; n.children.push(k); });
+    n.children.forEach((k, i) => { k.previousElementSibling = n.children[i - 1] || null; });
+    Object.defineProperty(n, 'textContent', { get() { return n._text + n.children.map(k => k.textContent).join(''); } });
+    const one = (el, s) => s[0] === '#' ? el.id === s.slice(1) : s[0] === '.' ? el.classList.contains(s.slice(1)) : el.tagName === s.toUpperCase();
+    const all = (el) => el.children.reduce((a, k) => a.concat([k], all(k)), []);
+    n.querySelectorAll = sel => { const ss = sel.split(',').map(s => s.trim()); return all(n).filter(el => ss.some(s => one(el, s))); };
+    n.querySelector = sel => n.querySelectorAll(sel)[0] || null;
+    n.closest = sel => { for (let p = n; p; p = p.parentNode) if (one(p, sel)) return p; return null; };
+    n.scrollIntoView = () => { N.scrolled = n; };
+    return n;
+  };
+  const T = (tag, text, attrs) => N(tag, Object.assign({ _text: text }, attrs || {}));
+  const I = (value, attrs) => N('input', Object.assign({ value, type: 'text' }, attrs || {}));
+  const memLabel = I('H/W 담당자', { className: 'mem-label' }), hwName = I('조익현,조재준'), hwMail = I('ihjo@kortek.co.kr', { type: 'email' });
+  const fwLabel = I('F/W 담당자', { className: 'mem-label' }), fwName = I('최종석'), fwMail = I('', { type: 'email' });
+  const matRow = N('tr', {}, [N('td', {}, [I('PANEL')]), N('td', {}, [I('502572')]), N('td', {}, [I('LM270WQ1 SSA1')])]);
+  const tab = N('div', { id: 'tab-summary' }, [
+    N('div', { className: 'concept-header-box' }, [T('h2', 'Summary')]),
+    T('h3', '프로젝트 개요'),
+    N('div', {}, [T('label', '적용 목적'), N('textarea', { value: 'LNW UK 유럽 시장' })]),
+    N('div', { className: 'concept-grid' }, [memLabel, hwName, hwMail, fwLabel, fwName, fwMail]),
+    N('table', {}, [N('tbody', {}, [matRow])]),
+    N('div', { id: 'sum-history-box' }, [T('td', '조익현 수정함')])]);
+  const ids = { 'tab-summary': tab, 'sum-search-count': { textContent: '' }, 'sum-search-input': {} };   // 칸이 이미 있으면 설치기는 건너뛴다
+  const W = { _currentLang: 'ko' }; new Function('window', helpers)(W);
+  const doc = { readyState: 'complete', getElementById: id => ids[id] || null, createElement: () => N('span') };
+  // ensureBar 는 헤더에 칸을 꽂으려다 btn-group 이 없으면 끝에 붙인다 — 그 칸은 시험에 안 쓴다
+  W.MutationObserver = undefined;
+  new Function('window', 'document', 'setTimeout', 'clearTimeout', 'Map', s22b.slice(sa))(W, doc, f => f(), () => {}, Map);
+  const run = q => { W._sumSearch.term = q; W._sumSearchApply(); return W._sumSearch.groups.length; };
+  chk(run('lnw 유럽') === 1 && tab.children[2].children[1].classList.has('search-hit'), '[Summary] 입력칸(개요) 찾기');
+  chk(run('hw 조익현') === 1 && memLabel.classList.has('search-hit') && hwName.classList.has('search-hit') && !fwName.classList.has('search-hit'),
+      '[Summary] 멤버 줄 = 역할+이름 한 묶음(AND)');
+  chk(run('panel lm270wq1') === 1 && !matRow.children[1].children[0].classList.has('search-hit'), '[Summary] 주요자재 행 AND, 걸린 칸만 강조');
+  chk(run('조익현') === 1, '[Summary] 변경 이력·헤더는 찾지 않음 ' + W._sumSearch.groups.length);
+  chk(run('lnw') >= 1 && ids['sum-search-count'].textContent === '1 / ' + W._sumSearch.groups.length, '[Summary] 개수 ' + ids['sum-search-count'].textContent);
+  run('담당자');
+  const n = W._sumSearch.groups.length; W._sumSearchStep(1);
+  chk(n === 2 && W._sumSearch.cur === 1 && fwLabel.classList.has('search-cur') && !memLabel.classList.has('search-cur'), '[Summary] ▼ 다음으로 옮기며 지금 칸 표시');
+  W._sumSearchStep(1);
+  chk(W._sumSearch.cur === 0, '[Summary] 끝에서 ▼ 는 처음으로');
+  run('');
+  chk(!memLabel.classList.has('search-hit') && !memLabel.classList.has('search-cur') && ids['sum-search-count'].textContent === '', '[Summary] 지우면 강조 원상복구');
+}
 console.log(`\n${pass}/${pass + fail}`); process.exit(fail ? 1 : 0);

@@ -2709,3 +2709,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
 
 /* 🔍 [2026-11-24] Customer SPEC 검색 — M.C 와 같은 설치기(js/22i _tblSearchInstall). */
 #briefspec-body input.search-hit { background-color:#fff3bf !important; }
+
+/* 🔍 [2026-11-24] Summary 찾기(js/22b _sumSearchApply) — 숨기지 않고 강조만, 지금 칸은 주황 테두리. */
+#tab-summary .search-hit { background-color:#fff3bf !important; }
+#tab-summary .search-cur { outline:2px solid #f08c00 !important; outline-offset:-2px; }
