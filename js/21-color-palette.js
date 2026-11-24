@@ -265,7 +265,9 @@ window._cpApplyLive = function(hex, skipSave) {
         '#tab-mctable .concept-table thead th', '#mc-comparison-table thead th',
         // 💡 [2026-08-30 추가] 주요 자재 표(2개, 좌/우)는 .concept-table 클래스가 아닌 일반 table이라
         // 위 목록 어디에도 안 걸려서 전역 `th{background:#f4f6f8}` 회색 규칙이 그대로 이겼음.
-        '#major-materials-section thead th'
+        '#major-materials-section thead th',
+        // 📏 [2026-11-24 "표 머리글 통일"] 일일보고 하루 보기 표 — 목록에 없어 전역 회색(#f4f6f8)이 이겼다
+        '#daily-report-page thead th'
     ];
     css += headerSelectors.join(', ') + ' { background: ' + gen.headerTint + ' !important; color: ' + gen.darkText + ' !important; }\n';
 

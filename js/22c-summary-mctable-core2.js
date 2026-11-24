@@ -1320,13 +1320,13 @@ window.renderMaterialModelsContainer = function() {
     const models = window._ensureModelMaterials();
     if (!models.length) { container.innerHTML = ''; return; }
     const _en = window._currentLang === 'en';
-    const _thS = 'padding:5px 6px; border:1px solid #cfe3e5; text-align:center;';
+    const _thS = 'padding:5px 6px; border:1px solid #cfe3e5; text-align:center; font-weight:600;';
     const _trustTitle = _en
         ? 'Check to let AI trust a mention of this PN as a project-identifying signal. Leave unchecked for shared parts.'
         : '체크하면 AI가 이 PN 언급을 "이 프로젝트가 맞다"는 신뢰 신호로 사용. 여러 프로젝트가 같이 쓰는 공용 부품은 체크하지 마세요(오매칭 위험).';
     const _tableHtml = function(side, mi) {
         return '<div style="flex:1 1 320px; min-width:280px; overflow:auto; border:1px solid #cfe3e5; border-radius:8px;">'
-            + '<table style="width:100%; border-collapse:collapse; font-size:12px;"><thead><tr style="background:#eef6f7;">'
+            + '<table style="width:100%; border-collapse:collapse; font-size:12.5px;"><thead><tr style="background:#eef6f7;">'
             + '<th style="' + _thS + ' width:120px;">TYPE</th>'
             + '<th style="' + _thS + ' width:60px;">KTK PN</th>'
             + '<th style="' + _thS + '">Description</th>'

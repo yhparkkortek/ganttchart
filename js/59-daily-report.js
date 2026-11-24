@@ -3450,7 +3450,7 @@
             '<colgroup>' + DAY_COLS.map(function (c) { return '<col' + (c.w ? ' style="width:' + c.w + ';"' : '') + '>'; }).join('') + '</colgroup>' +
             '<thead><tr style="background:#eef6f7;">' +
               DAY_COLS.map(function (c) {
-                  return '<th style="padding:6px 8px; border:1px solid #cfe3e5; font-size:12.5px; color:#2c5f8a;">' +
+                  return '<th style="padding:6px 8px; border:1px solid #cfe3e5; font-size:12.5px; font-weight:600; text-align:center; background:#eef6f7; color:#00707d;">' +
                          esc(window._currentLang === 'en' ? c.en : c.ko) + '</th>';
               }).join('') +
             '</tr></thead><tbody>' + (rows || '<tr><td colspan="' + DAY_COLS.length + '" style="padding:16px; text-align:center; color:#aaa; font-size:12.5px;">' + esc(T('이 날짜에 작성된 보고가 없습니다.', 'No reports for this date.')) + '</td></tr>') + '</tbody></table>';
