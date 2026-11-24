@@ -990,7 +990,7 @@
             }).catch(function () { /* 보관함을 못 읽으면 그냥 버튼을 누르면 된다 */ });
         }
         var factByKey = {}; (col.facts || []).forEach(function (f) { factByKey[factKey(f)] = f; });
-        _psLast = { shown: shown, openName: openName, label: shown && shown.archiveView ? shown.archiveView.label : col.range.label, kind: kind, factByKey: factByKey };
+        _psLast = { shown: shown, openName: openName, label: shown && shown.archiveView ? shown.archiveView.label : col.range.label, kind: kind, factByKey: factByKey, col: col };
         var secHtml = '<div id="ps-ai-sec">' + aiSectionHtml() + '</div>';   // 분류 칩·엑셀·보관함 — 고정 머리로
         // 📌 표는 고정 머리 **바로 아래**(틈 0) — 틈이 있으면 스크롤 첫 몇 px 동안 머리글이 따라 올라가다 멈춰 "같이 움직인다"(2026-11-23 실측 9px).
         if (shown && shown.rows.length) h.push('<div id="ps-ai-tbl" style="margin-bottom:10px;">' + tableHtml() + '</div>');
@@ -1011,7 +1011,9 @@
                     : '<div style="padding:24px 10px; text-align:center; color:#999; font-size:12.5px;">' + esc(T('이 기간에 메일 분석으로 들어온 업무가 없습니다.', 'No mail-derived tasks in this period.')) + (P.includeNonMail ? '' : '<br>' + esc(T('(사람이 직접 적은 업무는 세지 않습니다 — PERIOD_SUMMARY.includeNonMail)', '(hand-typed tasks are not counted)'))) + '</div>'));
         } else {
             var byDate = {};
-            col.facts.forEach(function (f) { (byDate[f.date] = byDate[f.date] || []).push(f); });
+            var factsShown = _psTbl.pinned ? col.facts.filter(factPinned) : col.facts;
+            if (_psTbl.pinned && !factsShown.length) h.push('<div style="padding:24px 10px; text-align:center; color:#999; font-size:12.5px;">' + esc(T('📌 핀셋을 켠 업무가 없습니다 — 열린 프로젝트의 업무만 셉니다', 'No pinned tasks (open project only)')) + '</div>');
+            factsShown.forEach(function (f) { (byDate[f.date] = byDate[f.date] || []).push(f); });
             Object.keys(byDate).sort().reverse().forEach(function (d) {
                 h.push('<div style="font-size:12px; font-weight:bold; color:#555; margin:10px 0 4px; border-bottom:1px solid #eee; padding-bottom:2px;">' + esc(d) + ' <span style="font-weight:normal; color:#999;">(' + byDate[d].length + ')</span></div>');
                 byDate[d].forEach(function (f) {
@@ -1050,7 +1052,7 @@
     }
 
     // ── 📊 AI 요약 표 ───────────────────────────────────────────────────────────
-    var _psTbl = { sort: 'cat', dir: 1, cats: {}, proj: '', who: '', q: '', common: false };
+    var _psTbl = { sort: 'cat', dir: 1, cats: {}, proj: '', who: '', q: '', common: false, pinned: false };
     var _psView = null;      // 📚 보관본을 열어 보는 중이면 그 기록
     var _psLooked = {};      // 같은 조건으로 보관함을 이미 찾아봤는가(렌더마다 NAS 를 두드리지 않게)
     var _psLast = null;
@@ -1064,6 +1066,7 @@
         var out = rows.filter(function (r) {
             if (anyCat && !_psTbl.cats[r.cat]) return false;
             if (_psTbl.common && !r.common) return false;
+            if (_psTbl.pinned && !rowPinned(r)) return false;
             if (_psTbl.proj && r.projects.indexOf(_psTbl.proj) < 0) return false;
             if (_psTbl.who && peopleOf(r).indexOf(_psTbl.who) < 0) return false;
             if (q && (r.text + ' ' + r.projects.join(' ') + ' ' + r.people.join(' ') + ' ' + r.refs.map(function (x) { return x.task; }).join(' ')).toLowerCase().indexOf(q) < 0) return false;
@@ -1232,6 +1235,21 @@
         if (window.showToast) window.showToast(T((newState ? '📌 핀셋(알람)을 켰습니다' : '🔕 핀셋(알람)을 껐습니다') + ' — 간트 ' + rows.length + '행', (newState ? 'Pinned ' : 'Unpinned ') + rows.length + ' row(s)'), 'info');
         if (window._renderAiProjectSummaryBody) window._renderAiProjectSummaryBody();
     }
+    /** 📌 이 요약 행(근거 간트 행 중 하나라도) / 이 사실이 핀셋 켜져 있나 — '핀셋만' 필터가 쓴다. */
+    function rowPinned(r) {
+        var res = resolveGanttRows(r);
+        return res.rows.some(function (ri) { return res.gd[ri] && res.gd[ri]._알림; });
+    }
+    function factPinned(f) {
+        var gd = (typeof globalData !== 'undefined' && globalData) ? globalData : window.globalData;
+        var ri = factGanttRow(f);
+        return ri >= 0 && !!(gd[ri] && gd[ri]._알림);
+    }
+    window._psFactPinned = factPinned;   // 하네스용
+    /** 📌 핀셋만 체크 — 표가 없을 때도(사실 목록만) 보인다. 열린 프로젝트 것만 셀 수 있다. */
+    function pinFilterHtml(n) {
+        return '<label title="' + esc(T('핀셋(알람)을 켠 업무만 — 표와 아래 사실 목록 둘 다. 열린 프로젝트의 업무만 알 수 있습니다', 'Pinned tasks only (table and fact list) — open project only')) + '" style="font-size:11px; color:#c25e00; display:inline-flex; align-items:center; gap:2px; cursor:pointer; margin-left:2px; white-space:nowrap;"><input type="checkbox"' + (_psTbl.pinned ? ' checked' : '') + ' onchange="window._psTblSet({pinned:this.checked})">📌 ' + esc(T('핀셋만', 'Pinned only')) + ' ' + n + '</label>';
+    }
     window._psPinRow = function (ai) {
         var r = _psLast && _psLast.shown && _psLast.shown.rows && _psLast.shown.rows[ai];
         if (!r) return;
@@ -1284,7 +1302,8 @@
         var s = _psLast && _psLast.shown;
         if (!s) {
             // 🧹 [2026-11-23 사용자 요청] 안내문은 지웠다 — 보관함 고르기만 남긴다.
-            return '<div style="display:flex; justify-content:flex-end; margin-bottom:6px;">' + archiveSelectHtml() + '</div>';
+            var nPinF = ((_psLast && _psLast.col && _psLast.col.facts) || []).filter(factPinned).length;
+            return '<div style="display:flex; justify-content:flex-end; align-items:center; gap:6px; margin-bottom:6px;">' + pinFilterHtml(nPinF) + archiveSelectHtml() + '</div>';
         }
         var all = s.rows;
         var cnt = {}; all.forEach(function (r) { cnt[r.cat] = (cnt[r.cat] || 0) + 1; });
@@ -1326,6 +1345,7 @@
         return banner +
             '<div style="display:flex; gap:4px; align-items:center; flex-wrap:wrap; margin-bottom:5px;">' + chips +
             (nCommon ? '<label style="font-size:11px; color:#8f5a00; display:inline-flex; align-items:center; gap:2px; cursor:pointer; margin-left:2px;"><input type="checkbox"' + (_psTbl.common ? ' checked' : '') + ' onchange="window._psTblSet({common:this.checked})">🔗 ' + esc(T('공통 이슈만', 'Common only')) + ' ' + nCommon + '</label>' : '') +
+            pinFilterHtml(all.filter(rowPinned).length) +
             '<select onchange="window._psTblSet({proj:this.value})" title="' + esc(T('프로젝트', 'Project')) + '" style="' + selS + '">' + opt(projs, _psTbl.proj, T('프로젝트 전체', 'All projects')) + '</select>' +
             '<select onchange="window._psTblSet({who:this.value})" title="' + esc(T('업무 담당자', 'Assignee')) + '" style="' + selS + '">' + opt(people, _psTbl.who, T('담당자 전체', 'All assignees')) + '</select>' +
             '<input id="ps-tbl-q" value="' + esc(_psTbl.q) + '" oninput="window._psTblSearch(this.value)" placeholder="🔍 ' + esc(T('내용 검색', 'Search')) + '" style="' + window._uiInputStyle() + ' width:120px;' + '">' +
@@ -1388,10 +1408,12 @@
     };
     window._psTblSet = function (patch) {
         patch = patch || {};
-        if (patch.reset) _psTbl = { sort: 'cat', dir: 1, cats: {}, proj: '', who: '', q: '', common: false };
+        if (patch.reset) _psTbl = { sort: 'cat', dir: 1, cats: {}, proj: '', who: '', q: '', common: false, pinned: false };
         if (patch.toggleCat) _psTbl.cats[patch.toggleCat] = !_psTbl.cats[patch.toggleCat];
-        ['proj', 'who', 'common'].forEach(function (k) { if (k in patch) _psTbl[k] = patch[k]; });
-        rerenderAi();
+        ['proj', 'who', 'common', 'pinned'].forEach(function (k) { if (k in patch) _psTbl[k] = patch[k]; });
+        // 📌 핀셋만 / 초기화는 아래 사실 카드도 거르므로 전체를 다시 그린다.
+        if (('pinned' in patch || patch.reset) && window._renderAiProjectSummaryBody) window._renderAiProjectSummaryBody();
+        else rerenderAi();
     };
     // 🎯 [2026-11-23 사용자 요청] 근거 → 그 사실 카드로 이동(상세·📧 원문) → 카드를 누르면 표의 그 행으로 돌아온다.
     var _psBackRow = null;

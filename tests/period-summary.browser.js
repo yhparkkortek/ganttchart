@@ -164,6 +164,21 @@
                 ok('카드 📌 도 간트 알람을 바꾼다', window.globalData.slice(1).filter(function (r) { return r && r._알림; }).length !== before); }
             window.globalData.forEach(function (r) { if (r && typeof r === 'object') delete r._알림; });
             window._renderAiProjectSummaryBody();
+            // 📌 핀셋만 보기 — 표와 사실 카드 둘 다 거른다.
+            var allRows = document.querySelectorAll('#ps-ai-tbl tbody tr[id^="ps-row-"]').length;
+            var allCards = document.querySelectorAll('[id^="ps-fact-"]').length;
+            ok('핀셋만 체크박스가 있다', !!document.querySelector('input[onchange*="pinned"]'));
+            window._psTblSet({ pinned: true });
+            ok('핀셋 0개면 표 행 0 · 카드 0 · 안내', document.querySelectorAll('#ps-ai-tbl tbody tr[id^="ps-row-"]').length === 0 && document.querySelectorAll('[id^="ps-fact-"]').length === 0 && /핀셋을 켠 업무가 없습니다/.test(document.getElementById('psummary-page').textContent));
+            window.globalData[1]._알림 = true;
+            window._renderAiProjectSummaryBody();
+            var pr = document.querySelectorAll('#ps-ai-tbl tbody tr[id^="ps-row-"]').length, pc = document.querySelectorAll('[id^="ps-fact-"]').length;
+            ok('켠 업무만 남는다(표·카드)', pr >= 1 && pr <= allRows && pc === 1, { pr: pr, allRows: allRows, pc: pc, allCards: allCards });
+            ok('남은 카드가 켠 그 업무다', !!document.querySelector('[id^="ps-fact-"] .ps-pin-btn.on'));
+            window._psTblSet({ reset: 1 });
+            ok('초기화하면 전부 다시', document.querySelectorAll('#ps-ai-tbl tbody tr[id^="ps-row-"]').length === allRows && document.querySelectorAll('[id^="ps-fact-"]').length === allCards);
+            delete window.globalData[1]._알림;
+            window._renderAiProjectSummaryBody();
         }
         // 🔁 [2026-11-23 "엑셀에 근거가 2번"] 같은 행의 두 사본(열린 쪽 #G7 · 훑은 쪽 #G200007)을 근거로 집어도 하나로
         var dup = window._psRowsFromAi({ items: [{ 분류: '한 일', 내용: 'x', 근거: ['#G7', '#G200007', '#G7'] }] },
