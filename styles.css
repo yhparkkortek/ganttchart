@@ -2717,3 +2717,6 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
 
 /* 🔍 [2026-11-24] JIRA 연결 이슈 찾기(js/70 findAfterRender) — 걸린 칸 강조. */
 #jira-table-wrap td.search-hit { background-color:#fff3bf !important; }
+
+/* 🔍 [2026-11-24] Daily Report 하루 보기 찾기(js/59) — 걸린 칸 강조. */
+#daily-report-page td.search-hit { background-color:#fff3bf !important; }

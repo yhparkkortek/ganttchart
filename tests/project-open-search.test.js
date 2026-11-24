@@ -340,4 +340,32 @@ const reset = window._driveModalSearchState.q === '';
   W._jiraClearAllFilters();
   chk(J.state().q === '' && Object.keys(J.state().filters).length === 0, '[JIRA] 필터 초기화가 찾기칸도 비운다');
 }
+// ── Daily Report 하루 보기(js/59 keepItems) — 진짜 js/59 전체를 스텁 DOM 위에서 불러 돌린다 ──
+{
+  const s59 = fs.readFileSync(path.join(__dirname, '..', 'js', '59-daily-report.js'), 'utf8');
+  const noop = () => {};
+  const el = () => ({ style: {}, classList: { add: noop, remove: noop, toggle: noop }, addEventListener: noop, appendChild: noop, querySelectorAll: () => [], querySelector: () => null, dataset: {} });
+  const doc = { getElementById: () => null, querySelectorAll: () => [], querySelector: () => null, addEventListener: noop, createElement: el, readyState: 'complete', body: el(), visibilityState: 'visible' };
+  const W = { addEventListener: noop, localStorage: { getItem: () => null, setItem: noop, removeItem: noop }, _currentLang: 'ko' };
+  new Function('window', helpers)(W);
+  new Function('window', 'document', 'localStorage', s59)(W, doc, W.localStorage);
+  const D = W._dailySearchInternals;
+  const items = [
+    { cat: 'HW', name: 'HARNESS 길이 검토', project: 'LNW_STELLAR32_32.0.json', note: '40P 300mm 로 확정', next: '', issue: '' },
+    { cat: 'FW', name: 'EDID 수정', project: 'LNW_OBSIDIAN27_27.0.json', note: 'V1.02 배포', next: '고객 확인', issue: '' },
+    { cat: 'ME', name: 'Back cover 도금', project: 'KONAMI_KGP-4_55.0.json', note: '', next: '', issue: '도금 불량 재발' }];
+  const names = (q, who) => { W._dailyFilter = { who: '', proj: '', cat: '', q }; return D.keepItems(items, who || '박용훈').map(i => i.name).join('|'); };
+  [['', 'HARNESS 길이 검토|EDID 수정|Back cover 도금', '빈 검색 = 전부'],
+   ['박용훈 harness', 'HARNESS 길이 검토', '이름+업무 AND(이름은 사람 칸)'],
+   ['stellar 300mm', 'HARNESS 길이 검토', '프로젝트+내용 AND'],
+   ['kgp4', 'Back cover 도금', '프로젝트 파일명 기호 무시'],
+   ['고객 확인', 'EDID 수정', '해야 할 일 칸'],
+   ['불량', 'Back cover 도금', '막힌 일 칸'],
+   ['임희철', '', '다른 사람 이름이면 0']
+  ].forEach(([q, want, label]) => { const got = names(q); const ok = got === want; ok ? pass++ : fail++; console.log((ok ? 'ok  ' : 'FAIL') + ' [Daily] ' + label + ' → ' + got + (ok ? '' : ' (기대 ' + want + ')')); });
+  W._dailyFilter = { who: '', proj: '', cat: 'FW', q: 'v1 02' };
+  chk(D.keepItems(items, '박용훈').map(i => i.name).join() === 'EDID 수정', '[Daily] 구분 선택과 같이 걸린다');
+  W._dailyFilter = { who: '', proj: '', cat: 'HW', q: 'edid' };
+  chk(D.keepItems(items, '박용훈').length === 0, '[Daily] 구분과 찾기가 AND');
+}
 console.log(`\n${pass}/${pass + fail}`); process.exit(fail ? 1 : 0);

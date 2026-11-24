@@ -2288,14 +2288,40 @@
         ['행 조작', '일정 재계산', '일정 고정'];
 
     /** 지금 필터에 걸리는 항목만. */
-    function keepItems(items) {
+    function keepItems(items, personName) {
         var F = window._dailyFilter || {};
+        var toks = dailySearchToks();
         return (items || []).filter(function (it) {
             if (F.cat && String((it && it.cat) || '') !== F.cat) return false;
             if (F.proj && String((it && it.project) || '').replace(/\.json$/i, '') !== F.proj) return false;
+            if (toks.length && !window._searchMatchAll(dailyItemHay(it, personName), toks)) return false;
             return true;
         });
     }
+    // 🔍 [2026-11-24 사용자 요청] 하루 보기 찾기 — 다른 페이지와 **같은 규칙**(js/04a: 낱말 AND·공백/기호 무시).
+    //    한 업무 = 이름·구분·업무·프로젝트·오늘 한 일·해야 할 일·막힌 일. 낱말이 그 업무의 서로 다른 칸에
+    //    있어도 걸린다("박용훈 harness" = 그 사람의 harness 업무). 사람 필터·프로젝트·구분 선택과 같이 걸린다.
+    function dailySearchToks() {
+        var q = (window._dailyFilter || {}).q;
+        return (q && window._searchTokens) ? window._searchTokens(q) : [];
+    }
+    function dailyItemHay(it, personName) {
+        it = it || {};
+        return [personName || '', it.cat || '', it.name || '', String(it.project || '').replace(/\.json$/i, '')]
+            .concat((window.DAILY_FIELDS || []).map(function (f) { return it[f.itemKey] || ''; }))
+            .join(' \u0001 ');
+    }
+    window._dailySearchInternals = { keepItems: keepItems, hay: dailyItemHay };
+    var _dailyDayCache = null;   // { date, roster, docs } — 하루 보기를 마지막으로 읽은 것(찾기 재그리기 전용)
+    // 글자마다 NAS 를 다시 읽지 않는다 — 찾기로 다시 그릴 땐 방금 읽은 그 날 데이터를 그대로 쓴다
+    //    (`_dailyDayCache`, dailyRenderTab 이 채운다). 다시 그린 뒤 찾기칸에 커서를 되돌린다.
+    window.dailySearch = async function (v) {
+        (window._dailyFilter || (window._dailyFilter = {})).q = String(v || '');
+        window._dailySearchRerender = true;
+        await window.dailyRenderTab();
+        var inp = document.getElementById('daily-search-input');
+        if (inp) { inp.focus(); var n = inp.value.length; try { inp.setSelectionRange(n, n); } catch (e) { /* type=search 일부 브라우저 */ } }
+    };
 
     /**
      * "오늘 한 일" 칸 — 구분·업무·프로젝트를 **열로** 나눈다(2026-11-05 요청).
@@ -2394,8 +2420,15 @@
             sel('who', T('담당자 전체', 'All people'), who, F.who || '') +
             sel('proj', T('프로젝트 전체', 'All projects'), Object.keys(projs).sort().map(function (k) { return [k, k]; }), F.proj || '') +
             sel('cat', T('구분 전체', 'All disciplines'), Object.keys(cats).sort().map(function (k) { return [k, k]; }), F.cat || '') +
-            ((F.who || F.proj || F.cat)
-                ? '<button onclick="window._dailyFilter={who:\'\',proj:\'\',cat:\'\'}; window.dailyRenderTab();" ' +
+            // 🔍 찾기칸 — 다시 그릴 때마다 새로 만들어지므로 값은 F.q 에서 되살린다
+            '<input id="daily-search-input" type="search" autocomplete="off" value="' + esc(F.q || '') + '"' +
+                ' placeholder="' + esc(T('🔍 찾기 — 이름·업무·프로젝트·내용', '🔍 Find — name, task, project, text')) + '"' +
+                ' title="' + esc(T('여러 낱말 가능 — 한 업무에 낱말이 모두 있으면 걸립니다', 'Several words OK — a task matches when all words appear in it')) + '"' +
+                ' oninput="clearTimeout(window._dailySearchT); var v=this.value; window._dailySearchT=setTimeout(function(){window.dailySearch(v);},250);"' +
+                ' onkeydown="if(event.key===\'Escape\'&&this.value){this.value=\'\';window.dailySearch(\'\');}"' +
+                ' style="width:220px;' + (window._uiInputStyle ? window._uiInputStyle() : '') + ' font-size:12px; outline:none;">' +
+            ((F.who || F.proj || F.cat || F.q)
+                ? '<button onclick="window._dailyFilter={who:\'\',proj:\'\',cat:\'\',q:\'\'}; window.dailyRenderTab();" ' +
                   'style="padding:3px 9px; border:1px solid #eeb0ac; background:#fbe4e2; color:#b1432f; border-radius:5px; font-size:11px; cursor:pointer;">' +
                   esc(T('필터 해제', 'Clear')) + '</button>'
                 : '') +
@@ -3266,7 +3299,10 @@
                 esc(storageWhyBlocked()) + '</div>';
             return;
         }
-        box.innerHTML = '<div style="padding:18px; color:#888; font-size:12.5px;">⏳ ' + esc(T('불러오는 중…', 'Loading…')) + '</div>';
+        // 🔍 찾기로 다시 그리는 거면(같은 날·하루 보기) 방금 읽은 데이터를 그대로 쓴다 — 글자마다 NAS 를 안 읽게
+        var useCache = !!(window._dailySearchRerender && _dailyDayCache && _dailyDayCache.date === date && window._dailyView !== 'month');
+        window._dailySearchRerender = false;
+        if (!useCache) box.innerHTML = '<div style="padding:18px; color:#888; font-size:12.5px;">⏳ ' + esc(T('불러오는 중…', 'Loading…')) + '</div>';
         // 🪪 "내 보고"를 가리려면 내 계정을 알아야 한다. 부팅 때 못 받았을 수 있다(실측).
         await window.dailyEnsureIdentity();
 
@@ -3306,13 +3342,17 @@
         }
 
         var roster, docs;
-        try {
-            roster = await window.dailyLoadRoster(true);
-            window.dailyRosterSyncIfNotifier();   // 기다리지 않는다 — 화면은 이미 합쳐져 있다
-            docs = await window.dailyLoadDay(date);
-        } catch (e) {
-            box.innerHTML = '<div style="padding:18px; color:#b1432f; font-size:13px;">⚠️ ' + esc(e.message) + '</div>';
-            return;
+        if (useCache) { roster = _dailyDayCache.roster; docs = _dailyDayCache.docs; }
+        else {
+            try {
+                roster = await window.dailyLoadRoster(true);
+                window.dailyRosterSyncIfNotifier();   // 기다리지 않는다 — 화면은 이미 합쳐져 있다
+                docs = await window.dailyLoadDay(date);
+            } catch (e) {
+                box.innerHTML = '<div style="padding:18px; color:#b1432f; font-size:13px;">⚠️ ' + esc(e.message) + '</div>';
+                return;
+            }
+            _dailyDayCache = { date: date, roster: roster, docs: docs };
         }
         var byKey = {};
         docs.forEach(function (d) { byKey[String(d.key || '').toLowerCase()] = d; });
@@ -3351,13 +3391,20 @@
 
         var allPeople = people.slice();   // 선택지는 **필터 걸기 전** 목록에서 만든다
         // 🔍 필터 — 사람·프로젝트·구분. 비어 있으면 전부.
-        var F = window._dailyFilter || (window._dailyFilter = { who: '', proj: '', cat: '' });
-        var itemFiltered = !!(F.proj || F.cat);
+        var F = window._dailyFilter || (window._dailyFilter = { who: '', proj: '', cat: '', q: '' });
+        var itemFiltered = !!(F.proj || F.cat || F.q);
+        var sToks = dailySearchToks();
+        // (기타) 줄도 찾기에 걸리면 보인다 — 업무에 안 붙은 글이라 프로젝트·구분 선택에는 안 걸린다
+        var etcHit = function (p, dd) {
+            if (!sToks.length || F.proj || F.cat || !dd) return false;
+            var t = [p.name || p.key || '', dd.aiDone || '', dd.next || '', dd.issue || ''].join(' \u0001 ');
+            return window._searchMatchAll(t, sToks);
+        };
         if (F.who) people = people.filter(function (p) { return String(p.key || '') === F.who; });
         if (itemFiltered) {
             people = people.filter(function (p) {
                 var dd = byKey[String(p.key || '').toLowerCase()];
-                return dd && keepItems(dd.items).length;
+                return dd && (keepItems(dd.items, p.name || p.key).length || etcHit(p, dd));
             });
         }
 
@@ -3384,7 +3431,7 @@
             }
             var typ = window.DAILY_DAY_TYPES.filter(function (x) { return x.key === d.dayType; })[0] || {};
             var typeTxt = window._currentLang === 'en' ? (typ.en || '') : (typ.ko || '');
-            var items = keepItems(d.items);
+            var items = keepItems(d.items, p.name || p.key);
 
             // 🧺 기타 = 업무에 안 붙는 것(옛 보고의 보고-단위 글·꼬리표 없는 사진).
             //    ⚠️ 필터가 켜져 있으면 기타는 안 보여 준다 — 어느 업무에도 안 걸리니까.
@@ -3392,7 +3439,8 @@
                 .filter(Boolean).join('\n');
             var etcFiles = filesOf(d, '');
             var hasEtc = !(window._dailyFilter && (window._dailyFilter.proj || window._dailyFilter.cat))
-                      && !!(etcTxt || etcFiles.length);
+                      && !!(etcTxt || etcFiles.length)
+                      && (!sToks.length || etcHit(p, d));   // 🔍 찾는 중이면 기타도 걸릴 때만
 
             var span = items.length + (hasEtc ? 1 : 0);
             if (!span) {   // 일 종류만 적고 넘어간 날(휴가 등)
@@ -3443,7 +3491,7 @@
           filterBar(allPeople, docs) +
           '<div style="margin-bottom:9px; font-size:12.5px; color:#555;">' +
             esc(T('작성 ', 'Written ')) + '<b>' + written + '</b> / ' + people.length +
-            ((F.who || F.proj || F.cat) ? ' <span style="color:#1971c2;">' + esc(T('(필터 적용 중)', '(filtered)')) + '</span>' : '') +
+            ((F.who || F.proj || F.cat || F.q) ? ' <span style="color:#1971c2;">' + esc(T('(필터 적용 중)', '(filtered)')) + '</span>' : '') +
             (roster && roster.length ? '' : ' <span style="color:#b1432f;">' + esc(T('(명단 파일이 없어 쓴 사람만 보입니다)', '(no roster file — showing authors only)')) + '</span>') +
           '</div>' +
           '<table style="width:100%; border-collapse:collapse; table-layout:fixed;">' +
@@ -3453,6 +3501,18 @@
                   return '<th style="padding:6px 8px; border:1px solid #cfe3e5; font-size:12.5px; font-weight:600; text-align:center; background:#eef6f7; color:#00707d;">' +
                          esc(window._currentLang === 'en' ? c.en : c.ko) + '</th>';
               }).join('') +
-            '</tr></thead><tbody>' + (rows || '<tr><td colspan="' + DAY_COLS.length + '" style="padding:24px 10px; text-align:center; color:#999; font-size:12.5px;">' + esc(T('이 날짜에 작성된 보고가 없습니다.', 'No reports for this date.')) + '</td></tr>') + '</tbody></table>';
+            '</tr></thead><tbody>' + (rows || '<tr><td colspan="' + DAY_COLS.length + '" style="padding:24px 10px; text-align:center; color:#999; font-size:12.5px;">' +
+                esc((F.who || F.proj || F.cat || F.q)
+                    ? T('조건에 맞는 업무가 없습니다 — 필터 해제로 전부 볼 수 있습니다.', 'No task matches — use Clear to see all.')
+                    : T('이 날짜에 작성된 보고가 없습니다.', 'No reports for this date.')) + '</td></tr>') + '</tbody></table>';
+        // 🔍 걸린 칸 강조 — 첨부 칸(마지막)은 파일 이름 칩이라 뺀다
+        if (sToks.length) {
+            Array.prototype.forEach.call(box.querySelectorAll('tbody tr'), function (tr) {
+                Array.prototype.forEach.call(tr.cells, function (tdEl) {
+                    if (tdEl.querySelector('span[onclick*="dailyOpenDayFile"]')) return;
+                    if (tdEl.textContent && window._searchMatchAny(tdEl.textContent, sToks)) tdEl.classList.add('search-hit');
+                });
+            });
+        }
     };
 })();
