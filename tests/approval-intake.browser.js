@@ -262,6 +262,34 @@ window.__approvalIntakeTest = async function () {
             }
         }
 
+        // ── 12. 🧑‍💼 인사 시스템 알림 행 지우기 — 인사 표식만, Outlook 일정 갱신·업무 메일·사람이 만든 행은 그대로 ──
+        if (window.currentDriveFileId) { ok(true, '12 (건너뜀) 프로젝트가 열려 있다'); }
+        else {
+            const keep12 = { gd: globalData, ci: colIdx, recalc: window.recalculateSchedules, render: window.renderGantt };
+            const M = (name, mr) => { const r = [name, '2026-10-08', '[핵심내용] x']; r._level = 4; r._calcStartTs = Date.parse('2026-10-08'); if (mr) r._mailRaw = mr; return r; };
+            try {
+                window.recalculateSchedules = () => {}; window.renderGantt = () => {};
+                colIdx = { wbs: 0, start: 1, content: 2, devStage: -1 };
+                const L0 = ['RFQ', '2026-09-01', '']; L0._level = 0; L0._calcStartTs = Date.parse('2026-09-01');
+                globalData = [['업무', '시작', '상세'], L0,
+                    M('연장근로 신청 승인 확인', { subject: '[연장근로 신청서 / OW-20261008-004] 신청문서가 최종 승인되었습니다', sender: 'admin@kortek.co.kr', body2000: '...' }),
+                    M('시간연차 안내', { subject: '[시간연차] 사용일 사전 안내 (D-3)', body2000: '경로 : 인사관리 > 근무변동계 등록' }),
+                    M('topper status', { subject: 'SL-1 Proto B topper status', body2000: 'has been automatically updated' }),   // Outlook — 이번 결정 밖
+                    M('업무 메일', { subject: 'RE: STELLAR32 Proto B 일정', body2000: '안녕하세요' }),
+                    M('사람이 만든 행 — 신청문서가 최종 승인', null)];
+                window.currentDriveFileId = 'TEST_PROJECT';
+                let msg12 = ''; const sv12 = window.showToast; window.showToast = (m) => { msg12 = String(m); };
+                const c = await window.approvalRepairOpenProject({ noSave: true, force: true });
+                window.showToast = sv12;
+                const left = globalData.slice(2).map(x => x[0]);
+                ok(c.noticeRemoved === 2 && JSON.stringify(left) === JSON.stringify(['topper status', '업무 메일', '사람이 만든 행 — 신청문서가 최종 승인']),
+                   '12-1 인사 알림 2행만 지우고 Outlook 일정 갱신·업무 메일·사람이 만든 행은 남긴다', { c, left });
+                ok(/인사 시스템 알림.*2건을 지웠습니다/.test(msg12) && /Ctrl\+Z/.test(msg12), '12-2 알림 문구에 무엇을 지웠는지 + 되돌리는 법', msg12);
+                const c2 = await window.approvalRepairOpenProject({ noSave: true, silent: true, force: true });
+                ok(c2.noticeRemoved === 0, '12-3 두 번째는 지울 게 없다', c2);
+            } finally { globalData = keep12.gd; colIdx = keep12.ci; window.recalculateSchedules = keep12.recalc; window.renderGantt = keep12.render; window.currentDriveFileId = null; }
+        }
+
         // ── 10. 프로젝트 열기 순서 그대로 — populateTabData 가 **먼저**, 파일 id 는 그 **뒤에** 바뀐다(js/04c).
         //     2026-11-24 실측: 훅이 열 때 id 를 잡아 두어 늘 이전 id 와 비교 → 한 번도 안 돌았다(K27). 9절은 함수를 직접 불러 이걸 못 잡았다.
         if (window.currentDriveFileId) { ok(true, '10 (건너뜀) 이 탭에 프로젝트가 열려 있다'); }

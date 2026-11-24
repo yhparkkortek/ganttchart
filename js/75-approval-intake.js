@@ -523,6 +523,22 @@
             var t2 = t.replace(/\r?\n🔗 (https?:\/\/\S*\/app\/approval\/document\/\d+)/, ' 🔗 $1');
             if (t2 !== t) { row[ci.content] = t2; out.relinked++; }
         }
+        // ⑥ 인사 시스템 알림 메일 행 지우기(2026-11-24 사용자 결정 "지워줘") — 메일 자동배치가 10월부터 넣은 연장근로·근무계획·연차 안내.
+        //    새로 들어오는 건 js/15b Stage0 이 AI 전에 버린다. 여기선 **인사 표식**(제목 MAIL_AUTO_NOTICE_SUBJECT_MARKERS · 본문 '경로 : 인사관리')만 —
+        //    Outlook 일정 갱신 등 다른 자동 알림 행은 사람이 정하지 않았으므로 건드리지 않는다. 결재 행·사람이 만든 행(_mailRaw 없음)도 제외.
+        out.noticeRemoved = 0;
+        var HR_SUBJ = window.MAIL_AUTO_NOTICE_SUBJECT_MARKERS || [], HR_BODY = ['경로 : 인사관리'];
+        var isHrNotice = function (mr) {
+            if (!mr || mr.approval) return false;
+            var s = String(mr.subject || ''), b = String(mr.body2000 || '');
+            return HR_SUBJ.some(function (m) { return s.indexOf(m) !== -1; }) || HR_BODY.some(function (m) { return b.indexOf(m) !== -1; });
+        };
+        if (P.removeHrNotices !== false) {
+            for (var y = gd.length - 1; y >= 1; y--) {
+                var ry = gd[y];
+                if (ry && ry._level !== 0 && isHrNotice(ry._mailRaw)) { gd.splice(y, 1); out.noticeRemoved++; }
+            }
+        }
         // ④ 잘못 퍼진 결재 행 빼기(데이터 P.cleanupPlacements) — 지킬 프로젝트(keepIds·keepModel)면 그대로 둔다
         out.removed = 0;
         var CL = (P.cleanupPlacements || []).filter(function (c) { return c && c.key; });
@@ -616,13 +632,14 @@
                 out.moved++;
             });
         })();
-        if (!out.moved && !out.relinked && !out.renamed && !out.removed) return out;
+        if (!out.moved && !out.relinked && !out.renamed && !out.removed && !out.noticeRemoved) return out;
         // 💬 [2026-11-24 사용자 요청 "쉬운 말로"] '자동배치 자리' 같은 내부 말 대신 무엇을 했는지만 — 화면 알림·수정이력 같은 문장
         var partsKo = [], partsEn = [];
         if (out.moved) { partsKo.push('날짜와 맞지 않는 자리에 있던 업무 ' + out.moved + '건을 날짜에 맞는 단계로 옮겼습니다'); partsEn.push('moved ' + out.moved + ' misplaced tasks into the stage matching their date'); }
         if (out.renamed) { partsKo.push('긴 결재 업무 이름 ' + out.renamed + '건을 짧게 줄였습니다'); partsEn.push('shortened ' + out.renamed + ' long approval task names'); }
         if (out.relinked) { partsKo.push('결재 링크 ' + out.relinked + '건을 한 줄로 정리했습니다'); partsEn.push('tidied ' + out.relinked + ' approval link lines'); }
         if (out.removed) { partsKo.push('다른 프로젝트 결재 문서 ' + out.removed + '건을 이 프로젝트에서 뺐습니다'); partsEn.push('removed ' + out.removed + ' approval rows that belong to another project'); }
+        if (out.noticeRemoved) { partsKo.push('프로젝트와 관계없는 인사 시스템 알림(연장근로·근무계획·연차 안내) ' + out.noticeRemoved + '건을 지웠습니다'); partsEn.push('deleted ' + out.noticeRemoved + ' HR system notices (overtime, work plan, leave reminders)'); }
         try { if (typeof logChange === 'function') logChange(1, -1, '없음', partsKo.join(' · ')); } catch (e) { /* 기록 실패는 무시 */ }
         try { if (window.recalculateSchedules) window.recalculateSchedules(); } catch (e) { console.warn('[자리 바로잡기] 재계산 실패', e); }
         try { if (window.renderGantt) window.renderGantt(); } catch (e) { /* 다음 렌더에 반영 */ }

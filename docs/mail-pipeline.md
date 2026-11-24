@@ -699,4 +699,4 @@ AI 매칭(`_msBuildProjectMatchSection` → `_msResolveAiProjectMatch`)을 js/61
 - 막는 곳은 하나 — `_mailIsAutoNotice`(js/14b): 본문 표식 `MAIL_AUTO_NOTICE_MARKERS` + 새 **제목 표식** `MAIL_AUTO_NOTICE_SUBJECT_MARKERS`(신청문서가 최종 승인·신청문서가 반려·사용일 사전 안내), 데이터.
   Stage0(js/15b)가 맨 앞에서 이걸 불러 **AI 분석 전에** 버린다(사유 `auto_notice`, 폐기 큐에 남음). 배치 직전 검사(buildMailTaskRow)도 같은 함수.
 - 실데이터 대조: 프로젝트 메일 행 2,858개 중 걸리는 건 이 17행 + 예전 Outlook 일정 갱신 2행(원래 막으려던 것) — 실제 업무 메일 0.
-- ⚠️ 이미 들어간 17행은 아직 그대로다(지우는 건 사람 확인 후).
+- 이미 들어간 17행은 사용자 결정("지워줘")으로 **그 프로젝트를 열 때 앱이 지운다**(js/75 바로잡기 ⑥, 인사 표식만 — Outlook 일정 갱신 2행은 결정 밖이라 둔다, Ctrl+Z 로 되돌림). 실데이터(메모리): STELLAR32 −14 · POLED −2 · 개발업무 −1.
