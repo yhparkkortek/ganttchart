@@ -213,6 +213,28 @@ window.TaskInbox = {
         try {
             const folderId = await window.getOrCreateTaskInboxFolder(token);
             if (!this._driveFileId) this._driveFileId = await window._findOrMigrateFile(token, fname, folderId);
+            // 🪦 [2026-11-24 실측 — 지운 DUMMY CODE 카드가 2분 뒤 되살아남] 같은 계정으로 앱을 띄운 다른 곳(다른 탭·브라우저·PC)이
+            //    자기 옛 목록을 **통째로** 올리면, 방금 남긴 삭제 묘비까지 같이 사라진다(10:34 삭제·묘비 → 10:36 묘비 없는 34장).
+            //    → 올리기 직전에 원격 묘비를 읽어 합치고, 묘비 난 카드는 내 목록에서도 뺀 뒤 올린다.
+            //    더하기만 한다 — 원격에만 있는 카드를 되살리지는 않는다(그건 loadFromDrive 의 몫, '처리됨 정리'를 되돌리면 안 된다).
+            //    원격을 못 읽으면 예전처럼 그냥 올린다(동기화를 막지 않는다).
+            if (this._driveFileId) {
+                try {
+                    const rr = await fetch('https://www.googleapis.com/drive/v3/files/' + this._driveFileId + '?alt=media&supportsAllDrives=true', { headers: { 'Authorization': 'Bearer ' + token } });
+                    if (rr.ok) {
+                        const rd = await rr.json();
+                        const tombSet = this._mergeTombs((rd && rd.deleted) || []);
+                        const cur = this.load();
+                        const kept = cur.filter(function(it) { return !(it && tombSet[it.uid]); });
+                        if (kept.length !== cur.length) {
+                            console.info('[업무 보관함] 다른 곳에서 지운 카드 ' + (cur.length - kept.length) + '장을 올리기 전에 뺐습니다');
+                            this.save(kept, true);
+                            const ov = document.getElementById('task-inbox-overlay');
+                            if (window.renderTaskInbox && ov && ov.style.display === 'flex') window.renderTaskInbox();
+                        }
+                    }
+                } catch (e) { console.warn('[업무 보관함] 올리기 전 묘비 합치기 실패(그대로 올림):', e.message); }
+            }
             const boundary = 'inbox_sync_boundary';
             const metadata = { name: fname, mimeType: 'application/json' };
             if (!this._driveFileId) metadata.parents = [folderId];
