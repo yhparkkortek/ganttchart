@@ -1101,10 +1101,10 @@ document.addEventListener('DOMContentLoaded', function() {
 //    `skipRow` 에 맞는 줄(M.C 의 SUBTOTAL·합계)은 계산 줄이라 검색 중엔 숨긴다.
 // ─────────────────────────────────────────────────────────────────────────────
 window.TBL_SEARCH_TABLES = [
-    { key: 'mc', tbodyId: 'mctable-body', mount: { into: 'mc-normal-section' },
+    { key: 'mc', tbodyId: 'mctable-body',
       skipRow: /(^|\s)mc-summary-row(\s|$)/,
       ko: '🔍 검색 — TYPE·ITEM·GROUP·P/N·Spec·Note…', en: '🔍 Search — type, item, group, P/N, spec, note…' },
-    { key: 'bs', tbodyId: 'briefspec-body', mount: { before: 'briefspec-table-scroll' },
+    { key: 'bs', tbodyId: 'briefspec-body',
       ko: '🔍 검색 — 항목·값·Note…', en: '🔍 Search — item, value, note…' }
 ];
 (function () {
@@ -1147,20 +1147,16 @@ window.TBL_SEARCH_TABLES = [
 
     window._tblSearchInstall = function (cfg) {
         if (document.getElementById(cfg.key + '-search-input')) return true;
-        var host = document.getElementById(cfg.mount.into || cfg.mount.before);
         var tbody = document.getElementById(cfg.tbodyId);
-        if (!host || !tbody) return false;
-        var bar = document.createElement('div');
-        bar.className = 'tbl-search-bar';
-        bar.style.cssText = 'display:flex; align-items:center; gap:6px; margin-bottom:6px;';
-        bar.innerHTML = '<input id="' + cfg.key + '-search-input" type="search" autocomplete="off" style="width:240px;'
-            + (window._uiInputStyle ? window._uiInputStyle() : '') + ' font-size:12px; outline:none;">'
-            + '<span id="' + cfg.key + '-search-count" style="font-size:12px; color:#888; white-space:nowrap;"></span>';
-        if (cfg.mount.into) host.insertBefore(bar, host.firstChild);
-        else host.parentNode.insertBefore(bar, host);
-        var inp = bar.querySelector('input');
-        inp.placeholder = _en() ? cfg.en : cfg.ko;
-        inp.title = _en() ? 'Several words OK — a row matches when all words appear in it' : '여러 낱말 가능 — 한 행에 낱말이 모두 있으면 걸립니다';
+        // 🔍 [2026-11-24 "검색 UI 를 헤더로"] 그 표가 든 탭의 헤더에 🔍 버튼(js/22b `_hdrFindWidget`)
+        var wrapEl = tbody && tbody.closest ? tbody.closest('.concept-tab-wrap') : null;
+        var hdr = wrapEl ? wrapEl.querySelector('.concept-header-box') : null;
+        if (!tbody || !hdr || !window._hdrFindWidget) return false;
+        var w = window._hdrFindWidget({ id: cfg.key + '-search-bar', inputId: cfg.key + '-search-input', countId: cfg.key + '-search-count',
+            ko: cfg.ko, en: cfg.en,
+            inputTitle: _en() ? 'Several words OK — a row matches when all words appear in it' : '여러 낱말 가능 — 한 행에 낱말이 모두 있으면 걸립니다' });
+        window._hdrFindMount(hdr, w.el);
+        var inp = w.input;
         var t = null;
         inp.oninput = function () { clearTimeout(t); t = setTimeout(function () { window._tblSearchTerms[cfg.key] = inp.value; window._tblSearchApply(cfg.key); }, 150); };
         inp.onkeydown = function (e) { if (e.key === 'Escape' && inp.value) { inp.value = ''; window._tblSearchTerms[cfg.key] = ''; window._tblSearchApply(cfg.key); } };

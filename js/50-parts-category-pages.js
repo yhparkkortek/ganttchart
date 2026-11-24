@@ -191,17 +191,18 @@
         if (document.getElementById('eh-search')) return;
         var anchor = document.getElementById('eh-panel-btns');
         if (!anchor || !anchor.parentNode) return;
+        // 🔍 [2026-11-24 "검색 UI 를 헤더로"] 칸 대신 🔍 버튼(js/22b `_hdrFindWidget`) — 누르면 아래 상자에 칸이 뜬다.
+        //    바깥 span#eh-search 는 그대로 둔다(BOM 화면에서 숨기고 SPEC 에서 다시 보이는 게 이 id 다).
+        if (!window._hdrFindWidget) return;
         var box = document.createElement('span');
         box.id = 'eh-search';
-        box.style.cssText = 'display:inline-flex; align-items:center; gap:6px; margin-right:10px; flex-shrink:0;';
-        box.innerHTML =
-            '<input id="parts-search-input" type="search" autocomplete="off" '
-          + 'style="width:170px; height:31px; box-sizing:border-box; padding:0 12px; border:1px solid #ccc; border-radius:16px; font-size:12px; outline:none;">'
-          + '<span id="parts-search-count" style="font-size:12px; color:#888; white-space:nowrap;"></span>';
+        box.style.cssText = 'display:inline-flex; align-items:center; flex-shrink:0;';
+        var w = window._hdrFindWidget({ inputId: 'parts-search-input', countId: 'parts-search-count',
+            ko: '🔍 항목·값 검색', en: '🔍 Search items · values',
+            inputTitle: _en() ? 'Several words OK — a row matches when all words appear in it' : '여러 낱말 가능 — 한 항목 행에 낱말이 모두 있으면 걸립니다' });
+        box.appendChild(w.el);
         anchor.parentNode.insertBefore(box, anchor);
-        var inp = box.querySelector('input');
-        inp.placeholder = _en() ? '🔍 Search items · values' : '🔍 항목·값 검색';
-        inp.title = _en() ? 'Several words OK — a row matches when all words appear in it' : '여러 낱말 가능 — 한 항목 행에 낱말이 모두 있으면 걸립니다';
+        var inp = w.input;
         var t = null;
         inp.oninput = function () {
             clearTimeout(t);

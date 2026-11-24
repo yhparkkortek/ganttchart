@@ -1372,6 +1372,67 @@ window.alarmFormatContent = function(text) {
 
 
 // ─────────────────────────────────────────────────────────────────────────────
+// 🔍 [2026-11-24 사용자 요청 "검색 UI 를 헤더로"] 헤더 찾기 위젯 — 모든 페이지 찾기칸의 **겉모양 한 벌**
+//    헤더엔 🔍 버튼 하나(31px)만 두고, 누르면 그 아래 작은 상자(position:fixed — 헤더 폭을 안 먹고
+//    헤더의 overflow 에 잘리지도 않는다)에 입력칸·개수(·▲▼)가 뜬다. BOM 헤더는 여유가 7px 뿐이라
+//    입력칸을 헤더에 그대로 둘 수가 없었다(CLAUDE.md js/38).
+//    찾는 중이면 버튼 글자가 `🔍 3 / 12` 로 바뀐다 — 닫아 둬도 걸러진 상태라는 게 보여야 한다
+//    ("데이터가 사라졌다"로 오인하지 않게). ⚠️ 색은 JS 로 칠하지 않는다(테마 팔레트가 정한다).
+//    입력칸·개수의 id 는 페이지가 정한다 — 거르는 로직은 각 페이지에 그대로 있고 이 위젯은 겉모양만.
+// ─────────────────────────────────────────────────────────────────────────────
+window._hdrFindWidget = function (o) {
+    var en = window._currentLang === 'en';
+    var wrap = document.createElement('span');
+    if (o.id) wrap.id = o.id;
+    wrap.className = 'hdr-find';
+    wrap.style.cssText = 'display:inline-flex; align-items:center; flex-shrink:0; margin:0 6px;';
+    var navBtn = 'height:28px; box-sizing:border-box; padding:0 8px; border:1px solid #cfe3e5; border-radius:6px; background:#fff; color:#00707d; cursor:pointer; font-size:12px;';
+    wrap.innerHTML =
+        '<button type="button" class="hdr-find-btn ep-theme-hover-btn" style="height:31px; box-sizing:border-box; padding:0 10px; background:#e0f5f7; color:#00707d; border:none; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; white-space:nowrap;">🔍</button>'
+        + '<div class="hdr-find-pop" style="display:none; position:fixed; z-index:9000; background:#fff; border:1px solid #cfe3e5; border-radius:8px; box-shadow:0 6px 18px rgba(0,0,0,.15); padding:6px; gap:4px; align-items:center; white-space:nowrap;">'
+        +   '<input id="' + o.inputId + '" type="search" autocomplete="off" style="width:' + (o.width || 230) + 'px; height:28px; box-sizing:border-box; padding:0 10px; border:1px solid #ccc; border-radius:14px; font-size:12px; outline:none;">'
+        +   (o.nav ? '<button type="button" id="' + o.nav.prevId + '" style="' + navBtn + '">▲</button><button type="button" id="' + o.nav.nextId + '" style="' + navBtn + '">▼</button>' : '')
+        +   '<span id="' + o.countId + '" style="font-size:12px; color:#888; white-space:nowrap; min-width:36px;"></span>'
+        +   '<button type="button" class="hdr-find-x" title="' + (en ? 'Close (search stays on)' : '닫기 (찾기는 유지)') + '" style="border:none; background:none; color:#888; cursor:pointer; font-size:14px; padding:0 4px;">✕</button>'
+        + '</div>';
+    var btn = wrap.querySelector('.hdr-find-btn'), pop = wrap.querySelector('.hdr-find-pop');
+    var input = wrap.querySelector('input'), count = wrap.querySelector('#' + o.countId);
+    input.placeholder = en ? (o.en || o.ko) : o.ko;
+    btn.title = en ? (o.titleEn || 'Find') : (o.titleKo || '찾기');
+    if (o.inputTitle) input.title = o.inputTitle;
+    function place() {
+        var r = btn.getBoundingClientRect();
+        pop.style.top = (r.bottom + 4) + 'px';
+        var w = pop.offsetWidth || 320;
+        pop.style.left = Math.max(8, Math.min(r.left, window.innerWidth - w - 8)) + 'px';
+    }
+    function open() { pop.style.display = 'flex'; place(); input.focus(); }
+    function close() { pop.style.display = 'none'; }
+    // 버튼 글자 = 찾는 중인지(+개수). 개수 칸이 바뀔 때마다 따라 쓴다.
+    function sync() {
+        var on = !!String(input.value || '').trim();
+        var c = String(count.textContent || '').trim();
+        btn.textContent = on ? ('🔍 ' + (c || '…')) : '🔍';
+    }
+    btn.onclick = function (e) { e.stopPropagation(); if (pop.style.display === 'none') open(); else close(); };
+    wrap.querySelector('.hdr-find-x').onclick = function (e) { e.stopPropagation(); close(); };
+    pop.addEventListener('click', function (e) { e.stopPropagation(); });
+    document.addEventListener('click', function () { if (pop.style.display !== 'none') close(); });
+    input.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !input.value) close(); });
+    input.addEventListener('input', sync);
+    if (window.MutationObserver) new MutationObserver(sync).observe(count, { childList: true, characterData: true, subtree: true });
+    window.addEventListener('resize', function () { if (pop.style.display !== 'none') place(); });
+    return { el: wrap, input: input, count: count, open: open, close: close, sync: sync };
+};
+/** 헤더 안 붙일 자리 — `.btn-group`(오른쪽 끝 버튼 묶음) 바로 앞, 없으면 끝. */
+window._hdrFindMount = function (hdr, el, before) {
+    if (!hdr) return false;
+    var anchor = before || hdr.querySelector(':scope > .btn-group');
+    if (anchor && anchor.parentNode) anchor.parentNode.insertBefore(el, anchor); else hdr.appendChild(el);
+    return true;
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
 // 🔍 [2026-11-24 사용자 요청] 페이지 안 찾기 — Summary · Document (양식 페이지 공용)
 //    다른 페이지와 **같은 규칙**(js/04a `_searchTokens`/`_searchMatchAll`/`_searchMatchAny`: 낱말 AND·공백/기호 무시).
 //    양식(입력칸·작은 표가 섞인 페이지)이라 행을 숨기지 않고 "페이지 안 찾기"로 한다 — 걸린 칸을 강조하고
@@ -1383,9 +1444,9 @@ window.alarmFormatContent = function(text) {
 //    페이지마다 다른 건 `PAGE_FIND_TARGETS`(데이터) 한 곳뿐 — 같은 꼴 페이지가 늘면 한 줄.
 // ─────────────────────────────────────────────────────────────────────────────
 window.PAGE_FIND_TARGETS = [
-    { key: 'sum', rootId: 'tab-summary', mount: 'header', skip: ['.concept-header-box', '#sum-history-box'],
+    { key: 'sum', rootId: 'tab-summary', skip: ['.concept-header-box', '#sum-history-box'],
       ko: '🔍 Summary 에서 찾기', en: '🔍 Find in Summary' },
-    { key: 'doc', rootId: 'doc-page-body', mount: 'before', skip: [],
+    { key: 'doc', rootId: 'doc-page-body', headerId: 'doc-header-tools', skip: [],
       ko: '🔍 문서에서 찾기', en: '🔍 Find in document' }
 ];
 (function () {
@@ -1487,34 +1548,22 @@ window.PAGE_FIND_TARGETS = [
             focusCur(true);
         };
 
-        // 찾기칸 — 헤더(31px) 또는 본문 바로 위(22px, 다시 그려지는 본문 **밖**)
+        // 찾기칸 — 헤더의 🔍 버튼(`_hdrFindWidget`, 위). 칸은 그 버튼 아래 작은 상자에 뜬다.
         if (document.getElementById(cfg.key + '-search-input')) return st;
         var r0 = root(); if (!r0) return st;
-        var bar = document.createElement(cfg.mount === 'header' ? 'span' : 'div');
-        bar.id = cfg.key + '-search-bar';
-        var big = cfg.mount === 'header';
-        bar.style.cssText = big ? 'display:inline-flex; align-items:center; gap:4px; margin-left:12px; flex-shrink:0;'
-                                : 'display:flex; align-items:center; gap:4px; margin:0 0 6px 0;';
-        if (!big) bar.className = 'tbl-search-bar';
-        var h = big ? '31px' : '22px';
-        var btn = 'height:' + h + '; box-sizing:border-box; padding:0 8px; border:1px solid #cfe3e5; border-radius:6px; background:#fff; color:#00707d; cursor:pointer; font-size:12px; line-height:1;';
-        var inpSt = big ? 'width:200px; height:31px; box-sizing:border-box; padding:0 12px; border:1px solid #ccc; border-radius:16px;'
-                        : ('width:240px;' + (window._uiInputStyle ? window._uiInputStyle() : ''));
-        bar.innerHTML = '<input id="' + cfg.key + '-search-input" type="search" autocomplete="off" style="' + inpSt + ' font-size:12px; outline:none;">'
-            + '<button type="button" id="' + cfg.key + '-search-prev" style="' + btn + '">▲</button>'
-            + '<button type="button" id="' + cfg.key + '-search-next" style="' + btn + '">▼</button>'
-            + '<span id="' + cfg.key + '-search-count" style="font-size:12px; color:#888; white-space:nowrap; min-width:40px;"></span>';
-        if (big) {
-            var hdr = r0.querySelector('.concept-header-box');
-            if (!hdr) return st;
-            var anchor = hdr.querySelector('.btn-group');
-            if (anchor) hdr.insertBefore(bar, anchor); else hdr.appendChild(bar);
-        } else {
-            r0.parentNode.insertBefore(bar, r0);
+        var hdr = cfg.headerId ? document.getElementById(cfg.headerId) : r0.querySelector('.concept-header-box');
+        if (!hdr) return st;
+        var w = window._hdrFindWidget({ id: cfg.key + '-search-bar', inputId: cfg.key + '-search-input', countId: cfg.key + '-search-count',
+            nav: { prevId: cfg.key + '-search-prev', nextId: cfg.key + '-search-next' }, ko: cfg.ko, en: cfg.en,
+            inputTitle: _en() ? 'Several words OK — Enter/▼ next, Shift+Enter/▲ previous' : '여러 낱말 가능 — Enter·▼ 다음, Shift+Enter·▲ 이전' });
+        window._hdrFindMount(hdr, w.el);
+        // Document 처럼 헤더 도구줄을 통째로 다시 그리는 페이지 — 위젯이 빠지면 다시 꽂는다(같은 요소라 상태 유지)
+        if (cfg.headerId && window.MutationObserver) {
+            new MutationObserver(function () {
+                if (!hdr.contains(w.el)) window._hdrFindMount(hdr, w.el);
+            }).observe(hdr, { childList: true });
         }
-        var inp = document.getElementById(cfg.key + '-search-input');
-        inp.placeholder = _en() ? cfg.en : cfg.ko;
-        inp.title = _en() ? 'Several words OK — Enter/▼ next, Shift+Enter/▲ previous' : '여러 낱말 가능 — Enter·▼ 다음, Shift+Enter·▲ 이전';
+        var inp = w.input;
         var t = null;
         inp.oninput = function () { clearTimeout(t); t = setTimeout(function () { st.term = inp.value; st.apply(); }, 200); };
         inp.onkeydown = function (e) {

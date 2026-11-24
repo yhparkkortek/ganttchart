@@ -2314,14 +2314,29 @@
     window._dailySearchInternals = { keepItems: keepItems, hay: dailyItemHay };
     var _dailyDayCache = null;   // { date, roster, docs } — 하루 보기를 마지막으로 읽은 것(찾기 재그리기 전용)
     // 글자마다 NAS 를 다시 읽지 않는다 — 찾기로 다시 그릴 땐 방금 읽은 그 날 데이터를 그대로 쓴다
-    //    (`_dailyDayCache`, dailyRenderTab 이 채운다). 다시 그린 뒤 찾기칸에 커서를 되돌린다.
+    //    (`_dailyDayCache`, dailyRenderTab 이 채운다).
     window.dailySearch = async function (v) {
         (window._dailyFilter || (window._dailyFilter = {})).q = String(v || '');
         window._dailySearchRerender = true;
         await window.dailyRenderTab();
-        var inp = document.getElementById('daily-search-input');
-        if (inp) { inp.focus(); var n = inp.value.length; try { inp.setSelectionRange(n, n); } catch (e) { /* type=search 일부 브라우저 */ } }
     };
+    // 🔍 [2026-11-24 "검색 UI 를 헤더로"] 헤더의 날짜 이동 묶음 오른쪽(✏️ 작성 앞)에 🔍 버튼(js/22b `_hdrFindWidget`).
+    //    다시 그려지는 본문 밖이라 글자를 칠 때 커서가 날아가지 않는다.
+    function dailyEnsureSearchWidget() {
+        if (document.getElementById('daily-search-input') || !window._hdrFindWidget) return;
+        var tab = document.getElementById('tab-daily');
+        var hdr = tab ? tab.querySelector('.concept-header-box') : null;
+        if (!hdr) return;
+        var w = window._hdrFindWidget({ inputId: 'daily-search-input', countId: 'daily-search-count',
+            ko: '🔍 찾기 — 이름·업무·프로젝트·내용', en: '🔍 Find — name, task, project, text',
+            inputTitle: T('여러 낱말 가능 — 한 업무에 낱말이 모두 있으면 걸립니다', 'Several words OK — a task matches when all words appear in it') });
+        var grp = hdr.querySelector(':scope > .btn-group');
+        window._hdrFindMount(hdr, w.el, grp ? grp.nextElementSibling : null);
+        w.input.value = (window._dailyFilter || {}).q || '';
+        var t = null;
+        w.input.oninput = function () { clearTimeout(t); var v = w.input.value; t = setTimeout(function () { window.dailySearch(v); }, 250); };
+        w.input.onkeydown = function (e) { if (e.key === 'Escape' && w.input.value) { w.input.value = ''; window.dailySearch(''); } };
+    }
 
     /**
      * "오늘 한 일" 칸 — 구분·업무·프로젝트를 **열로** 나눈다(2026-11-05 요청).
@@ -2420,15 +2435,9 @@
             sel('who', T('담당자 전체', 'All people'), who, F.who || '') +
             sel('proj', T('프로젝트 전체', 'All projects'), Object.keys(projs).sort().map(function (k) { return [k, k]; }), F.proj || '') +
             sel('cat', T('구분 전체', 'All disciplines'), Object.keys(cats).sort().map(function (k) { return [k, k]; }), F.cat || '') +
-            // 🔍 찾기칸 — 다시 그릴 때마다 새로 만들어지므로 값은 F.q 에서 되살린다
-            '<input id="daily-search-input" type="search" autocomplete="off" value="' + esc(F.q || '') + '"' +
-                ' placeholder="' + esc(T('🔍 찾기 — 이름·업무·프로젝트·내용', '🔍 Find — name, task, project, text')) + '"' +
-                ' title="' + esc(T('여러 낱말 가능 — 한 업무에 낱말이 모두 있으면 걸립니다', 'Several words OK — a task matches when all words appear in it')) + '"' +
-                ' oninput="clearTimeout(window._dailySearchT); var v=this.value; window._dailySearchT=setTimeout(function(){window.dailySearch(v);},250);"' +
-                ' onkeydown="if(event.key===\'Escape\'&&this.value){this.value=\'\';window.dailySearch(\'\');}"' +
-                ' style="width:220px;' + (window._uiInputStyle ? window._uiInputStyle() : '') + ' font-size:12px; outline:none;">' +
+            // 🔍 찾기칸은 헤더의 🔍 버튼으로 옮겼다(2026-11-24, dailyEnsureSearchWidget) — 여기선 해제만 같이
             ((F.who || F.proj || F.cat || F.q)
-                ? '<button onclick="window._dailyFilter={who:\'\',proj:\'\',cat:\'\',q:\'\'}; window.dailyRenderTab();" ' +
+                ? '<button onclick="window._dailyFilter={who:\'\',proj:\'\',cat:\'\',q:\'\'}; var _si=document.getElementById(\'daily-search-input\'); if(_si) _si.value=\'\'; window.dailyRenderTab();" ' +
                   'style="padding:3px 9px; border:1px solid #eeb0ac; background:#fbe4e2; color:#b1432f; border-radius:5px; font-size:11px; cursor:pointer;">' +
                   esc(T('필터 해제', 'Clear')) + '</button>'
                 : '') +
@@ -3277,6 +3286,7 @@
     window.dailyRenderTab = async function () {
         var box = document.getElementById('daily-report-page');
         if (!box) return;
+        dailyEnsureSearchWidget();
         var date = window._dailyTabDate || ymd();
         var lbl = document.getElementById('daily-day-label');
         if (lbl) lbl.textContent = dayLabel(date);
@@ -3487,6 +3497,16 @@
         }).join('');
 
         var written = people.filter(function (p) { return byKey[String(p.key || '').toLowerCase()]; }).length;
+        // 🔍 헤더 🔍 버튼에 보일 개수 — 걸린 업무 수(사람 수가 아니라)
+        var _dsc = document.getElementById('daily-search-count');
+        if (_dsc) {
+            if (!sToks.length) _dsc.textContent = '';
+            else {
+                var _n = 0;
+                people.forEach(function (p) { var dd = byKey[String(p.key || '').toLowerCase()]; if (dd) _n += keepItems(dd.items, p.name || p.key).length; });
+                _dsc.textContent = _n + T('건', '');
+            }
+        }
         box.innerHTML =
           filterBar(allPeople, docs) +
           '<div style="margin-bottom:9px; font-size:12.5px; color:#555;">' +

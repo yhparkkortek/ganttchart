@@ -2747,3 +2747,6 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
 /* 🔍 [2026-11-24] Document 문서에서 찾기 — Summary 와 같은 설치기(js/22b _pageFindInstall). */
 #doc-page-body .search-hit { background-color:#fff3bf !important; }
 #doc-page-body .search-cur { outline:2px solid #f08c00 !important; outline-offset:-2px; }
+
+/* 🔍 [2026-11-24] 헤더 찾기 위젯(js/22b _hdrFindWidget) — 인쇄엔 안 찍는다. */
+@media print { .hdr-find, .hdr-find-pop { display:none !important; } }

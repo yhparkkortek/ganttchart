@@ -280,16 +280,16 @@
     function ensureFindBox() {
         if (document.getElementById('jira-find-input')) return;
         var anchor = document.getElementById('jira-tab-state');
-        if (!anchor || !anchor.parentNode) return;
-        var bar = document.createElement('span');
-        bar.style.cssText = 'display:inline-flex; align-items:center; gap:6px; margin-left:10px; flex-shrink:0;';
-        bar.innerHTML = '<input id="jira-find-input" type="search" autocomplete="off" style="width:200px; height:31px; box-sizing:border-box; padding:0 12px; border:1px solid #ccc; border-radius:16px; font-size:12px; outline:none;">'
-            + '<span id="jira-find-count" style="font-size:12px; color:#888; white-space:nowrap;"></span>';
-        anchor.parentNode.insertBefore(bar, anchor.nextSibling);
-        var inp = bar.querySelector('input');
-        inp.placeholder = T('🔍 연결 이슈에서 찾기', '🔍 Find in linked issues');
-        inp.title = T('이미 불러온 연결 이슈만 거릅니다(여러 낱말 가능). JIRA 전체는 오른쪽 🔍 전체 검색.',
-                      'Filters the linked issues already loaded (several words OK). Whole JIRA: 🔍 search on the right.');
+        if (!anchor || !anchor.parentNode || !window._hdrFindWidget) return;
+        // 🔍 [2026-11-24 "검색 UI 를 헤더로"] 칸 대신 🔍 버튼(js/22b) — 오른쪽 끝의 🔍(JIRA 전체 검색)와
+        //    헷갈리지 않게 **상태 글 바로 뒤(왼쪽)**에 두고 말풍선으로 가른다.
+        var w = window._hdrFindWidget({ inputId: 'jira-find-input', countId: 'jira-find-count',
+            ko: '🔍 연결 이슈에서 찾기', en: '🔍 Find in linked issues',
+            titleKo: '연결 이슈에서 찾기 (받아 둔 목록만 — JIRA 전체는 오른쪽 🔍)', titleEn: 'Find in linked issues (loaded list only — whole JIRA: 🔍 on the right)',
+            inputTitle: T('이미 불러온 연결 이슈만 거릅니다(여러 낱말 가능). JIRA 전체는 오른쪽 🔍 전체 검색.',
+                          'Filters the linked issues already loaded (several words OK). Whole JIRA: 🔍 search on the right.') });
+        anchor.parentNode.insertBefore(w.el, anchor.nextSibling);
+        var inp = w.input;
         var t = null;
         inp.oninput = function () { clearTimeout(t); t = setTimeout(function () { _tables.main.q = inp.value; renderFilteredSortedTable(); }, 150); };
         inp.onkeydown = function (e) { if (e.key === 'Escape' && inp.value) { inp.value = ''; _tables.main.q = ''; renderFilteredSortedTable(); } };
@@ -689,6 +689,7 @@
     //  같은 저장소를 쓰므로, 거기서 코드를 넣고 저장하면 다음 탭 진입 때 바로 보인다.
     window._jiraOnTabShown = async function () {
         window.jiraRenderUnitBar();
+        ensureFindBox();   // 🔍 헤더 찾기 버튼 — 로그인 전·조회 전에도 자리는 보이게(표가 그려질 때만 달면 안 보였다)
         var box = document.getElementById('jira-table-wrap');
         if (!box) return;
         box.innerHTML = '<div style="padding:30px; text-align:center; color:#999;">' + T('불러오는 중...', 'Loading...') + '</div>';

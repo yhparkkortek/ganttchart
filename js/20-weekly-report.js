@@ -490,19 +490,17 @@
     };
     function wrEnsureSearchBar() {
         if (document.getElementById('wr-search-input')) return;
-        const page = document.getElementById('weekly-report-page');
-        if (!page || !page.parentNode) return;
-        const bar = document.createElement('div');
-        bar.className = 'tbl-search-bar';
-        bar.style.cssText = 'display:flex; align-items:center; gap:6px; margin:0 0 6px 0;';
-        bar.innerHTML = '<input id="wr-search-input" type="search" autocomplete="off" style="width:240px;'
-            + (window._uiInputStyle ? window._uiInputStyle() : '') + ' font-size:12px; outline:none;">'
-            + '<span id="wr-search-count" style="font-size:12px; color:#888; white-space:nowrap;"></span>';
-        page.parentNode.insertBefore(bar, page);
-        const inp = bar.querySelector('input');
+        // 🔍 [2026-11-24 "검색 UI 를 헤더로"] 헤더의 주 이동 묶음 오른쪽(📊 PPT 앞)에 🔍 버튼(js/22b `_hdrFindWidget`)
+        const tab = document.getElementById('tab-weekly');
+        const hdr = tab ? tab.querySelector('.concept-header-box') : null;
+        if (!hdr || !window._hdrFindWidget) return;
         const en = window._currentLang === 'en';
-        inp.placeholder = en ? '🔍 Find — task, content, owner…' : '🔍 찾기 — 업무·내용·담당자…';
-        inp.title = en ? 'Screen only — the PPT export still includes everything' : '화면만 거릅니다 — 📊 PPT 출력은 전부 나갑니다';
+        const w = window._hdrFindWidget({ inputId: 'wr-search-input', countId: 'wr-search-count',
+            ko: '🔍 찾기 — 업무·내용·담당자…', en: '🔍 Find — task, content, owner…',
+            inputTitle: en ? 'Screen only — the PPT export still includes everything' : '화면만 거릅니다 — 📊 PPT 출력은 전부 나갑니다' });
+        const grp = hdr.querySelector(':scope > .btn-group');
+        window._hdrFindMount(hdr, w.el, grp ? grp.nextElementSibling : null);
+        const inp = w.input;
         let t = null;
         inp.oninput = function () { clearTimeout(t); t = setTimeout(function () { window._wrSearchTerm = inp.value; window.showWeeklyReport(); }, 200); };
         inp.onkeydown = function (e) { if (e.key === 'Escape' && inp.value) { inp.value = ''; window._wrSearchTerm = ''; window.showWeeklyReport(); } };

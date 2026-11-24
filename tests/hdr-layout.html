@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>header layout probe</title></head><body style="margin:0">
+<!-- 📏 헤더 넘침 점검 — 진짜 kortek_pm.html 을 iframe 으로 띄워 탭마다 헤더가 넘치거나 버튼 글자가 두 줄로
+     깨지지 않는지, 🔍 찾기 위젯이 헤더에 붙었는지 잰다(1366·1920 두 폭). 데이터·백엔드 없이도 헤더는 그려진다.
+     실행: chrome --headless=new --allow-file-access-from-files --window-size=2000,900 --virtual-time-budget=60000
+           --dump-dom file:///.../tests/hdr-layout.html   → <pre id="out"> -->
+<iframe id="f" style="border:0; height:800px;"></iframe>
+<pre id="out">running…</pre>
+<script>
+var TABS = ['summary','briefspec','mctable','bom','elecparts','document','jira','calendar','weekly','daily','projectlist','address','gantt'];
+var WIDTHS = [1366, 1920], out = [], f = document.getElementById('f');
+function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+async function runWidth(w) {
+  f.style.width = w + 'px';
+  f.src = '../kortek_pm.html?probe=' + w;
+  await new Promise(function (r) { f.onload = r; });
+  await sleep(2500);
+  var W = f.contentWindow, D = f.contentDocument;
+  try { var lm = D.getElementById('app-user-modal') || D.querySelector('[id*="login"][style*="flex"]'); } catch (e) {}
+  for (var i = 0; i < TABS.length; i++) {
+    var t = TABS[i];
+    try { W.switchTab(t); } catch (e) { out.push(w + ' ' + t + ' switchTab ERR ' + e.message); continue; }
+    await sleep(300);
+    try {
+      if (t === 'bom' && W.bomRender) W.bomRender();
+      if (t === 'weekly' && W.showWeeklyReport) W.showWeeklyReport();
+      if (t === 'calendar' && W.calRender) W.calRender();
+      if (t === 'daily' && W.dailyRenderTab) W.dailyRenderTab();
+      if (t === 'document' && W._docRender) W._docRender();
+      if (t === 'jira' && W._jiraOnTabShown) W._jiraOnTabShown();
+    } catch (e) { out.push(w + ' ' + t + ' render ERR ' + e.message); }
+    await sleep(300);
+    var hdr = D.querySelector('#tab-' + t + ' .concept-header-box');
+    if (!hdr) { out.push(w + ' ' + t + ' (헤더 없음)'); continue; }
+    var over = hdr.scrollWidth - hdr.clientWidth;
+    var tall = [].slice.call(hdr.querySelectorAll('button, select, input:not([type=hidden])')).filter(function (b) {
+      var r = b.getBoundingClientRect(); return r.width > 0 && r.height > 34 && !b.closest('.hdr-find-pop');
+    }).map(function (b) { return (b.id || b.textContent.trim().slice(0, 8)) + ':' + Math.round(b.getBoundingClientRect().height); });
+    var finds = hdr.querySelectorAll('.hdr-find').length;
+    var hr = hdr.getBoundingClientRect();
+    out.push(w + ' ' + t + ' 넘침=' + over + 'px 높이=' + Math.round(hr.height) + ' 🔍=' + finds + (tall.length ? ' 두줄=' + tall.join(',') : ''));
+  }
+}
+(async function () {
+  try { for (var i = 0; i < WIDTHS.length; i++) await runWidth(WIDTHS[i]); }
+  catch (e) { out.push('ERROR ' + e.message); }
+  document.getElementById('out').textContent = out.join('\n');
+})();
+</script></body></html>

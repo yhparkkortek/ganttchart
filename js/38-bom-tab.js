@@ -1862,24 +1862,31 @@
     //    헤더는 여유가 7px 뿐이라(CLAUDE.md js/38) **표 위 줄**에 둔다(22px, `_uiInputStyle`).
     //    거르는 일은 위 뷰 상태 줄기가 하고, 여기선 ① 입력칸 → store 낱말 ② 렌더 뒤 걸린 칸 강조·개수만.
     var _BOM_SEARCH = {
-        bom:  { input: 'bom-search-input', count: 'bom-search-count', before: 'bom-meta', tbody: 'bom-body', store: function () { return window._bomStore(); } },
-        elec: { input: 'ep-bom-search-input', count: 'ep-bom-search-count', before: 'ep-bom-meta', tbody: 'ep-bom-body',
+        bom:  { input: 'bom-search-input', count: 'bom-search-count', tbody: 'bom-body', store: function () { return window._bomStore(); },
+                excel: function () { return document.getElementById('bom-excel-btn'); } },
+        elec: { input: 'ep-bom-search-input', count: 'ep-bom-search-count', tbody: 'ep-bom-body',
+                excel: function () { var g = document.getElementById('eh-bom-btns'); return g ? g.querySelector('button[onclick*="_elecBomExportExcel"]') : null; },
                 store: function () { return window._elecBomType ? window._elecBomGetStore(window._elecBomType) : null; } }
     };
     var _bomSearchEnsure = function (scope) {
         var cfg = _BOM_SEARCH[scope];
         if (document.getElementById(cfg.input)) return;
-        var anchor = document.getElementById(cfg.before);
-        if (!anchor || !anchor.parentNode) return;
-        var bar = document.createElement('div');
-        bar.style.cssText = 'display:flex; align-items:center; gap:6px; margin-bottom:6px; flex-shrink:0;';
-        bar.innerHTML = '<input id="' + cfg.input + '" type="search" autocomplete="off" style="width:220px;' + (window._uiInputStyle ? window._uiInputStyle() : '') + ' font-size:12px; outline:none;">'
-            + '<span id="' + cfg.count + '" style="font-size:12px; color:#888; white-space:nowrap;"></span>';
-        anchor.parentNode.insertBefore(bar, anchor);
-        var inp = bar.querySelector('input');
-        inp.placeholder = _t('🔍 부품 검색 — 코드·내역·자재그룹·비고…', '🔍 Search parts — code, description, group, note…');
-        inp.title = _t('여러 낱말 가능 — 한 부품 행에 낱말이 모두 있으면 걸리고, 그 상위 부품도 같이 보입니다. 엑셀도 이 결과대로 저장됩니다.',
-                       'Several words OK — a part matches when all words appear; its parents stay visible. Excel export follows this view.');
+        // 🔍 [2026-11-24 "검색 UI 를 헤더로"] 헤더의 📊 엑셀 저장 **바로 앞**에 🔍 버튼(js/22b `_hdrFindWidget`).
+        //    엑셀 버튼이 `margin-left:auto` 로 오른쪽 끝에 붙어 있었으므로 그 auto 를 🔍 가 넘겨받는다
+        //    (둘이 같이 오른쪽으로 붙는다). ⚠️ BOM 탭 헤더는 nowrap 에 여유가 7px 뿐이라 자재번호·레이아웃
+        //    칸을 줄여 31px 자리를 냈다(kortek_pm.html).
+        var excel = cfg.excel();
+        if (!excel || !excel.parentNode || !window._hdrFindWidget) return;
+        var w = window._hdrFindWidget({ id: cfg.input + '-wrap', inputId: cfg.input, countId: cfg.count,
+            ko: '🔍 부품 검색 — 코드·내역·자재그룹·비고…', en: '🔍 Search parts — code, description, group, note…',
+            titleKo: '부품 검색', titleEn: 'Search parts',
+            inputTitle: _t('여러 낱말 가능 — 한 부품 행에 낱말이 모두 있으면 걸리고, 그 상위 부품도 같이 보입니다. 엑셀도 이 결과대로 저장됩니다.',
+                           'Several words OK — a part matches when all words appear; its parents stay visible. Excel export follows this view.') });
+        w.el.style.marginLeft = 'auto';
+        w.el.style.marginRight = '4px';
+        excel.parentNode.insertBefore(w.el, excel);
+        excel.style.marginLeft = '0';
+        var inp = w.input;
         var t = null;
         inp.oninput = function () { clearTimeout(t); t = setTimeout(function () { _sortRerender(scope); }, 150); };
         inp.onkeydown = function (e) { if (e.key === 'Escape' && inp.value) { inp.value = ''; _sortRerender(scope); } };
