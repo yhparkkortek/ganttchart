@@ -1252,7 +1252,7 @@ window.renderMaterialRows = function(rows, modelIdx) {
             + ((r.category === 'PANEL' || _epRowType[r.category]) ? 'onchange="window.renderMaterialRows(window.collectMaterialRows(true, ' + _mi + '), ' + _mi + ');"' : '') + '></td>'
             + descInputCell
             + '<td style="padding:2px; border:1px solid #cfe3e5;"><input type="text" data-idx="' + idx + '" data-field="cost" class="u-input" value="' + _escTabVal(r.cost) + '" style="border:none; width:100%; box-sizing:border-box; background:transparent;"></td>'
-            + '<td style="border:1px solid #cfe3e5; text-align:center; white-space:nowrap;"><input type="checkbox" data-idx="' + idx + '" data-field="useForAnalysis" ' + (r.useForAnalysis ? 'checked' : '') + ' title="' + (_matEn ? 'Check to trust mentions of this PN as a project-identifying signal (uncheck for shared/common parts)' : '체크하면 이 PN 언급을 프로젝트 식별 신호로 신뢰함(공용 부품이면 체크 해제 권장)') + '"></td>'
+            + '<td style="border:1px solid #cfe3e5; text-align:center; white-space:nowrap;"><input type="checkbox" style="width:14px; height:14px; cursor:pointer; vertical-align:middle;" data-idx="' + idx + '" data-field="useForAnalysis" ' + (r.useForAnalysis ? 'checked' : '') + ' title="' + (_matEn ? 'Check to trust mentions of this PN as a project-identifying signal (uncheck for shared/common parts)' : '체크하면 이 PN 언급을 프로젝트 식별 신호로 신뢰함(공용 부품이면 체크 해제 권장)') + '"></td>'
             + '</tr>';
     };
 
