@@ -368,4 +368,34 @@ const reset = window._driveModalSearchState.q === '';
   W._dailyFilter = { who: '', proj: '', cat: 'HW', q: 'edid' };
   chk(D.keepItems(items, '박용훈').length === 0, '[Daily] 구분과 찾기가 AND');
 }
+// ── Weekly Report(js/20 showWeeklyReport) — 진짜 js/20 을 불러 진짜 그리기 함수를 돌린다(DOM·주간 분류만 가짜) ──
+{
+  const s20 = fs.readFileSync(path.join(__dirname, '..', 'js', '20-weekly-report.js'), 'utf8');
+  const noop = () => {};
+  const container = { innerHTML: '', querySelectorAll: () => [], parentNode: { insertBefore: noop } };
+  const ids = { 'weekly-report-page': container, 'wr-search-input': {}, 'wr-search-count': { textContent: '' } };   // 칸이 있으면 설치기는 건너뛴다
+  const doc = { getElementById: id => ids[id] || null, querySelectorAll: () => [], querySelector: () => null, addEventListener: noop, createElement: () => ({ style: {} }), readyState: 'complete', body: {} };
+  const W = { addEventListener: noop, _currentLang: 'ko', wrBaseDate: new Date() };
+  new Function('window', helpers)(W);
+  new Function('window', 'document', 'colIdx', 'escapeHtml', 'globalData', 'setTimeout', s20)(W, doc, { content: 1 }, s => String(s), [], noop);
+  const mk = (text, content) => ({ text, idx: 0, row: Object.assign(['', content], { _calcStartTs: 0, _calcPlanTs: 0 }) });
+  let calls = 0;
+  W.wrClassifyTasks = () => { calls++; return { thisWeek: { start: 0, end: 0 }, nextWeek: { start: 0, end: 0 }, thisWeekNo: 1, nextWeekNo: 2,
+    thisList: [mk('HARNESS 검토', '[핵심내용] 40P 300mm\n담당: 박용훈'), mk('EDID 수정', 'V1.02 배포')],
+    nextList: [mk('Back cover 도금', '[문제점] 도금 불량\n[대책] 재도금')] }; };
+  W.wrSyncLevelFilterUI = noop; W.wrSyncTaskModeBtn = noop; W.wrAutoActivateNearest = noop;
+  W.wrGetLevel0Timeline = () => ({ items: [], minTs: 0, maxTs: 1 });
+  const show = q => { W._wrSearchTerm = q; W.showWeeklyReport(); const h = container.innerHTML;
+    return ['HARNESS', 'EDID', 'Back cover'].filter(k => h.indexOf(k) !== -1).join('|') + ' #' + ids['wr-search-count'].textContent; };
+  [['', 'HARNESS|EDID|Back cover #', '빈 검색 = 전부, 개수 비움'],
+   ['harness 300mm', 'HARNESS #1 / 3건', '업무명+상세내용 AND'],
+   ['v1 02', 'EDID #1 / 3건', '기호 무시'],
+   ['도금 대책', 'Back cover #1 / 3건', '문제점·대책 줄도 찾음(문제점 표까지 같이)'],
+   ['harness edid', ' #0 / 3건', 'AND — 한 업무에 둘 다 없음']
+  ].forEach(([q, want, label]) => { const got = show(q); const ok = got === want; ok ? pass++ : fail++; console.log((ok ? 'ok  ' : 'FAIL') + ' [Weekly] ' + label + ' → ' + got + (ok ? '' : ' (기대 ' + want + ')')); });
+  // PPT 출력은 화면 찾기를 안 탄다 — 진짜 출력 함수 본문이 찾기 상태를 읽지 않고 분류를 새로 부르는지 소스로 본다
+  const pa = s20.indexOf('window.exportWeeklyReportPPT = ');
+  const pbody = pa < 0 ? '' : s20.slice(pa, s20.indexOf('\n  window.', pa + 10));
+  chk(pa >= 0 && pbody.indexOf('wrClassifyTasks()') !== -1 && pbody.indexOf('_wrSearch') === -1, '[Weekly] PPT 출력은 분류를 새로 부르고 찾기 상태를 안 읽는다(화면만 거른다)');
+}
 console.log(`\n${pass}/${pass + fail}`); process.exit(fail ? 1 : 0);

@@ -424,6 +424,19 @@
 
         const container = document.getElementById('weekly-report-page');
         if (!container) return;
+        // 🔍 [2026-11-24 사용자 요청] 화면 찾기 — 다른 페이지와 같은 규칙(js/04a: 낱말 AND·공백/기호 무시).
+        //    한 업무 = 업무명·상세내용(문제점·대책·담당자 포함). 실적·계획 카드와 문제점 표가 같이 걸러진다.
+        //    ⚠️ **화면만** 거른다 — 📊 PPT 출력은 보고서라 찾기와 무관하게 전부 나간다(wrClassifyTasks 를 다시 부른다).
+        wrEnsureSearchBar();
+        const _wrToks = window._wrSearchToks();
+        const _wrTotal = data.thisList.length + data.nextList.length;
+        if (_wrToks.length) {
+            const keep = function (t) { return window._searchMatchAll(window._wrItemHay(t), _wrToks); };
+            data.thisList = data.thisList.filter(keep);
+            data.nextList = data.nextList.filter(keep);
+        }
+        const _wrCnt = document.getElementById('wr-search-count');
+        if (_wrCnt) _wrCnt.textContent = _wrToks.length ? ((data.thisList.length + data.nextList.length) + ' / ' + _wrTotal + (_wrEn ? '' : '건')) : '';
 
         const SKY_C = '#2c5f8a', SKY_TINT = '#eef6f7', BORDER_C = '#cfe3e5';
 
@@ -457,7 +470,43 @@
                 </div>
             </div>`;
         setTimeout(function() { window.wrAutoActivateNearest(); }, 0);
+        // 🔍 걸린 카드·칸 강조(개발 진척 현황 타임라인은 빼고)
+        if (_wrToks.length) {
+            container.querySelectorAll('.wr-print-item > div, #weekly-report-page table td').forEach(function (el) {
+                if (el.textContent && window._searchMatchAny(el.textContent, _wrToks)) el.classList.add('search-hit');
+            });
+        }
     };
+
+    // ─── 🔍 찾기 (2026-11-24) — 칸은 다시 그려지는 #weekly-report-page **밖**(바로 위)에 한 번만 만든다
+    //     (안에 두면 글자마다 다시 그려지며 커서가 날아간다) ───
+    window._wrSearchTerm = '';
+    window._wrSearchToks = function () {
+        return (window._wrSearchTerm && window._searchTokens) ? window._searchTokens(window._wrSearchTerm) : [];
+    };
+    window._wrItemHay = function (t) {
+        const raw = (t && t.row && colIdx.content !== -1) ? (t.row[colIdx.content] || '').toString() : '';
+        return [(t && t.text) || '', raw].join(' \u0001 ');
+    };
+    function wrEnsureSearchBar() {
+        if (document.getElementById('wr-search-input')) return;
+        const page = document.getElementById('weekly-report-page');
+        if (!page || !page.parentNode) return;
+        const bar = document.createElement('div');
+        bar.className = 'tbl-search-bar';
+        bar.style.cssText = 'display:flex; align-items:center; gap:6px; margin:0 0 6px 0;';
+        bar.innerHTML = '<input id="wr-search-input" type="search" autocomplete="off" style="width:240px;'
+            + (window._uiInputStyle ? window._uiInputStyle() : '') + ' font-size:12px; outline:none;">'
+            + '<span id="wr-search-count" style="font-size:12px; color:#888; white-space:nowrap;"></span>';
+        page.parentNode.insertBefore(bar, page);
+        const inp = bar.querySelector('input');
+        const en = window._currentLang === 'en';
+        inp.placeholder = en ? '🔍 Find — task, content, owner…' : '🔍 찾기 — 업무·내용·담당자…';
+        inp.title = en ? 'Screen only — the PPT export still includes everything' : '화면만 거릅니다 — 📊 PPT 출력은 전부 나갑니다';
+        let t = null;
+        inp.oninput = function () { clearTimeout(t); t = setTimeout(function () { window._wrSearchTerm = inp.value; window.showWeeklyReport(); }, 200); };
+        inp.onkeydown = function (e) { if (e.key === 'Escape' && inp.value) { inp.value = ''; window._wrSearchTerm = ''; window.showWeeklyReport(); } };
+    }
   // 💡 [2026-08-30 되돌림] PPT 출력이 항상 "지금 화면 테마"를 자동으로 쓰도록 했었는데, 기본값(청록
   // 계열 #19c3d6)은 그대로 두고 싶다는 요청 — 대신 출력할 때마다 "기본 테마 색상 / 현재 테마 색상"
   // 중 고르게 한다. 다른 3지선다 모달(_showSaveChoiceModal 등)과 같은 톤으로 재사용 가능한 모달을 새로 만듦.
