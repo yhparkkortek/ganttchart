@@ -17,7 +17,7 @@
 // ⚠️⚠️ [2026-11-12 사용자 제보] 넷을 전부 자동으로 돌렸더니 모델끼리 이슈가 섞였다
 // (검색어 JQL `text ~`가 모델명 숫자 하나 겹치는 **다른 프로젝트** 이슈까지 끌어왔다 — 실측:
 // GABKJ를 연결했는데 GABKH·GABJO 이슈까지 표에 보임). → **자동은 ④(프로젝트 코드, 결정론)
-// 하나뿐**이고, ①②③은 표 아래 "🔎 더 찾기" 버튼을 사람이 눌러야 돈다(CLAUDE.md "결정론
+// 하나뿐**이고, ①②③은 출처 열 머리글의 🔍(2026-11-24 전엔 표 아래 "🔎 더 찾기" 버튼)를 사람이 눌러야 돈다(CLAUDE.md "결정론
 // 먼저" 그대로 — 느슨한 검색은 사람이 트리거할 때만). 네 소스는 **따로 조회한다**(한 JQL로
 // OR 하지 않음) — 메일 스캔은 존재하지 않는 키를 주워올 수 있는데, JIRA의 `key in (...)`는
 // 그중 하나라도 없으면 전체가 400으로 죽는다. 소스 하나가 깨져도 나머지는 멀쩡히 보여야 한다.
@@ -186,7 +186,14 @@
             key: 'src', label: T('출처', 'Source'), type: 'select', multi: true,
             get: function (it) { return (it.src || []).map(function (s) { return SRC_LABELS[s] || s; }).join(', '); },
             getArray: function (it) { return it.src || []; },
-            display: function (v) { return SRC_LABELS[v] || v; }
+            display: function (v) { return SRC_LABELS[v] || v; },
+            // 🔍 [2026-11-24 사용자 요청] 표 아래 안내줄 대신 **출처 머리글의 돋보기 하나** — 설명은 말풍선으로.
+            //    출처가 곧 "어떤 방법으로 연결됐나"라서 그 방법을 더 돌리는 버튼도 여기 있는 게 맞다.
+            action: {
+                icon: function () { return _extraBusy ? '⏳' : '🔍'; },
+                onclick: 'window._jiraPullExtraSources()',
+                title: function () { return extraSourcesTitle(); }
+            }
         }
     ];
     var COLUMNS_BY_KEY = {};
@@ -254,8 +261,6 @@
     // merge 결과(_lastRows, 원본)에 지금의 필터·정렬을 입혀 다시 그린다 — 열 머리글
     // 클릭이나 필터 체크박스가 바뀔 때마다 이것만 부르면 된다(서버 재조회 없음).
     function renderFilteredSortedTable() {
-        // 출처 열이 숨으면 그 열에 걸어 둔 필터도 푼다 — 안 보이는 필터가 행을 숨기면 이유를 찾을 길이 없다
-        if (!mainShowsSrc()) delete _tables.main.filters.src;
         renderTable(viewRows('main'), _lastNote);
     }
 
@@ -393,6 +398,8 @@
             + esc(col.label) + ' <span style="font-size:10px; color:#00707d;">' + sortArrow(colKey, tbl) + '</span></span>'
             + (col.noFilter ? '' : (' <span data-jira-filter-btn onclick="window._jiraToggleColFilter(this, ' + qa(colKey, tbl) + ')"'
                 + ' style="cursor:pointer; font-size:11px; color:' + (filterActive ? '#00707d' : '#bbb') + ';" title="' + esc(T('필터', 'Filter')) + '">🔽</span>'))
+            + (col.action && (tbl || 'main') === 'main' ? (' <span data-jira-col-action onclick="event.stopPropagation();' + col.action.onclick + '"'
+                + ' style="cursor:pointer; font-size:11px;" title="' + esc(col.action.title()) + '">' + col.action.icon() + '</span>') : '')
             + '</th>';
     }
 
@@ -404,19 +411,6 @@
             + '🔽 ' + esc(T(n + '개 열에 필터 적용 중', n + ' column filter(s) active'))
             + '<button onclick="window._jiraClearAllFilters(\'' + (tbl || 'main') + '\')" style="border:none; background:none; color:#a3281c; cursor:pointer; font-size:11px; text-decoration:underline;">'
             + T('전체 해제', 'Clear all') + '</button></div>';
-    }
-
-    // 🏷 [2026-11-24 사용자 요청] 출처 열은 **출처가 두 가지 이상 섞일 때만** 보인다 — 평소엔 전부
-    //    '📁 프로젝트'(탭이 자동으로 부르는 건 프로젝트 코드뿐)라 자리만 차지했다. '🔎 더 찾기'로 수동·검색·
-    //    메일 이슈가 섞여 들어오면 그때 나타난다. 판정은 **필터 전 원본**(_lastRows) 기준 — 필터 때문에
-    //    열이 사라졌다 나타났다 하면 안 된다.
-    function mainShowsSrc() {
-        var seen = {}, n = 0;
-        for (var i = 0; i < _lastRows.length; i++) {
-            var arr = _lastRows[i].src || [];
-            for (var j = 0; j < arr.length; j++) { if (!seen[arr[j]]) { seen[arr[j]] = 1; if (++n > 1) return true; } }
-        }
-        return false;
     }
 
     function renderTable(merged, note) {
@@ -449,21 +443,20 @@
         // 🔽 [2026-11-12 3차, 사용자 요청] 각 열 머리글에 정렬(클릭)·필터(🔽) — headerCell() 한
         //    곳에서 공통으로 그린다(COLUMNS 레지스트리, 위 "헤더 정렬·필터" 절). 정렬은 여기서
         //    다시 안 한다 — merged는 renderFilteredSortedTable이 이미 정렬해서 넘긴다.
-        var showSrc = mainShowsSrc();
         var html = '<table class="concept-table" style="width:100%; table-layout:fixed; border-collapse:separate; border-spacing:0; font-size:12.5px;">'
             + '<thead><tr style="background:#eef6f7;">'
             + '<th style="padding:7px 8px; text-align:center; width:4%; background:#eef6f7; border-bottom:2px solid #cfe3e5;">' + T('No.', 'No.') + '</th>'
             // ⚠️ [2026-11-24] 보고자 열을 넣으며 수정일을 10% 로 줄였더니 '2026-11-19 16:42' 가 두 줄로 접혀
             //    **모든 행 높이가 두 배**가 됐다(사용자 신고) — 수정일 11%·요약 28% 는 그대로(요약도 26% 면 긴 제목이 접힌다, 실측), 줄인 폭은 상태·담당자·구성·출처에서
             + headerCell('key', 7, 'left')
-            + headerCell('summary', showSrc ? 28 : 37, 'left')   // 출처 열(9%)이 숨으면 그 폭은 요약으로
+            + headerCell('summary', 28, 'left')
             + headerCell('status', 6, 'center')
             + headerCell('assignee', 7, 'center')
             + headerCell('reporter', 7, 'center')
             + headerCell('priority', 7, 'center')
-            + headerCell('meta', 14, 'left')
+            + headerCell('meta', 13, 'left')
             + headerCell('updated', 11, 'center')
-            + (showSrc ? headerCell('src', 9, 'left') : '')
+            + headerCell('src', 10, 'left')
             + '</tr></thead><tbody>'
             + merged.map(function (it, i) {
                 var c = statusColor(it.status);
@@ -478,7 +471,7 @@
                     + '<td style="padding:7px 8px; text-align:center;">' + esc(it.priority || '—') + '</td>'
                     + '<td style="padding:7px 8px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#555;" title="' + esc(metaTxt) + '">' + (metaTxt ? esc(metaTxt) : '—') + '</td>'
                     + '<td style="padding:7px 8px; text-align:center; color:#888; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + esc((it.updated || '').slice(0, 16).replace('T', ' ')) + '</td>'
-                    + (showSrc ? '<td style="padding:7px 8px;">' + srcChip(it.src) + '</td>' : '')
+                    + '<td style="padding:7px 8px;">' + srcChip(it.src) + '</td>'
                     + '</tr>';
             }).join('')
             + '</tbody></table>'
@@ -574,7 +567,6 @@
         _lastRows = Object.keys(_byKey).map(function (k) { return _byKey[k]; });
         _lastNote = _notes.join(' / ');
         renderFilteredSortedTable();
-        appendExtraSearchControl(L);
     }
 
     // ── 🔍 "더 찾기"(수동 키·검색어·메일 추정) — 사람이 눌러야만 돈다 ─────────
@@ -583,36 +575,28 @@
     //  화면에 GABKJ 프로젝트를 연결했는데 GABKH·GABJO 이슈까지 섞여 나왔다). → **결정론
     //  (프로젝트 코드, Summary 탭 "JIRA 코드"와 같은 저장소)만 자동으로 돌리고, 나머지
     //  (수동 키·검색어·메일 추정)는 사람이 이 버튼을 눌러야 돈다**(CLAUDE.md "결정론 먼저").
-    function extraSourcesLabel(L) {
+    var _extraBusy = false;
+    // 출처 머리글 🔍 의 말풍선 — 무엇을 더 찾는지(지금 연결 설정 기준)와 왜 자동이 아닌지
+    function extraSourcesTitle() {
+        var L = links();
         var manualCount = (L.manualKeys || []).filter(function (k) { return KEY_RE.test(k); }).length;
         var keyword = (L.keyword || '').trim();
-        var bits = [];
-        bits.push(manualCount ? T('수동 키 ' + manualCount + '개', manualCount + ' manual key(s)') : T('수동 키 없음', 'no manual keys'));
-        bits.push(T('검색어 ', 'keyword ') + (keyword ? ('"' + keyword + '"') : T('(모델명 기본값)', '(default: model name)')));
-        bits.push(T('메일에서 찾은 이슈번호', 'issue numbers captured from mail'));
-        return bits.join(' · ');
-    }
-
-    function appendExtraSearchControl(L) {
-        var box = document.getElementById('jira-table-wrap');
-        if (!box) return;
-        var html = '<div id="jira-extra-row" style="padding:8px 10px; border-top:1px solid #eee; background:#fafcfc;'
-            + ' font-size:11.5px; color:#789; display:flex; align-items:center; gap:8px; flex-wrap:wrap;">'
-            + '<span>🔍 ' + T('그 외 연결 방법(눌러야 돕니다): ', 'Other link methods (click to run): ') + esc(extraSourcesLabel(L)) + '</span>'
-            + '<button onclick="window._jiraPullExtraSources()"'
-            + ' onmouseover="this.style.background=\'#a3d9e0\';" onmouseout="this.style.background=\'#e0f5f7\';"'
-            + ' style="padding:4px 10px; border-radius:6px; font-size:11.5px; cursor:pointer; border:none; background:#e0f5f7;'
-            + ' color:#00707d; font-weight:bold; transition:background .15s;">🔎 ' + T('더 찾기', 'Search these too') + '</button>'
-            + '<span id="jira-extra-status" style="color:#999;"></span>'
-            + '</div>';
-        box.insertAdjacentHTML('beforeend', html);
+        return T('🔍 더 찾기 — 누르면 지금 조회합니다', '🔍 Search more — runs now') + '\n'
+            + '· ' + (manualCount ? T('🔗 수동 키 ' + manualCount + '개', '🔗 ' + manualCount + ' manual key(s)') : T('🔗 수동 키 없음', '🔗 no manual keys')) + '\n'
+            + '· ' + T('🔍 검색어 ', '🔍 keyword ') + (keyword ? '"' + keyword + '"' : T('(모델명 기본값)', '(default: model name)')) + '\n'
+            + '· ' + T('📧 메일에서 찾은 이슈번호', '📧 issue numbers found in mail') + '\n'
+            + T('자동으로는 📁 프로젝트 코드만 불러옵니다(검색어는 다른 프로젝트 이슈가 섞일 수 있어서).',
+                'Only the 📁 project code loads automatically (keyword search can pull in other projects).');
     }
 
     window._jiraPullExtraSources = async function () {
-        var statusEl = document.getElementById('jira-extra-status');
-        if (statusEl) statusEl.textContent = T('찾는 중...', 'Searching...');
+        if (_extraBusy) return;
+        _extraBusy = true;
+        renderFilteredSortedTable();   // 머리글 🔍 → ⏳
         var L = links();
         var beforeCount = Object.keys(_byKey).length;
+        // ⚠️ 중간에 무엇이 던져도 ⏳ 에 갇히지 않게(다시 누를 수 없게 된다) — 실패는 토스트로 드러낸다
+        try {
 
         var manualKeys = (L.manualKeys || []).filter(function (k) { return KEY_RE.test(k); });
         var validPrefixes = await validProjectPrefixes();
@@ -637,11 +621,16 @@
         await pullKeysByTag(mailKeys, 'mail');
         await pullKeyword(keyword);
 
+        } catch (e) {
+            _notes.push(String(e && e.message || e));
+            if (window.showToast) window.showToast('⚠️ ' + T('더 찾기 실패: ', 'Search failed: ') + (e && e.message ? e.message : e), 'warning');
+        } finally {
+            _extraBusy = false;
+        }
         Object.keys(_byKey).forEach(function (k) { _issueCache[k] = _byKey[k]; });
         var added = Object.keys(_byKey).length - beforeCount;
         renderMergedTable(L);
-        var statusEl2 = document.getElementById('jira-extra-status');
-        if (statusEl2) statusEl2.textContent = '✅ ' + (added > 0 ? T(added + '건 더 찾았습니다.', 'Found ' + added + ' more.') : T('더 찾은 결과 없음.', 'Nothing more found.'));
+        if (window.showToast) window.showToast('🔍 ' + (added > 0 ? T(added + '건 더 찾았습니다.', 'Found ' + added + ' more.') : T('더 찾은 이슈가 없습니다.', 'Nothing more found.')), added > 0 ? 'success' : 'info');
     };
 
     // ── 탭 진입 시마다 다시 수집한다(메일 분석·설정이 그 사이 바뀌었을 수 있다) ──
