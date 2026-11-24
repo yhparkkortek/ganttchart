@@ -672,8 +672,8 @@ function bmConfirmModal(message, onYes, okLabel, okColor) {
         //    데이터가 바뀌면 확인 클릭이 옛 대상을 참조할 수 있다는 점은 감수하기로 함(사용자 승인).
         modal.style.cssText = 'position:fixed;inset:0;z-index:100000;background:none;pointer-events:none;display:flex;align-items:center;justify-content:center;';
         modal.innerHTML =
-            '<div style="pointer-events:all;background:#fff;border-radius:10px;padding:26px 30px;min-width:300px;box-shadow:0 8px 32px rgba(0,0,0,0.18);text-align:center;">'
-            + '<div id="bm-confirm-msg" style="font-size:14px;color:#333;margin-bottom:20px;"></div>'
+            '<div style="pointer-events:all;background:#fff;border-radius:10px;padding:28px 32px;min-width:320px;box-shadow:0 8px 32px rgba(0,0,0,0.18);text-align:center;">'
+            + '<div id="bm-confirm-msg" style="font-size:14px;color:#495057;margin-bottom:20px;"></div>'
             + '<div style="display:flex;gap:12px;justify-content:center;">'
             + '<button id="bm-confirm-ok" style="padding:9px 26px;background:#fbe4e2;color:#b1432f;border:1px solid #eeb0ac;border-radius:7px;font-size:14px;font-weight:700;cursor:pointer;">삭제</button>'
             + '<button id="bm-confirm-cancel" style="padding:9px 26px;background:#dee2e6;color:#333;border:none;border-radius:7px;font-size:14px;cursor:pointer;">취소</button>'
@@ -692,7 +692,8 @@ function bmConfirmModal(message, onYes, okLabel, okColor) {
     //    같은 계열의 파스텔 3종(배경/테두리/글자)으로 매핑해서 적용 — 호출부 시그니처는 그대로 유지.
     const _bmPastel = {
         '#e03131': { bg: '#fbe4e2', border: '#eeb0ac', text: '#b1432f', hoverBg: '#f5c2bd', hoverBorder: '#e08f87' },
-        '#0056b3': { bg: '#e8f4fd', border: '#a5c8f0', text: '#1a4f7a', hoverBg: '#cfe6fa', hoverBorder: '#7fb0dd' },
+        // 🎨 [2026-11-24 "확인창 통일"] 파랑(주 동작)은 테마색 — 빨강(삭제)·초록(확인)·주황(경고)은 역할색이라 그대로
+        '#0056b3': { bg: 'var(--ui-accent-bg, #e0f5f7)', border: 'var(--ui-accent-line, #a3d9e0)', text: 'var(--ui-accent, #00707d)', hoverBg: 'var(--ui-accent-line, #a3d9e0)', hoverBorder: 'var(--ui-accent, #00707d)' },
         '#2f9e44': { bg: '#e6f6ea', border: '#a8dab8', text: '#1f7a3d', hoverBg: '#c9ecd3', hoverBorder: '#7cc494' },
         '#e67e22': { bg: '#fbead9', border: '#edbf85', text: '#a85d0a', hoverBg: '#f4d9b3', hoverBorder: '#dba354' },
     };
