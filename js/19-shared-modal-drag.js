@@ -144,7 +144,11 @@ window._modalHdrRegister = function(handleId) {
         + sel(' > span:not([style*="background"])') + ', ' + sel(' > div > span:not([style*="background"])')
         + ' { color: var(--modal-hdr-text, #00707d) !important; }\n'
         // 상자 둥글기 10px 에 맞춰 헤더 윗모서리도 둥글게(테두리 1px 안쪽이라 9px)
-        + sel('') + ' { border-radius: 9px 9px 0 0 !important; }\n';
+        + sel('') + ' { border-radius: 9px 9px 0 0 !important; }\n'
+        // 📏 [2026-11-25 사용자 요청] 높이를 페이지 헤더 상자(.concept-header-box, 50px)에 맞춘다 — 상자 위 테두리 1px + 헤더 49px.
+        //    전엔 위아래 여백 13px + 내용 높이라 모달마다 49~55px 로 제각각이었다(실측). 내용이 더 높은 헤더는 그만큼 자란다(min-height).
+        + sel('') + ' { min-height: 49px !important; padding-top: 0 !important; padding-bottom: 0 !important; box-sizing: border-box !important;'
+        + ' display: flex !important; align-items: center !important; }\n';
 };
 
 // 🖼 [2026-11-24 "모달 박스 테두리도 같이 검토"] 상자 틀도 한 벌 — 실측 72개 중 둥글기는 10px 44 · 12px 1 · 미지정 27,
