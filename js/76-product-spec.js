@@ -472,7 +472,10 @@
         'AD BOARD': { seps: ['PBA-AD', 'PBM AD'] },
         'CONVERTER': { seps: ['PBA-CNV'] },
         'TOUCH CTRL': { seps: ['PBA-T', 'PBM TCH-CON'] },
-        'TSP/GLASS': { seps: ['TSP'], groups: ['TOUCH SCREEN MODULE', 'TOUCH SCREEN ASSY'] }
+        'TSP/GLASS': { seps: ['TSP'], groups: ['TOUCH SCREEN MODULE', 'TOUCH SCREEN ASSY'] },
+        // 스케일러 IC — VCP(모니터 제어 명령표)는 A/D 보드가 아니라 스케일러 펌웨어·고객이 정한다
+        //   (2026-11-25 실측: SHUFFLER 3.0·4.3 은 A/D 보드가 다른데 둘 다 RTD2555 라 VCP 110칸이 전부 같았다)
+        'SCALER': { seps: ['IC_SCALR'] }
     };
     // 이 모델 BOM 에서 그 부품 — null = BOM 을 안 받아서 모름 · false = BOM 엔 없음 · {code,name,desc}
     var _bomPart = function (cat) {
@@ -775,7 +778,8 @@
         { id: 'adp', label: _t('A/D 커넥터 핀 표', 'A/D pinouts'), match: ['adbd'],
           keys: [/^adH\d+$/, /^adp\d+\./], images: ['img_adbd'] },
         { id: 'osd', label: 'OSD', match: ['adbd'], keys: [/^osd\./], images: ['img_osdkey', 'img_osdmenu'] },
-        { id: 'vcp', label: 'VCP', match: ['adbd', 'customer'], keys: [/^vcp\./] },
+        // VCP — 같은 고객 + 같은 스케일러 IC(같은 A/D 보드면 스케일러도 같다고 본다)
+        { id: 'vcp', label: 'VCP', match: ['scaler', 'customer'], keys: [/^vcp\./] },
         { id: 'conv', label: _t('컨버터 커넥터 핀 표', 'converter pinouts'), match: ['conv'],
           keys: [/^cvi\./, /^cvo\./], images: ['img_conv'] },
         // 블록도엔 터치 컨트롤러도 그려진다 — 터치 구성까지 같아야('touchKind' = 둘 다 없음이거나 같은 컨트롤러)
@@ -786,7 +790,7 @@
         { id: 'tim', label: _t('타이밍 표(실제 EDID)', 'timing (EDID)'), match: ['adbd', 'native'], keys: [/^tim\./], first: true }
     ];
     window.PS_REF_SCAN = window.PS_REF_SCAN || { maxProjects: 40 };
-    var PS_ID_CATS = { adbd: 'AD BOARD', conv: 'CONVERTER', touch: 'TOUCH CTRL' };
+    var PS_ID_CATS = { adbd: 'AD BOARD', conv: 'CONVERTER', touch: 'TOUCH CTRL', scaler: 'SCALER' };
     var _refGroupOf = function (key) {
         var gs = window.PS_REF_GROUPS || [];
         for (var i = 0; i < gs.length; i++) {
@@ -839,7 +843,7 @@
             var parts = (card && card.materials) || [];
             var plr = (card && card.KTKPN) ? (_plRow({ meta: { KTKPN: card.KTKPN } }) || {}) : {};
             var ident = {};
-            Object.keys(PS_ID_CATS).forEach(function (w) { ident[w] = _identFrom(bom, parts, PS_ID_CATS[w], plr[LIB[w].pl]); });
+            Object.keys(PS_ID_CATS).forEach(function (w) { ident[w] = _identFrom(bom, parts, PS_ID_CATS[w], LIB[w] ? plr[LIB[w].pl] : null); });
             Object.keys(revs).forEach(function (rk) {
                 if (!/^R\d+$/.test(rk)) return;
                 var r = revs[rk] || {};
@@ -917,7 +921,7 @@
         var mine = {};
         Object.keys(PS_ID_CATS).forEach(function (w) {
             var card = ((window.tabData || {}).projectModels || []).filter(function (m) { return m && m.unitId === (window.mcActiveUnit || ''); })[0];
-            mine[w] = _identFrom((st && st.rows) || [], (card && card.materials) || [], PS_ID_CATS[w], row[LIB[w].pl]);
+            mine[w] = _identFrom((st && st.rows) || [], (card && card.materials) || [], PS_ID_CATS[w], LIB[w] ? row[LIB[w].pl] : null);
         });
         mine.customer = _custKey(ctx.meta && ctx.meta.고객사);
         var nat = _nativeRes(ctx);
@@ -939,6 +943,7 @@
                     if (w === 'customer') return !!(mine.customer && mine.customer === c.customer);
                     if (w === 'native') return !!(mine.native && mine.native === c.native);
                     if (w === 'touchKind') return (mine.touch === false && c.ident.touch === false) || _sameIdent(mine.touch, c.ident.touch);
+                    if (w === 'scaler') return _sameIdent(mine.scaler, c.ident.scaler) || _sameIdent(mine.adbd, c.ident.adbd);
                     return _sameIdent(mine[w], c.ident[w]);
                 });
             })[0];
@@ -975,7 +980,7 @@
             if (w === 'native') return _t('같은 해상도', 'same resolution');
             if (w === 'touchKind') return c.ident.touch === false ? _t('둘 다 터치 없음', 'no touch') : _t('같은 터치', 'same touch');
             var id = c.ident[w] || {};
-            return _t('같은 ', 'same ') + ({ adbd: 'A/D', conv: 'CONV', touch: 'TOUCH' })[w] + (id.code ? ' ' + id.code : '');
+            return _t('같은 ', 'same ') + ({ adbd: 'A/D', conv: 'CONV', touch: 'TOUCH', scaler: 'SCALER' })[w] + (id.code ? ' ' + id.code : '');
         }).join('·');
         return '📑 ' + c.proj + (c.unit ? ' ' + c.unit : '') + ' V' + _pad((parseInt(c.rev.slice(1), 10) || 1) - 1)
             + _t(' 사양서', ' spec') + ' (' + why + ')';

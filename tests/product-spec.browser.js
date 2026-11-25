@@ -377,6 +377,24 @@ window.__psTest = async function (opt) {
         var cE = window._dgCollect(), HE = window.DOC_AUTO_HOOKS.ps;
         var syms = [1, 2, 3].map(function (n) { return HE(cE, 'adc.r' + n + '.c0').v; });
         check(syms.join(',') === 'J1,SW1~4,' , 'EMI 자리 스위치는 A/D 연결표에서 빠지고 OSD 키(SW1~4)·커넥터는 남는다 (' + syms.join(',') + ')');
+        //   ④ 16차 실측(SHUFFLER 3.0·4.3): A/D 보드가 달라도 **같은 고객 + 같은 스케일러 IC** 면 VCP 를 가져온다(VCP 110칸이 같았다).
+        //      핀 표는 그래도 A/D 보드가 같아야만(다른 보드 핀 표는 J 번호부터 다르다)
+        window.tabData.bomByUnit.LOWER.rows.push({ _level: 2, IDNRK: '888001', OJTXP: 'IC_SCALR>S,RTD9999T,HDMI/DP,2K,LVDS', WGBEZ60: '회로자재/IC-VIDEO' });
+        var otherAd = { code: '777555', name: 'ADBOTHER' };
+        var candS = function (scCode, cust) {
+            return { proj: 'OTHER_S', rank: 2, unit: 'PTD', rev: 'R1', dk: 'product-spec#PTD', customer: cust,
+                     ident: { adbd: otherAd, conv: false, touch: false, scaler: { code: scCode, name: 'RTD9999T' } },
+                     fields: { 'vcp.r1.c1': 'VCP-SC', 'adp1.r1.c1': 'PIN-OTHER', adH1: 'J9 : OTHER' }, att: {} };
+        };
+        window._psRef.set([candS('888001', 'LNW')]);
+        var cS = window._dgCollect();
+        check(HE(cS, 'vcp.r1.c1').v === 'VCP-SC' && /같은 SCALER 888001/.test(HE(cS, 'refSummary').v) && HE(cS, 'adp1.r1.c1').v !== 'PIN-OTHER',
+              'A/D 보드가 달라도 같은 고객·같은 스케일러면 VCP 는 가져오고 핀 표는 안 가져온다 (' + HE(cS, 'vcp.r1.c1').v + ' / ' + HE(cS, 'adp1.r1.c1').v + ')');
+        window._psRef.set([candS('888999', 'LNW')]);
+        check(window.DOC_AUTO_HOOKS.ps(window._dgCollect(), 'vcp.r1.c1').v !== 'VCP-SC', '스케일러가 다르면 VCP 를 안 가져온다');
+        window._psRef.set([candS('888001', 'ABC')]);
+        check(window.DOC_AUTO_HOOKS.ps(window._dgCollect(), 'vcp.r1.c1').v !== 'VCP-SC', '고객이 다르면 VCP 를 안 가져온다');
+        window._psRef.set([]);
         delete window.tabData.bomByUnit;
         //   ② 모델명 SAP 내역 모양('PTD>…@VINA') → 머리·꼬리 뗌(표지·Scope 둘 다)  ③ 인치 '04.3' → '4.3'
         var cardM = window.tabData.projectModels[0], mName0 = cardM.KTK모델명, pmName0 = window.projectMeta.KTK모델명, inch0 = window.projectMeta.인치;
