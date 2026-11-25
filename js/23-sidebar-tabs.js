@@ -111,6 +111,8 @@
             const noticeSec = document.getElementById('tab-notice');
             if (noticeSec) noticeSec.style.display = 'none';
         }
+        // 🧲 붙은 넓은 모달 — 탭마다 페이지를 비킬지가 다르다(간트·프로젝트 목록은 안 비킴, js/19 MODAL_DOCK_SKIP_TABS)
+        if (window._modalDockSync) window._modalDockSync();
     };
 
     // 💡 [2026-08-29 변경] Alarm/Notice 밑줄탭 2개 고정 대신, Elec Parts(🖥️ PANEL ▾)와 동일한

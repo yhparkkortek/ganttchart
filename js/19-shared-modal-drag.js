@@ -311,6 +311,8 @@ window._modalPosSave = function(boxId, withSize) {
 window.MODAL_FIT_WIDE = ['gantt-qa-box', 'mail-analyzer-modal', 'task-inbox-modal', 'jira-issue-box', 'jira-search-box',
                          'daily-box', 'matcart-box', 'ovc-box', 'ms-queue-box'];
 window.MODAL_FIT_POLICY = { side: 'right', minHalfW: 640, gapDefault: 10 };
+// 붙은 모달이 있어도 페이지를 비키지 않는 탭(화면 전체를 쓰는 페이지) — 탭 이름은 사이드바 data-tab
+window.MODAL_DOCK_SKIP_TABS = ['gantt', 'projectlist'];
 window._modalFitRect = function() {
     const main = document.getElementById('app-main');
     if (!main) return null;
@@ -358,7 +360,10 @@ window._modalDockSync = function() {
     const main = document.getElementById('app-main');
     if (!main) return;
     let reserve = 0;
-    (window.MODAL_FIT_WIDE || []).forEach(function (id) {
+    // 화면 전체를 쓰는 페이지(간트·프로젝트 목록)는 비키지 않는다 — 좁히면 표가 망가진다, 겹쳐도 된다(사용자 결정 2026-11-25)
+    const act = document.querySelector('.tab-panel.active');
+    const tab = act ? act.id.replace(/^tab-/, '') : '';
+    if ((window.MODAL_DOCK_SKIP_TABS || []).indexOf(tab) < 0) (window.MODAL_FIT_WIDE || []).forEach(function (id) {
         const box = document.getElementById(id);
         if (!box || box.dataset.fitDocked !== '1' || !window._mreszIsShown(box)) return;
         const r = box.getBoundingClientRect();
