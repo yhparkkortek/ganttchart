@@ -1451,7 +1451,7 @@ window._hdrFindMount = function (hdr, el, before) {
 window.PAGE_FIND_TARGETS = [
     { key: 'sum', rootId: 'tab-summary', skip: ['.concept-header-box', '#sum-history-box'], dates: true,
       ko: '🔍 Summary 에서 찾기', en: '🔍 Find in Summary' },
-    { key: 'doc', rootId: 'doc-page-body', headerId: 'doc-header-tools', skip: [],
+    { key: 'doc', rootId: 'doc-page-body', headerId: 'doc-header-tools', skip: [], dates: true,
       ko: '🔍 문서에서 찾기', en: '🔍 Find in document' }
 ];
 (function () {
