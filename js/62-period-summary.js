@@ -71,11 +71,10 @@
     function pad(n) { return String(n).padStart(2, '0'); }
     function ymd(d) { return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
     /** 🎨 [2026-11-25] 날짜 글자색 클래스 — 일요일·공휴일=빨강, 토요일=파랑, 평일=회색(Daily Report·Calendar 와 같은 규칙, 색은 styles.css/js/21). */
+    //    판정은 공용 `window._dateDayCls`(js/04a) 한 곳 — 여기선 그 결과 이름만 이 페이지 범위 클래스(ps-date-*)로 바꾼다.
     function dateCls(s) {
-        var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s || ''); if (!m) return '';
-        var wd = new Date(+m[1], +m[2] - 1, +m[3]).getDay();
-        var hol = (wd === 0) || !!(window.isHoliday && window.isHoliday(s));
-        return hol ? 'ps-date-hol' : (wd === 6 ? 'ps-date-sat' : 'ps-date-wk');
+        var c = window._dateDayCls ? window._dateDayCls(s) : '';
+        return c ? c.replace('date-day-', 'ps-date-') : '';
     }
     function mode() {
         var m = null;

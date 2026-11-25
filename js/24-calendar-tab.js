@@ -459,7 +459,6 @@ window._calSyncHelpRender = function() {
 function calBuildDayCell(cellDate, eventsByDay, todayKey, selectedEvent, opts) {
     opts = opts || {};
     const key = calDateKey(cellDate);
-    const dow = cellDate.getDay();
     // ⚠️ [2026-10-16] 간트 업무를 **항상 먼저** 놓는다. 칩은 하루 최대 10개까지만 그려지는데,
     //    마감시각만으로 정렬했더니 오전에 끝나는 그룹웨어 일정들이 앞을 차지해 내 업무가
     //    통째로 잘려 나갔다(실측: 그룹웨어 12건이면 간트 0건). 그룹웨어 일정은 어디까지나
@@ -473,9 +472,10 @@ function calBuildDayCell(cellDate, eventsByDay, todayKey, selectedEvent, opts) {
     if (opts.otherMonth) cls += ' cal-other-month';
     if (key === todayKey) cls += ' cal-today';
     // 🎨 [2026-11-25] 날짜 글자색 — 일요일·공휴일(토요일 공휴일 포함)=빨강, 토요일=파랑, 평일=회색(Daily Report 월 보기와 같은 규칙)
-    const isHol = !!(window.isHoliday && window.isHoliday(key));
-    if (dow === 0 || isHol) cls += ' cal-weekend-sun';
-    else if (dow === 6) cls += ' cal-weekend-sat';
+    //    판정은 공용 `window._dateDayCls`(js/04a) 한 곳 — 여기선 결과를 이 페이지 클래스(cal-weekend-*)로 옮길 뿐이다.
+    const dayCls = window._dateDayCls ? window._dateDayCls(key) : '';
+    if (dayCls === 'date-day-hol') cls += ' cal-weekend-sun';
+    else if (dayCls === 'date-day-sat') cls += ' cal-weekend-sat';
     if (opts.tall) cls += ' cal-day-cell-tall';
 
     const chipCount = dayEvents.length;

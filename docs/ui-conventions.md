@@ -487,7 +487,7 @@ Summary처럼 블록이 여러 개인 페이지를 **시트 하나**로 낸다(�
 - **Calendar 만 일요일 빨강이 `#e03131`** — 달력에 원래 있던 색을 그대로 뒀다(`.cal-weekend-sun`). 새로 만드는 곳은 `#d32f2f`.
 - **판정은 `window._dateDayCls(문자열)` 한 곳**(js/04a). `YYYY-MM-DD` 로 시작하는 글자를 받아
   `'date-day-hol'` / `'date-day-sat'` / `'date-day-wk'` 를 돌려주고, 날짜가 아니면 `''`. 새 페이지는 **이 함수만 부르고** 요일 계산을 따로 만들지 않는다
-  (Daily 월 보기·Calendar 는 같은 규칙을 제 코드로 한 번 더 계산한다 — 두 곳을 고칠 일이 생기면 같이).
+  (Daily 월 보기만 같은 규칙을 제 코드로 한 번 더 계산한다 — 판정 규칙을 바꾸면 그곳도 같이).
 
 ### ⚠️ 색은 클래스로, 그리고 **두 곳에 같이** 적는다
 팔레트 테마(js/21 `_cpApplyLive`)가 `!important` 규칙으로 글자색을 덮어쓰므로 **인라인 `color` 로는 안 먹는다**.
@@ -502,10 +502,10 @@ Summary처럼 블록이 여러 개인 페이지를 **시트 하나**로 낸다(�
 |---|---|---|---|
 | Daily Report 하루 보기 | 헤더 날짜 라벨 `#daily-day-label` | 라벨에 `date-day-hol/sat` 클래스(평일은 원래 색) | js/59 (**CRLF**) |
 | Daily Report 월 보기 | 일자 머리글 `th` | `daily-mdate daily-mdate-hol/sat/wk`, 칸 폭 28px 고정(`table-layout:fixed`) | js/59 |
-| Calendar 월·주 | 날짜 숫자 `.cal-day-num` | `.cal-weekend-sun/sat` — **두 보기가 `calBuildDayCell` 한 곳을 공유**해 따로 안 고쳤다 | js/24 |
+| Calendar 월·주 | 날짜 숫자 `.cal-day-num` | `_dateDayCls` 결과를 `.cal-weekend-sun/sat` 로 옮긴다 — **두 보기가 `calBuildDayCell` 한 곳을 공유**해 따로 안 고쳤다 | js/24 |
 | Weekly Report | 업무 카드 제목·문제점 표(첫 칸·추진일정)·타임라인 | **화면 전용** `wrDateSpan(ts)` 가 일/토/공휴일만 `<span class="date-day-…">` 로 감싼다 | js/20 (**CRLF**) |
 | Summary | 마일스톤 계획·실적 날짜 입력칸 | `_sumColorizeDates` 가 입력칸 클래스를 다시 단다 + `input/change` 위임 + `populateTabData` 감싸기 | js/23 |
-| Project Review | 표 날짜 열·근거 사실 목록 날짜 제목 | `dateCls()` → `ps-date-hol/sat/wk` | js/62 |
+| Project Review | 표 날짜 열·근거 사실 목록 날짜 제목 | `dateCls()` 가 `_dateDayCls` 결과 이름만 `ps-date-hol/sat/wk` 로 바꾼다 | js/62 |
 | JIRA | 연결 이슈 표·전체 검색 표의 "수정일" | `td` 에 `_dateDayCls` 결과 | js/70 |
 | Alarm | "완료 예정일" | `td` 에 `_dateDayCls` 결과 | js/22c |
 | Notice | "기준일" | `td` 클래스 + 지난 날짜는 회색 대신 `opacity:.6` | js/22b |
@@ -527,4 +527,4 @@ Summary처럼 블록이 여러 개인 페이지를 **시트 하나**로 낸다(�
 전 페이지를 합성 날짜(공휴일이 평일에 걸린 10/9·12/25 포함)로 돌려 **불일치 0건**: Daily 하루 92일·월 365칸, Calendar 월 496일·주 398일, Summary 18칸×6라운드,
 Document 실제 서식 4종, Weekly 카드·표·타임라인 14업무, Project Review 18일. ⚠️ **JIRA·Alarm·Notice 는 데이터를 넣어 그리는 입구가 모듈 안에 있어 직접 못 불렀다** —
 같은 범위 안에 92일치 칸을 만들어 팔레트 CSS 가 먹는지만 확인했고(간접), 각 화면 코드가 클래스를 붙이는 것은 소스로 확인했다. **실제 프로젝트·NAS·JIRA 데이터로는 확인 못 했다.**
-**검증 하네스 `tests/date-color.browser.js`** — 새로고침 직후 콘솔에 붙여넣고 `await __dateColorTest()`(약 14초, 45건). 실제 프로젝트가 열려 있으면 거부(`{force:true}` 로만). 가짜는 일일보고 NAS 읽기 4개·`_psCollectFacts`·합성 `globalData` 뿐이고 색을 다는 코드는 전부 진짜. 세 종류(일·공휴일/토/평일)를 한 번도 못 만났으면 실패로 친다(허공 검사 방지). 돌연변이 확인: `_dateDayCls` 가 토요일을 평일로 돌리게 하면 **16건 실패**(판정 함수·Daily 하루·Summary·Document·Weekly 셋·JIRA/Alarm/Notice CSS). ⚠️ **Calendar·Project Review·Daily 월 보기는 `_dateDayCls` 를 안 쓰고 제 코드로 요일을 계산해서** 그 돌연변이로는 안 걸린다 — 그 셋은 각자 코드를 바꿨을 때만 잡힌다. ⚠️ 브라우저 창이 **숨겨져 있으면** rAF 가 안 돌아 Document 검사가 멈춘다 — 미리보기 창을 보이게 하고, 도구 45초 제한에 걸리니 백그라운드로 시작해 결과만 읽을 것.
+**검증 하네스 `tests/date-color.browser.js`** — 새로고침 직후 콘솔에 붙여넣고 `await __dateColorTest()`(약 14초, 45건). 실제 프로젝트가 열려 있으면 거부(`{force:true}` 로만). 가짜는 일일보고 NAS 읽기 4개·`_psCollectFacts`·합성 `globalData` 뿐이고 색을 다는 코드는 전부 진짜. 세 종류(일·공휴일/토/평일)를 한 번도 못 만났으면 실패로 친다(허공 검사 방지). 돌연변이 확인: `_dateDayCls` 가 토요일을 평일로 돌리게 하면 **20건 실패**(판정 함수·Daily 하루·Calendar 월·주·Summary·Document·Weekly 셋·Project Review 둘·JIRA/Alarm/Notice CSS). ⚠️ **Daily 월 보기(js/59)만 아직 `_dateDayCls` 를 안 쓰고 제 코드로 요일을 계산한다** — 그 돌연변이로는 안 걸린다(Calendar·Project Review 는 2026-11-25 에 공용 함수로 통일했다).⚠️ 브라우저 창이 **숨겨져 있으면** rAF 가 안 돌아 Document 검사가 멈춘다 — 미리보기 창을 보이게 하고, 도구 45초 제한에 걸리니 백그라운드로 시작해 결과만 읽을 것.
