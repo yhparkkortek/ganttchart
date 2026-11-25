@@ -2,7 +2,7 @@
 <html><head><meta charset="utf-8"><title>모달 위치 기억·초기화·넓은 모달 기본 위치 시험</title></head><body style="margin:0">
 <!-- 📐 [2026-11-25] 진짜 kortek_pm.html, 진짜 여는 함수·진짜 ⚙️ 메뉴 버튼. 가짜는 showToast 하나(글을 받아 본다).
      ① 기억된 자리로 열린다 ② 메뉴 [🪟 모달 위치 초기화] → 열린 넓은 모달이 기본 자리로, 저장 비움, 토스트
-     ③ 다시 열어도 기본 자리(다시 만드는 모달 — JIRA 검색) ④ 다른 넓은 모달(자재 보관함)도 같은 자리 ⑤ 목록 밖 모달(알람 설정)은 원래 크기 ⑥~⑧ 붙은 동안 페이지 비킴·닫으면 되돌림·옮긴 창은 안 비킴 ⑨ 모든 페이지가 같이 비킴(간트·목록·캘린더·주간 보고 포함) ⑩ 프로젝트 탭 줄이 생기면 그 아래로
+     ③ 다시 열어도 기본 자리(다시 만드는 모달 — JIRA 검색) ④ 다른 넓은 모달(자재 보관함)도 같은 자리 ⑤ 목록 밖 모달(알람 설정)은 원래 크기 ⑥~⑧ 붙은 동안 페이지 비킴·닫으면 되돌림·옮긴 창은 안 비킴 ⑨ 모든 페이지에서 모달과 안 겹침(폭이 정해진 페이지는 빈 공간만큼만 모달) ⑩ 프로젝트 탭 줄이 생기면 그 아래로
      실행: chrome --headless=new --allow-file-access-from-files --window-size=2000,1100 --virtual-time-budget=30000
            --dump-dom file:///.../tests/modal-pos-reset.html → <pre id="out"> (마지막 줄 N/M) -->
 <iframe id="f" src="../kortek_pm.html?mpr=1" style="border:0;width:2000px;height:1100px;"></iframe>
@@ -50,10 +50,14 @@ f.onload = async function () {
     hide('matcart-modal'); await sleep(300);
     // ⑨ 모달을 연 채 탭을 오가도 모든 페이지가 똑같이 비킨다(화면 전체를 쓰는 페이지 포함 — 사용자 결정)
     W.localStorage.removeItem(KEY); W.switchTab('briefspec'); await sleep(300); W._mcOpen(); await sleep(700);
-    var pads = {};
-    for (const tab of ['briefspec', 'gantt', 'projectlist', 'calendar', 'weekly']) { W.switchTab(tab); await sleep(300); pads[tab] = M.style.paddingRight; }
-    var vals = Object.keys(pads).map(function (k) { return pads[k]; });
-    chk(vals[0] !== '' && vals.every(function (v) { return v === vals[0]; }), '⑨ 모든 페이지가 같은 폭으로 비킨다 — ' + JSON.stringify(pads));
+    var res = {}, okAll = true;
+    for (const tab of ['briefspec', 'gantt', 'projectlist', 'calendar', 'weekly']) {
+        W.switchTab(tab); await sleep(400);
+        var pg = D.getElementById('tab-' + tab), el = tab === 'gantt' ? D.getElementById('table-container') : tab === 'projectlist' ? D.getElementById('pl-table-wrap') : pg.querySelector('.concept-tab-wrap');
+        var pe = Math.round(el.getBoundingClientRect().right), ml = Math.round(D.getElementById('matcart-box').getBoundingClientRect().left);
+        res[tab] = pe + '<' + ml; if (!(pe <= ml - 5)) okAll = false;
+    }
+    chk(okAll, '⑨ 모든 페이지에서 페이지 끝이 모달 왼쪽 — ' + JSON.stringify(res));
     hide('matcart-modal'); await sleep(400); W.switchTab('calendar'); await sleep(300);
     chk(M.style.paddingRight === '', '⑨ 닫으면 캘린더도 원래 폭 — "' + M.style.paddingRight + '"');
     W.switchTab('briefspec'); await sleep(300);
