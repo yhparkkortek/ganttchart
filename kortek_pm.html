@@ -18,7 +18,7 @@
 <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
 
-<link rel="stylesheet" href="styles.css?v=2026112505h">
+<link rel="stylesheet" href="styles.css?v=2026112591">
 <!-- 💡 [2026-09-04] FOUC 방지: 저장된 테마 CSS를 첫 렌더 전에 즉시 주입.
      styles.css가 파싱된 직후, <body>가 렌더되기 전에 실행되므로
      "청록 → 파랑" 깜빡임 없이 바로 올바른 테마색이 적용된다.
@@ -1924,10 +1924,10 @@
 <!-- 수정코드 -->
 <div id="tab-weekly" class="tab-panel">
     <div class="concept-tab-wrap">
+        <!-- 📑 [2026-11-25] 주간 보고 ↔ 프로젝트 리뷰 전환(js/78). 헤더 안에 넣으면 주간 보고 헤더(이미 꽉 참)가 1366px 에서 두 줄이 돼서 헤더 **위** 한 줄로 뺐다. -->
+        <div class="rpt-tabs"><div class="cal-view-toggle rpt-toggle" id="rpt-toggle-weekly"><button type="button" class="cal-view-btn cal-view-btn-active" data-page-title="weekly" onclick="window.switchTab('weekly')" title="간트 일정 기준 — 이번 주·다음 주 계획과 문제점">📋 주간 보고</button><button type="button" class="cal-view-btn" data-page-title="psummary" onclick="window.switchTab('psummary')" title="메일 분석 사실 기준 — 실제로 있었던 일(일·주·월·기간)">📑 프로젝트 리뷰</button></div></div>
         <div class="concept-header-box">
-            <h2 data-page-title="weekly">📋 주간 보고</h2>
-            <!-- 💡 [경계선 위치 변경] 타이틀과 LEVEL(WBS) 사이로 이동 -->
-            <span style="display:inline-block; width:1px; height:16px; background:#ddd; margin:0 12px;"></span>
+
             <!-- 💡 [드롭다운화] Gantt 차트 페이지와 동일하게 트리거 버튼 + 팝업 방식으로 통일 (실제 필터 그룹은
                  body 하단의 gantt-filter-popup-wr-wbs 팝업 안에 있음 — window.toggleGanttFilterPopup 재사용) -->
             <button type="button" id="gantt-filter-trigger-wr-wbs" class="action-btn gantt-filter-trigger-btn" onclick="window.toggleGanttFilterPopup('wr-wbs', event)" onmouseover="window._gftHover && window._gftHover(this, true)" onmouseout="window._gftHover && window._gftHover(this, false)" style="background:#e0f5f7 !important; border-color:#a3d9e0 !important; color:#00707d !important; border:none;">LEVEL(WBS) ▾</button>
@@ -1975,8 +1975,9 @@
 <!-- 🗂 [2026-11-23 사용자 요청] 프로젝트 요약 — 예전 "AI 요약" 모달을 페이지로. 본문은 js/62 가 그린다(renderPeriod). -->
 <div id="tab-psummary" class="tab-panel">
     <div class="concept-tab-wrap">
+        <!-- 📑 [2026-11-25] 주간 보고 ↔ 프로젝트 리뷰 전환(js/78). 헤더 안에 넣으면 주간 보고 헤더(이미 꽉 참)가 1366px 에서 두 줄이 돼서 헤더 **위** 한 줄로 뺐다. -->
+        <div class="rpt-tabs"><div class="cal-view-toggle rpt-toggle" id="rpt-toggle-psummary"><button type="button" class="cal-view-btn" data-page-title="weekly" onclick="window.switchTab('weekly')" title="간트 일정 기준 — 이번 주·다음 주 계획과 문제점">📋 주간 보고</button><button type="button" class="cal-view-btn cal-view-btn-active" data-page-title="psummary" onclick="window.switchTab('psummary')" title="메일 분석 사실 기준 — 실제로 있었던 일(일·주·월·기간)">📑 프로젝트 리뷰</button></div></div>
         <div class="concept-header-box">
-            <h2 data-page-title="psummary">📑 프로젝트 리뷰</h2>
             <div class="btn-group">
                 <button id="ps-page-gen-btn" onclick="window.generatePeriodSummary(window._psMode())" title="이 기간·조건의 사실 목록만으로 표를 만듭니다. 같은 조건의 보관본이 있으면 AI 를 부르지 않습니다." onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';" style="padding:6px 12px; background:#e0f5f7; border:none; color:#00707d; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer;">🤖 AI 요약 생성</button>
                 <button id="ps-page-excel-btn" onclick="window._psTblExcel()" title="지금 보이는 요약 표(필터·정렬 그대로)를 엑셀로" onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';" style="padding:6px 12px; background:#e0f5f7; border:none; color:#00707d; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer;">📊 엑셀 출력</button>
@@ -2079,7 +2080,7 @@
 <script src="js/04g-core-app-upload-utils-2.js?v=2026112631"></script>
 <script src="js/04h-core-app-upload-utils-3.js?v=2026112701"></script>
 <script src="js/04i-core-app-upload-utils-4.js?v=2026112641"></script>
-<script src="js/04j-core-app-upload-utils-5.js?v=2026112561"></script>
+<script src="js/04j-core-app-upload-utils-5.js?v=2026112581"></script>
 <script src="js/04k-core-app-filter-export.js?v=2026112501k"></script>
 
 <script src="js/05-drive-sync-optimize.js?v=20261124a4"></script>
@@ -2677,7 +2678,7 @@
 
 <script src="js/18-mail-analyzer-modal-drag.js?v=20261124a4"></script>
 
-<script src="js/19-shared-modal-drag.js?v=2026112521"></script>
+<script src="js/19-shared-modal-drag.js?v=2026112581"></script>
 
 <script src="js/20-weekly-report.js?v=2026112733g"></script>
 
@@ -2788,6 +2789,7 @@
     <script src="js/60-telegram-qa-bridge.js?v=20261124a4"></script>
     <script src="js/61-mail-evidence.js?v=20261125a1"></script>
     <script src="js/62-period-summary.js?v=2026112737a"></script>
+    <script src="js/78-report-tabs.js?v=20261125a"></script>
     <script src="js/63-daily-draft-qa.js?v=20261124a4"></script>
     <script src="js/64-user-switch.js?v=20261124a4"></script>
     <script src="js/65-overdue-cleanup.js?v=2026112571"></script>

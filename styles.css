@@ -740,6 +740,7 @@ button:disabled:not(.topbar-menu-item), input[type="button"]:disabled, input[typ
     padding: 0 12px;            /* 🎯 상하 패딩을 0으로 지우고 좌우 여백만 유지 */
     font-size: 14px;            /* 🎯 글자 크기 13px */
     font-weight: bold;
+    font-family: inherit;       /* 🔤 [2026-11-25] 버튼은 글꼴을 안 물려받아 Arial 로 나왔다 — 사이드바(맑은 고딕)와 같게 */
 
     background: transparent;
     border: none;
@@ -814,7 +815,9 @@ button:disabled:not(.topbar-menu-item), input[type="button"]:disabled, input[typ
 #app-sidebar .sb-item {
     display: flex; align-items: center; gap: 10px;
     padding: 11px 0 11px 21px; cursor: pointer; white-space: nowrap;
-    font-size: 15px; color: #00636e;
+    /* 🔤 [2026-11-25] 상단바(.topbar-btn)와 같은 14px 굵게 — 예전엔 15px 보통 + 고른 것만 굵게라 두 바가 달라 보였다.
+       고른 항목은 배경·왼쪽 주황 막대로 가른다. */
+    font-size: 14px; font-weight: bold; color: #00636e;
     border-left: 3px solid transparent;
     transition: background 0.15s ease;
 }
@@ -985,6 +988,8 @@ button:disabled:not(.topbar-menu-item), input[type="button"]:disabled, input[typ
 
 /* 📑 [2026-11-23] Project Review — BOM 과 같은 구조: 본문 상자는 안 스크롤, 안쪽 #ps-scroll(표·근거)만 스크롤 */
 #tab-psummary > .concept-tab-wrap > #psummary-page { flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column; margin-bottom: 0 !important; }
+/* 📑 [2026-11-25] 주간 보고 ↔ 프로젝트 리뷰 전환 줄(js/78) — 헤더 **위** 한 줄. 토글 모양은 Calendar 월/주(.cal-view-toggle) 그대로. */
+.rpt-tabs { display: flex; align-items: center; margin: 0 0 6px 0; flex-shrink: 0; }
 
 /* 3. 테이블을 감싼 .concept-section: 남은 공간 전체 차지 (flex:1) */
 #tab-address   > .concept-tab-wrap > .concept-section,
