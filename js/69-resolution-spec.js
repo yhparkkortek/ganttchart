@@ -677,6 +677,45 @@
         });
         return parts.join(' · ');
     };
+    // ── 📘 [2026-11-25] 문서 칸 자동값 `edid:<포트>:<sum|file|note>` (js/67 DOC_AUTO_HOOKS) — 모델명세서 6. SOFTWARE SPEC — EDID
+    //   사용자: "모델명세서 EDID 칸도 자동으로 채워줘". 이 모델에 불러 둔 그 포트의 EDID 에서 읽는다.
+    //   그 포트 EDID 가 없으면 체크섬만 Customer SPEC `EDID Check Sum` 에서 — `HDMI 0x.. · DP 0x..` 처럼 포트가 적혀 있으면
+    //   **그 포트 몫만**, 포트 표시 없는 옛 값(`0x36`)은 DP 칸에만(예전 동작 그대로).
+    window.DOC_AUTO_HOOKS = window.DOC_AUTO_HOOKS || {};
+    window.DOC_AUTO_HOOKS.edid = function (ctx, arg) {
+        var a = String(arg || '').split(':'), port = a[0], what = a[1] || 'sum';
+        var rec = _edidStore(false)[port];
+        var res = rec && rec.hex && window.EDID ? window.EDID.parse(rec.hex) : null;
+        var portName = ((window.RES_PORTS || []).filter(function (p) { return p.key === port; })[0] || {}).label || port;
+        if (res && res.ok) {
+            var src = _t('🧬 EDID ▸ ', '🧬 EDID ▸ ') + portName + (rec.file ? ' ▸ ' + rec.file : '');
+            if (what === 'sum') return { v: res.checksums.map(function (c) { return c.value; }).join('/'), src: src };
+            if (what === 'file') return { v: rec.file || '', src: src };
+            if (what === 'note') {
+                return { v: [res.name || '', res.native ? res.native.label : ''].filter(Boolean).join(' · '), src: src };
+            }
+            return { v: '', src: '' };
+        }
+        if (what !== 'sum') return { v: '', src: _t('이 모델에 ' + portName + ' EDID 를 안 불러옴 (Customer SPEC ▸ 🖥 지원 해상도 ▸ 🧬)', 'no ' + portName + ' EDID loaded') };
+        // Customer SPEC 칸으로 폴백
+        var spec = null;
+        try {
+            var rows = (ctx && ctx.spec) || [];
+            var hit = rows.filter(function (r) { return _isSumType(r.label); })[0];
+            spec = hit ? String(hit.value == null ? '' : hit.value).trim() : '';
+        } catch (e) { spec = ''; }
+        if (!spec) return { v: '', src: _t('이 모델에 ' + portName + ' EDID 를 안 불러옴', 'no ' + portName + ' EDID loaded') };
+        var keys = (window.RES_PORTS || []).map(function (p) { return p.key; }).concat(['ANALOG', 'VGA', 'HDMI', 'DP', 'DVI']);
+        var segs = spec.split(/\s*(?:·|\||;|,|\/\s*(?=[A-Za-z]))\s*/);
+        var labeled = segs.filter(function (s) { return keys.some(function (k) { return new RegExp('^' + k + '\\b', 'i').test(s); }); });
+        var alias = port === 'RGB' ? ['RGB', 'ANALOG', 'VGA'] : [port];
+        if (labeled.length) {
+            var mine = labeled.filter(function (s) { return alias.some(function (k) { return new RegExp('^' + k + '\\b', 'i').test(s); }); })[0];
+            return mine ? { v: mine.replace(/^[A-Za-z]+\s*[:：]?\s*/, ''), src: 'Customer SPEC ▸ EDID Check Sum' } : { v: '', src: '' };
+        }
+        return port === 'DP' ? { v: spec, src: 'Customer SPEC ▸ EDID Check Sum' } : { v: '', src: '' };
+    };
+
     var _lastSumStore = function () { var td = _td(); td.resolutionEdidSpecSum = td.resolutionEdidSpecSum || {}; return td.resolutionEdidSpecSum; };
     /** 자동으로 써도 되나 — 비었거나·항목이 없거나·지난번 앱이 쓴 값 그대로거나·이미 같은 값 */
     var _specSumAuto = function (cur, next) {

@@ -127,6 +127,31 @@ window.__resEdidTest = async function (opt) {
               '자리는 js/43 규칙대로 Power 위 (' + types.join(' | ') + ')');
         window.collectTabData();
         check((window.tabData.briefSpec.filter(function (r) { return r.type === 'EDID Check Sum'; })[0] || {}).modelA === r5.sum, '저장 경로 뒤에도 남는다');
+
+        // ⑤ 📘 모델명세서 6. SOFTWARE SPEC — EDID (js/67 `edid:<포트>:<sum|file|note>`)
+        //   엑셀 원본 양식으로 보내는 값(_docModelSpecFields)과 화면·엑셀·워드가 같이 쓰는 목록(_docToAoa) 둘 다 본다.
+        var dpBytes = mk([D1440, D1080]);
+        window.tabData = { briefSpec: [
+            { type: 'EDID Check Sum', sub: '', modelA: 'HDMI 0x50/0x9E · DVI: 0x22 · DP 0x36', note: '' }], documents: {} };
+        window.tabData.resolutionEdidByUnit = {};
+        window.tabData.resolutionEdidByUnit[window.resActiveUnit()] = { DP: { file: 'P12_DP_MS.bin', hex: window.EDID.hex(dpBytes) } };
+        window.populateTabData();      // ⚠️ _dgCollect 는 Customer SPEC 을 **화면 표에서** 다시 읽는다 — 화면을 데이터에 맞춰 둔다
+        var dpSum = window.EDID.parse(dpBytes).checksum;
+        var ms = window._docModelSpecFields('model-spec');
+        check(ms.edidDpSum === dpSum && ms.edidDpFile === 'P12_DP_MS.bin' && /2560×1440@60/.test(ms.edidDpNote),
+              'DP: 불러 둔 EDID 의 체크섬·파일·기본 해상도 (' + [ms.edidDpSum, ms.edidDpFile, ms.edidDpNote].join(' | ') + ')');
+        check(ms.edidDviSum === '0x22' && ms.edidDviFile === '' && ms.edidAnalogSum === '',
+              'EDID 없는 포트: Customer SPEC 에서 그 포트 몫만 (DVI ' + ms.edidDviSum + ' / Analog ' + JSON.stringify(ms.edidAnalogSum) + ')');
+        var aoa = window._docToAoa('model-spec') || [];
+        var dpRow = aoa.filter(function (r) { return r && r[0] === 'EDID (DP)'; })[0] || [];
+        check(dpRow[1] === dpSum && dpRow[2] === 'P12_DP_MS.bin', '화면·엑셀·워드 공용 목록에도 (' + dpRow.join(' | ') + ')');
+        // 옛 값(포트 표시 없음)은 DP 칸에만 — 예전 동작 그대로
+        window.tabData.resolutionEdidByUnit = {};
+        // ⚠️ 다시 그리면 js/43 이 보탬 항목(F/W Version)을 끼워 넣어 [0] 이 EDID 줄이 아니다 — 이름으로 찾는다
+        window.tabData.briefSpec.filter(function (r) { return r.type === 'EDID Check Sum'; })[0].modelA = '0x36';
+        window.populateTabData();
+        var ms2 = window._docModelSpecFields('model-spec');
+        check(ms2.edidDpSum === '0x36' && ms2.edidDviSum === '' && ms2.edidDpFile === '', '포트 표시 없는 옛 값은 DP 칸에만 (' + ms2.edidDpSum + ')');
     } catch (e) {
         fail++; log.push('💥 ' + (e && e.stack || e));
     } finally {

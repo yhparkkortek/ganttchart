@@ -9265,7 +9265,10 @@ _MODEL_SPEC_CELLS = {
     'osdBrightness': 'P161', 'osdContrast': 'P162', 'osdColorTemp': 'P163',
     'swAdDate1': 'H169', 'swAdFile1': 'M169',
     'swTspDate1': 'H175', 'swTspFile1': 'M175',
-    'edidDviSum': 'M185', 'edidDpSum': 'M188',
+    # EDID — 줄: Analog 182 · DVI 185 · DP 188 / 열: M Check sum · R FILE · W NOTE (원본 양식 병합 칸의 왼쪽 위)
+    'edidAnalogSum': 'M182', 'edidAnalogFile': 'R182', 'edidAnalogNote': 'W182',
+    'edidDviSum': 'M185', 'edidDviFile': 'R185', 'edidDviNote': 'W185',
+    'edidDpSum': 'M188', 'edidDpFile': 'R188', 'edidDpNote': 'W188',
 }
 # CERTIFICATION 체크(○) — 원본은 CE/CB/UL/FCC/RoHS II/SABS 여섯 칸짜리 체크 그리드다.
 # 프런트는 자유 텍스트 한 칸(elecCert, 예 "CE, CB, UL, FCC")만 받으므로 그 글자로 가른다.

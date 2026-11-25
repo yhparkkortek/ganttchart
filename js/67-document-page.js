@@ -406,9 +406,11 @@
                     title: '6. SOFTWARE SPEC — EDID', kind: 'table',
                     columns: ['항목', 'Check Sum', 'File', 'NOTE'],
                     rows: [
-                        { cells: [{ fixed: 'EDID (Analog)' }, { key: 'edidAnalogSum' }, { key: 'edidAnalogFile' }, { key: 'edidAnalogNote' }] },
-                        { cells: [{ fixed: 'EDID (DVI)' }, { key: 'edidDviSum' }, { key: 'edidDviFile' }, { key: 'edidDviNote' }] },
-                        { cells: [{ fixed: 'EDID (DP)' }, { key: 'edidDpSum', from: 'specEdid' }, { key: 'edidDpFile' }, { key: 'edidDpNote' }] }
+                        // 🧬 [2026-11-25] 이 모델에 불러 둔 포트별 EDID(js/69 `DOC_AUTO_HOOKS.edid`) — 없으면 체크섬만 Customer SPEC 에서
+                        //    Analog = 지원 해상도의 RGB 포트(D-Sub). HDMI 줄은 원본 양식에 없다.
+                        { cells: [{ fixed: 'EDID (Analog)' }, { key: 'edidAnalogSum', from: 'edid:RGB:sum' }, { key: 'edidAnalogFile', from: 'edid:RGB:file' }, { key: 'edidAnalogNote', from: 'edid:RGB:note' }] },
+                        { cells: [{ fixed: 'EDID (DVI)' }, { key: 'edidDviSum', from: 'edid:DVI:sum' }, { key: 'edidDviFile', from: 'edid:DVI:file' }, { key: 'edidDviNote', from: 'edid:DVI:note' }] },
+                        { cells: [{ fixed: 'EDID (DP)' }, { key: 'edidDpSum', from: 'edid:DP:sum' }, { key: 'edidDpFile', from: 'edid:DP:file' }, { key: 'edidDpNote', from: 'edid:DP:note' }] }
                     ]
                 },
                 { title: "# 7. SAMPLE PICTURE", kind: 'photomark', key: 'att_pic_sample',
@@ -6926,7 +6928,9 @@
             osdBrightness: val('OSD Brightness'), osdContrast: val('OSD Contrast'), osdColorTemp: val('OSD Color Temp'),
             swAdDate1: val('swAdDate1'), swAdFile1: val('swAdFile1', 'specFw'),
             swTspDate1: val('swTspDate1'), swTspFile1: val('swTspFile1'),
-            edidDviSum: val('edidDviSum'), edidDpSum: val('edidDpSum', 'specEdid')
+            edidAnalogSum: val('edidAnalogSum', 'edid:RGB:sum'), edidAnalogFile: val('edidAnalogFile', 'edid:RGB:file'), edidAnalogNote: val('edidAnalogNote', 'edid:RGB:note'),
+            edidDviSum: val('edidDviSum', 'edid:DVI:sum'), edidDviFile: val('edidDviFile', 'edid:DVI:file'), edidDviNote: val('edidDviNote', 'edid:DVI:note'),
+            edidDpSum: val('edidDpSum', 'edid:DP:sum'), edidDpFile: val('edidDpFile', 'edid:DP:file'), edidDpNote: val('edidDpNote', 'edid:DP:note')
         };
     };
 
