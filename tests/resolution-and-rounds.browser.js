@@ -582,43 +582,58 @@
             window._cpApplyLive(window._cpSavedThemeHex || '#00707d', true);
             window._docRender();
 
-            var realFetch3 = window.fetch, docxReq = null, dl = null;
+            // ⚠️ [2026-11-25] Sample Report 원본저장은 2026-11-19 부터 **원본 .docx 양식 경로**(`/doc/sample-report-docx`)가 **먼저**고,
+            //    그게 안 되면(404·오류) 일반 문서(`/doc/docx`)로 **폴백**한다. 이 구간은 옛 `/doc/docx` 하나만 기대해서 2건이 계속 실패했고,
+            //    실패한 줄에서 예외(`docxReq` 가 null)로 뻗어 **뒤의 검사(NAS 폴더 등)가 아예 안 돌았다** — 세 경로를 다 시험한다.
+            var realFetch3 = window.fetch, tplReq = null, docxReq = null, dl = null, tplMode = 'ok', docxMode = 'ok';
+            var okBlob = function () { return Promise.resolve({ ok: true, status: 200, blob: function () { return Promise.resolve(new Blob(['PK'], { type: 'application/octet-stream' })); } }); };
+            var notFound = function () { return Promise.resolve({ ok: false, status: 404, json: function () { return Promise.reject(new Error('html')); } }); };
             window.fetch = function (u, o) {
-                if (String(u).indexOf('/doc/docx') >= 0) {
-                    docxReq = JSON.parse((o && o.body) || '{}');
-                    return Promise.resolve({ ok: true, status: 200,
-                        blob: function () { return Promise.resolve(new Blob(['PK'], { type: 'application/octet-stream' })); } });
-                }
+                var url = String(u);
+                if (url.indexOf('/doc/sample-report-docx') >= 0) { tplReq = JSON.parse((o && o.body) || '{}'); return tplMode === 'ok' ? okBlob() : notFound(); }
+                if (url.indexOf('/doc/docx') >= 0) { docxReq = JSON.parse((o && o.body) || '{}'); return docxMode === 'ok' ? okBlob() : notFound(); }
                 return realFetch3.apply(window, arguments);
             };
             var realClick = HTMLAnchorElement.prototype.click;
             HTMLAnchorElement.prototype.click = function () { if (this.download) { dl = this.download; return; } return realClick.apply(this, arguments); };
-            await window._docSaveDocx();
-            HTMLAnchorElement.prototype.click = realClick;
-            window.fetch = realFetch3;
-            ok(!!docxReq, '원본저장이 /doc/docx 로 안 간다');
-            ok(/\.docx$/.test(docxReq.name || ''), '보내는 이름이 .docx 가 아니다: ' + (docxReq && docxReq.name));
-            ok(/Sample Report/.test(docxReq.name || ''), '파일 이름이 문서 이름을 안 따른다: ' + (docxReq && docxReq.name));
-            ok(docxReq.name.indexOf(window._docState.round) >= 0, '파일 이름에 회차가 없다: ' + docxReq.name);
-            // ⚠️⚠️ 내용은 화면·엑셀과 **같은 목록**(`_docToAoa`)이어야 한다 — 두 벌이면 갈라진다
-            var aoaNow = window._docToAoa('sample-report');
-            ok(JSON.stringify(docxReq.rows) === JSON.stringify(aoaNow),
-               '원본저장이 엑셀과 다른 목록을 보낸다 (한쪽만 고쳐질 자리)');
-            ok(dl === docxReq.name, '받는 파일에 이름이 안 붙는다: ' + dl);
-
-            // 구버전 백엔드(404)면 **정직하게** 안내한다 — 조용히 아무 일도 안 하면 안 된다
             var said = [];
             var realToast = window.showToast;
             window.showToast = function (m) { said.push(String(m)); };
-            window.fetch = function (u) {
-                if (String(u).indexOf('/doc/docx') >= 0) {
-                    return Promise.resolve({ ok: false, status: 404, json: function () { return Promise.reject(new Error('html')); } });
-                }
-                return realFetch3.apply(window, arguments);
-            };
-            await window._docSaveDocx();
-            window.fetch = realFetch3; window.showToast = realToast;
-            ok(said.some(function (m) { return /재시작/.test(m); }), '404 일 때 재시작이 필요하다고 말하지 않는다: ' + said.join(' | '));
+            try {
+                // ① 원본 양식 경로가 되면 그걸로 끝 — 일반 문서(/doc/docx)는 부르지 않는다
+                await window._docSaveDocx();
+                ok(!!tplReq, '원본저장이 /doc/sample-report-docx 로 안 간다');
+                ok(!docxReq, '원본 양식이 됐는데 일반 문서(/doc/docx)도 불렀다');
+                var tplName = (tplReq && tplReq.name) || '';
+                ok(/\.docx$/.test(tplName), '보내는 이름이 .docx 가 아니다: ' + tplName);
+                ok(/Sample Report/.test(tplName), '파일 이름이 문서 이름을 안 따른다: ' + tplName);
+                ok(tplName.indexOf(window._docState.round) >= 0, '파일 이름에 회차가 없다: ' + tplName);
+                // ⚠️⚠️ 원본 양식에 보내는 칸은 `_docSampleReportFields` 한 곳에서 온다 — 두 벌이면 갈라진다
+                var sentFields = Object.assign({}, tplReq || {}); delete sentFields.name;
+                var wantFields = Object.assign({}, window._docSampleReportFields('sample-report')); delete wantFields.name;
+                ok(JSON.stringify(sentFields) === JSON.stringify(wantFields), '원본 양식에 보내는 칸이 _docSampleReportFields 와 다르다');
+                ok(dl === tplName, '받는 파일에 이름이 안 붙는다: ' + dl);
+
+                // ② 원본 양식이 안 되면(404) **일반 문서로 폴백** — 내용은 화면·엑셀과 **같은 목록**(`_docToAoa`)이어야 한다(두 벌이면 갈라진다)
+                tplReq = null; docxReq = null; dl = null; said.length = 0; tplMode = '404';
+                await window._docSaveDocx();
+                ok(!!tplReq && !!docxReq, '원본 양식이 404 인데 일반 문서(/doc/docx)로 폴백하지 않는다');
+                var fbName = (docxReq && docxReq.name) || '';
+                ok(/\.docx$/.test(fbName) && /Sample Report/.test(fbName) && fbName.indexOf(window._docState.round) >= 0, '폴백 파일 이름이 이상하다: ' + fbName);
+                ok(JSON.stringify(docxReq && docxReq.rows) === JSON.stringify(window._docToAoa('sample-report')),
+                   '원본저장(폴백)이 엑셀과 다른 목록을 보낸다 (한쪽만 고쳐질 자리)');
+                ok(dl === fbName, '폴백 받는 파일에 이름이 안 붙는다: ' + dl);
+                ok(said.some(function (m) { return /일반 문서로 대신/.test(m); }), '폴백할 때 그 사실을 알리지 않는다: ' + said.join(' | '));
+
+                // ③ 둘 다 안 되면(구버전 백엔드) **정직하게** 안내한다 — 조용히 아무 일도 안 하면 안 된다
+                tplReq = null; docxReq = null; dl = null; said.length = 0; tplMode = '404'; docxMode = '404';
+                await window._docSaveDocx();
+                ok(said.some(function (m) { return /재시작/.test(m); }), '404 일 때 재시작이 필요하다고 말하지 않는다: ' + said.join(' | '));
+                ok(dl === null, '둘 다 404 인데 파일을 받았다');
+            } finally {
+                HTMLAnchorElement.prototype.click = realClick;
+                window.fetch = realFetch3; window.showToast = realToast;
+            }
 
             // ═══ 5-4. 🗂 문서마다 제 NAS 폴더 ═════════════════════════════
             //   사용자 신고(2026-11-09): "DOCUMENT 하위 폴더가 생성되지 않음 /
