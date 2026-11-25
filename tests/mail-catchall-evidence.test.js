@@ -109,5 +109,15 @@ ok('제 결재는 그대로 간다(관리번호·모델)', !!(j.target && j.targ
 j = ctx.mailRouteJudge({ subject: '[연구개발과제 발의서] AMUSNET 43" 신규', sender: 'x@kortek.co.kr', body: '', refs: [] }, C7, null);
 ok('43" 결재가 55" 형제 모두에 안 간다', !(j.decision === 'auto' && j.target && /^A/.test(j.target.drive_file_id)), j);
 
+console.log('\n[8] 모델명 조각 button·deck, PN 꼬리 ALT3 는 단서가 아니다 (2026-11-25 실측 — 광고 메일 7건)');
+const UH = { drive_file_id: 'UH', file_name: 'UNIDESA_BTN_14.0.json', model: 'BTN 14', customer: 'UNIDESA>BTN', inch: '14', keywords: ['BTN 14', 'Unidesa Harlem 14inch Button Deck', '502504'] };
+const SB = { drive_file_id: 'SB', file_name: 'LNW_SSBT_27.0.json', model: 'SSBTQ', customer: 'LNW>SSBTQ', inch: '27', keywords: ['SSBTQ', '1570975-ALT3'] };
+j = ctx.mailRouteJudge({ subject: '[신간리포트] 2026 이차전지 시장전망', sender: 'news@forum.kr', body: '지금 신청하기 button 을 눌러 주세요', refs: [] }, [UH, ST, KG], null);
+ok('광고 메일 본문의 button 으로 UNIDESA 에 안 간다', !(j.target && j.target.drive_file_id === 'UH'), j);
+j = ctx.mailRouteJudge({ subject: 'Unidesa Harlem 14 sample 일정', sender: 'x@unidesa.com', body: '', refs: [] }, [UH, ST, KG], null);
+ok('Harlem 메일은 그대로 UNIDESA', !!(j.target && j.target.drive_file_id === 'UH'), j);
+j = ctx.mailRouteJudge({ subject: 'Drawing Review #1604319-VAR2_ALT3 panel', sender: 'x@lnw.com', body: '', refs: [] }, [SB, ST, KG], null);
+ok('PN 꼬리 ALT3 로 SSBT 에 안 간다', !(j.target && j.target.drive_file_id === 'SB'), j);
+
 console.log('\n결과: ' + pass + '/' + (pass + fail) + ' 통과');
 process.exit(fail ? 1 : 0);
