@@ -4071,50 +4071,9 @@
     //    **같은 패턴**(별도 placeholder 없이 걸쳐진 항목의 위/아래로 바로 옮긴다). 순서는
     //    사람 취향이라 프로젝트 데이터가 아니라 **이 PC 의 localStorage** 에 둔다.
     var DOC_FORM_ORDER_KEY = 'gantt_docform_order_v1';
-    var _docOrderForms = function (forms) {
-        var saved;
-        try { saved = JSON.parse(localStorage.getItem(DOC_FORM_ORDER_KEY) || 'null'); } catch (e) { saved = null; }
-        if (!saved || !saved.length) return forms;
-        var byId = {};
-        forms.forEach(function (f) { byId[f.id] = f; });
-        var out = [];
-        saved.forEach(function (id) { if (byId[id]) { out.push(byId[id]); delete byId[id]; } });
-        // 저장 뒤 새로 생긴(또는 숨김이 풀린) 서식은 원래 순서 그대로 끝에 붙는다.
-        forms.forEach(function (f) { if (byId[f.id]) out.push(f); });
-        return out;
-    };
-    var _docSaveFormOrder = function (pop) {
-        var order = Array.prototype.map.call(
-            pop.querySelectorAll('[data-doc-form-id]'),
-            function (el) { return el.getAttribute('data-doc-form-id'); }
-        );
-        try { localStorage.setItem(DOC_FORM_ORDER_KEY, JSON.stringify(order)); } catch (e) { /* ignore */ }
-    };
-    var _docInitFormDragReorder = function (pop) {
-        var dragEl = null;
-        pop.querySelectorAll('[data-doc-form-id]').forEach(function (el) {
-            el.setAttribute('draggable', 'true');
-            el.addEventListener('dragstart', function (e) {
-                dragEl = el;
-                el.style.opacity = '0.4';
-                e.dataTransfer.effectAllowed = 'move';
-                try { e.dataTransfer.setData('text/plain', el.getAttribute('data-doc-form-id')); } catch (err) { /* ignore */ }
-            });
-            el.addEventListener('dragend', function () {
-                el.style.opacity = '';
-                dragEl = null;
-                _docSaveFormOrder(pop);
-            });
-            el.addEventListener('dragover', function (e) {
-                if (!dragEl || dragEl === el) return;
-                e.preventDefault();
-                var rect = el.getBoundingClientRect();
-                var before = (e.clientY - rect.top) < rect.height / 2;
-                pop.insertBefore(dragEl, before ? el : el.nextSibling);
-            });
-            el.addEventListener('drop', function (e) { e.preventDefault(); });
-        });
-    };
+    // ⚠️ [2026-11-25] 순서 로직·끌기는 **js/19b `_ddReorder` 공용 헬퍼**로 옮겼다(알람/공지·PARTS·보고 드롭다운과 같은 코드). 저장 키와 속성 이름은 그대로라 저장된 순서가 이어진다.
+    var _docOrderForms = function (forms) { return window._ddReorder.order(DOC_FORM_ORDER_KEY, forms, function (f) { return f.id; }); };
+    var _docInitFormDragReorder = function (pop) { window._ddReorder.init(pop, DOC_FORM_ORDER_KEY, 'data-doc-form-id'); };
     window._toggleDocFormDropdown = function (ev) {
         if (ev) ev.stopPropagation();
         var pop = document.getElementById('doc-form-dropdown');
@@ -4125,18 +4084,9 @@
         //    (사용자가 "다른 서식에도 드래그 핸들 아이콘 보여줘"로 요청, 끌기 자체는 손잡이가
         //    아니라 행 전체에 걸려 있다 — 아이콘은 "끌 수 있다"는 신호일 뿐).
         pop.innerHTML = _docOrderForms(window._docVisibleForms()).map(function (f) {
-            var on = f.id === cur;
-            return '<div data-doc-form-id="' + _esc(f.id) + '" onclick="window._docPick(\'' + _esc(f.id) + '\')"'
-                 + ' style="padding:7px 10px; cursor:grab; border-radius:4px; font-size:12.5px;'
-                 + ' font-weight:bold; white-space:nowrap; display:flex; align-items:center; gap:6px;'
-                 + ' background:' + (on ? '#00707d' : 'transparent') + '; color:' + (on ? '#fff' : '#333') + ';"'
-                 + ' onmouseover="if(this.style.background!==\'rgb(0, 112, 125)\') this.style.background=\'#f1f3f5\';"'
-                 + ' onmouseout="if(this.style.background!==\'rgb(0, 112, 125)\') this.style.background=\'transparent\';">'
-                 + '<span title="' + _esc(_t('끌어서 순서 바꾸기', 'drag to reorder')) + '"'
-                 + ' style="flex:0 0 auto; color:' + (on ? 'rgba(255,255,255,.7)' : '#adb5bd') + '; user-select:none;">⠿</span>'
-                 + '<span style="flex:1 1 auto;">' + (f.icon || '📄') + ' ' + _esc(f.label)
-                 + (f.builder ? '<span style="margin-left:6px; font-size:10px; font-weight:normal; opacity:.7;">PPT</span>' : '')
-                 + '</span></div>';
+            return window._ddReorder.itemHtml({ id: f.id, attr: 'data-doc-form-id', active: f.id === cur, activeBg: '#00707d',
+                onclick: "window._docPick('" + _esc(f.id) + "')",
+                labelHtml: (f.icon || '📄') + ' ' + _esc(f.label) + (f.builder ? '<span style="margin-left:6px; font-size:10px; font-weight:normal; opacity:.7;">PPT</span>' : '') });
         }).join('');
         _docInitFormDragReorder(pop);
         // 📍 [2026-11-11 신고 "드롭다운 가려짐"] 자리를 **직접 잡는다** — PARTS 와 같은 방식

@@ -234,15 +234,16 @@
         const btn = document.getElementById('alarm-view-trigger');
         if (!popup || !btn) return;
         if (popup.style.display === 'block') { popup.style.display = 'none'; return; }
-        const options = Object.keys(window.ALARM_VIEW_META).map(function(key) { return Object.assign({ key: key }, window.ALARM_VIEW_META[key]); });
+        // 🖱️ [2026-11-25] 항목을 끌어 순서 바꾸기 — js/19b 공용 헬퍼(Document 드롭다운·사이드바와 같은 방식). 순서는 이 PC 의 localStorage.
+        const options = window._ddReorder.order('gantt_alarmview_order_v1',
+            Object.keys(window.ALARM_VIEW_META).map(function(key) { return Object.assign({ key: key }, window.ALARM_VIEW_META[key]); }),
+            function(o) { return o.key; });
         popup.innerHTML = options.map(function(o) {
-            const active = o.key === window._alarmView;
-            return `<div onclick="window._switchAlarmView('${o.key}'); document.getElementById('alarm-view-dropdown').style.display='none';"
-                         style="padding:7px 10px; cursor:pointer; border-radius:4px; font-size:12.5px; font-weight:bold; white-space:nowrap;
-                                background:${active ? '#2c5f8a' : 'transparent'}; color:${active ? '#fff' : '#333'};"
-                         onmouseover="if(this.style.background!=='rgb(44, 95, 138)') this.style.background='#f1f3f5';"
-                         onmouseout="if(this.style.background!=='rgb(44, 95, 138)') this.style.background='transparent';">${o.icon} ${window._alarmViewLabel(o)}</div>`;
+            return window._ddReorder.itemHtml({ id: o.key, active: o.key === window._alarmView,
+                onclick: "window._switchAlarmView('" + o.key + "'); document.getElementById('alarm-view-dropdown').style.display='none';",
+                labelHtml: o.icon + ' ' + window._alarmViewLabel(o) });
         }).join('');
+        window._ddReorder.init(popup, 'gantt_alarmview_order_v1');
         const rect = btn.getBoundingClientRect();
         popup.style.left = rect.left + 'px';
         popup.style.top = (rect.bottom + 4) + 'px';
@@ -401,22 +402,21 @@
         const btn = document.getElementById('elec-view-trigger');
         if (!popup || !btn) return;
         if (popup.style.display === 'block') { popup.style.display = 'none'; return; }
-        const options = window._getElecDropdownOptions();
+        // 🖱️ [2026-11-25] 항목을 끌어 순서 바꾸기 — js/19b 공용 헬퍼. 순서는 이 PC 의 localStorage(구분이 새로 생기면 끝에 붙는다).
+        const options = window._ddReorder.order('gantt_elecview_order_v1', window._getElecDropdownOptions(), function(o) { return o.key; });
         const _ddEn = window._currentLang === 'en';
         popup.innerHTML = options.map(function(o) {
-            const active = o.key === window._elecView;
             // 전용 도표가 아니라 공용 기본 항목을 쓰는 구분은 꼬리표를 붙인다 — 항목이
             // 그 부품에 맞춰 설계된 게 아니라는 걸 눌러본 뒤에 알게 되면 안 된다.
             //   ⚠️ 중첩 템플릿 리터럴을 쓰지 않는다(백틱 하나로 파일 전체가 죽는 사고 이력).
             const mark = !o.generic ? '' :
                 '<span style="margin-left:6px; font-size:10px; font-weight:normal; opacity:.7;">'
                 + (_ddEn ? 'basic' : '기본항목') + '</span>';
-            return `<div onclick="window._switchElecView('${o.key}'); document.getElementById('elec-view-dropdown').style.display='none';"
-                         style="padding:7px 10px; cursor:pointer; border-radius:4px; font-size:12.5px; font-weight:bold; white-space:nowrap;
-                                background:${active ? '#2c5f8a' : 'transparent'}; color:${active ? '#fff' : '#333'};"
-                         onmouseover="if(this.style.background!=='rgb(44, 95, 138)') this.style.background='#f1f3f5';"
-                         onmouseout="if(this.style.background!=='rgb(44, 95, 138)') this.style.background='transparent';">${o.icon} ${o.label}${mark}</div>`;
+            return window._ddReorder.itemHtml({ id: o.key, active: o.key === window._elecView,
+                onclick: "window._switchElecView('" + o.key + "'); document.getElementById('elec-view-dropdown').style.display='none';",
+                labelHtml: o.icon + ' ' + o.label + mark });
         }).join('');
+        window._ddReorder.init(popup, 'gantt_elecview_order_v1');
         const rect = btn.getBoundingClientRect();
         popup.style.left = rect.left + 'px';
         popup.style.top = (rect.bottom + 4) + 'px';

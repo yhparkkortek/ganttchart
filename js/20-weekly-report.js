@@ -455,7 +455,14 @@
 
         // 💡 주간업무 보고 타이틀과 프로젝트 정보 패널을 완전히 삭제했습니다.
         const wrWeekLabel = document.getElementById('wr-week-label');
-        if (wrWeekLabel) wrWeekLabel.textContent = `${wrFormatMD(data.thisWeek.start)} ~ ${wrFormatMD(data.thisWeek.end)} (${data.thisWeekNo}W)`;
+        // 📏 [2026-11-25] 올해 안의 주면 연도(`'26`)를 뺀다 — 이 헤더는 원래 꽉 차 있어서(1280px 에서 2px 여유) 화면 이름 드롭다운이 7px 늘자
+        //    날짜 이동 묶음이 두 줄로 접혔다. 연도를 빼면 라벨이 ~187px → ~130px. 해가 다르거나 연말·연초에 걸친 주는 예전처럼 연도를 적는다(헷갈림 방지).
+        if (wrWeekLabel) {
+            const _yS = new Date(data.thisWeek.start).getFullYear(), _yE = new Date(data.thisWeek.end).getFullYear();
+            const _md = function (ts) { return wrFormatMD(ts).replace(/ '\d\d$/, ''); };
+            const _short = (_yS === _yE && _yS === new Date().getFullYear());
+            wrWeekLabel.textContent = `${_short ? _md(data.thisWeek.start) : wrFormatMD(data.thisWeek.start)} ~ ${_short ? _md(data.thisWeek.end) : wrFormatMD(data.thisWeek.end)} (${data.thisWeekNo}W)`;
+        }
 
         // 💡 [인쇄 페이지 나눔] 각 섹션에 wr-print-block 클래스를 붙여서, 인쇄 시 이 블록 중간이 아니라
         //    블록과 블록 사이의 "적당한 위치"에서만 페이지가 나뉘도록 함 (아래 print CSS와 짝)

@@ -70,15 +70,13 @@
         var btn = document.getElementById('rpt-view-trigger-' + cur);
         if (!popup || !btn) return;
         if (popup.style.display === 'block') { popup.style.display = 'none'; return; }
-        popup.innerHTML = VIEWS.map(function (key) {
-            var active = key === cur;
-            return '<div onclick="document.getElementById(\'rpt-view-dropdown-' + cur + '\').style.display=\'none\'; window.switchTab(\'' + key + '\');"'
-                 + ' style="padding:7px 10px; cursor:pointer; border-radius:4px; font-size:12.5px; font-weight:bold; white-space:nowrap;'
-                 + ' background:' + (active ? '#2c5f8a' : 'transparent') + '; color:' + (active ? '#fff' : '#333') + ';"'
-                 + ' onmouseover="if(this.style.background!==\'rgb(44, 95, 138)\') this.style.background=\'#f1f3f5\';"'
-                 + ' onmouseout="if(this.style.background!==\'rgb(44, 95, 138)\') this.style.background=\'transparent\';">'
-                 + (window._pageTitle ? window._pageTitle(key, true) : key) + '</div>';
+        // 🖱️ [2026-11-25] 항목을 끌어 순서 바꾸기 — js/19b 공용 헬퍼. 두 화면의 드롭다운이 **같은 순서**를 쓴다(저장 키 하나).
+        popup.innerHTML = window._ddReorder.order('gantt_rptview_order_v1', VIEWS, function (k) { return k; }).map(function (key) {
+            return window._ddReorder.itemHtml({ id: key, active: key === cur,
+                onclick: "document.getElementById('rpt-view-dropdown-" + cur + "').style.display='none'; window.switchTab('" + key + "');",
+                labelHtml: window._pageTitle ? window._pageTitle(key, true) : key });
         }).join('');
+        window._ddReorder.init(popup, 'gantt_rptview_order_v1');
         var rect = btn.getBoundingClientRect();
         popup.style.left = rect.left + 'px';
         popup.style.top = (rect.bottom + 4) + 'px';
