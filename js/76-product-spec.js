@@ -1309,10 +1309,13 @@
     };
     var _fileName = function (ctx) {
         var cust = String((ctx.meta && ctx.meta.고객사) || '').split('>')[0].trim();
-        var pn = _valueOf(ctx, 'cover.r1.c2') || (ctx.meta && ctx.meta.KTKPN) || '';
+        // ⚠️ 고객 PN 칸은 여러 줄일 수 있다(`…-VAR2` / `…-ALT3`) — 첫 줄만. 줄바꿈이 이름에 들어가면
+        //    백엔드 응답 헤더가 거부돼 **원본저장이 HTTP 500** 이었다(2026-11-25 실측).
+        var pn = String(_valueOf(ctx, 'cover.r1.c2') || (ctx.meta && ctx.meta.KTKPN) || '').split(/[\r\n]+/)
+            .map(function (s) { return s.trim(); }).filter(Boolean)[0] || '';
         var unit = window.mcActiveUnit || '';
         var parts = ['P03_Specification', cust, pn, unit, 'V' + _pad(_revNo()), _enDate()].filter(Boolean);
-        return parts.join('_').replace(/[\\/:*?"<>|]/g, '-');
+        return parts.join('_').replace(/[\\/:*?"<>|]/g, '-').replace(/[\x00-\x1f\x7f]+/g, ' ');
     };
 
     var _docxSave = async function (ctx, name) {

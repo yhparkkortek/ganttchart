@@ -7895,8 +7895,11 @@ def _docstore_probe_root(root):
 def _docstore_safe_name(name):
     """파일명만 남긴다 — 경로 탈출(.., /, \\, C:) 차단.
     ⚠️ 이 백엔드는 UNC 공유에 쓰기 권한이 있으므로, 이름을 그대로 믿으면 공유 어디에나
-       파일을 쓸 수 있게 된다. basename만 취하고 상위 참조를 거부한다."""
-    raw = str(name or '').strip().replace('\\', '/')
+       파일을 쓸 수 있게 된다. basename만 취하고 상위 참조를 거부한다.
+    ⚠️ 제어문자(줄바꿈 등)는 한 칸으로 — 이 이름은 응답 헤더(`send_file(download_name=)`)에도 들어가는데
+       werkzeug 가 줄바꿈 든 헤더를 거부해 **HTTP 500** 이 났다(2026-11-25 실측: 고객 PN 칸이 두 줄이라
+       PRODUCT SPEC 원본저장 이름에 `\\r\\n` 이 섞였다). 윈도 파일 이름에도 못 쓰는 글자다."""
+    raw = re.sub(r'[\x00-\x1f\x7f]+', ' ', str(name or '')).strip().replace('\\', '/')
     base = os.path.basename(raw)
     if not base or base in ('.', '..'):
         return ''

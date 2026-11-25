@@ -109,6 +109,13 @@ for variant in ('base', 'touch'):
     n_out = sum(1 for _ in d.element.body.iter(WSP))
     check(n_out == n_tpl - 2, '%s: 그림 빠진 자리의 덧그림만 지워져야 (양식 %d → %d)' % (variant, n_tpl, n_out))
 
+# ── 1-a. 파일 이름에 줄바꿈 (2026-11-25 실측: 고객 PN 칸이 두 줄이라 이름에 \r\n → 응답 헤더 거부 → HTTP 500) ──
+print('1-a. 줄바꿈 든 파일 이름')
+r = client.post('/doc/product-spec-docx', json={'name': 'P03_A_123-VAR2\r\n123-ALT3_MVD.docx', 'variant': 'base', 'values': {}})
+check(r.status_code == 200, '줄바꿈 든 이름도 200 이어야 (%s)' % r.status_code)
+cd = r.headers.get('Content-Disposition', '')
+check('\r' not in cd and '\n' not in cd and 'VAR2' in cd, '내려받는 이름에 줄바꿈이 없어야 (%s)' % cd[:80])
+
 # ── 1-b. 구조가 다른 사양서 읽기 (원본 없이 — 채운 문서를 일부러 비틀어 본다) ───────────────
 #   (2026-11-25 실측: 위치로 읽던 파서는 원본 ~130개가 전부 일치율 50% 아래였다 — 장 하나·줄 하나만 달라도 밀렸다)
 print('1-b. 구조가 다른 문서')
