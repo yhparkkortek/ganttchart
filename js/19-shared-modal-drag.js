@@ -312,7 +312,7 @@ window.MODAL_FIT_WIDE = ['gantt-qa-box', 'mail-analyzer-modal', 'task-inbox-moda
                          'daily-box', 'matcart-box', 'ovc-box', 'ms-queue-box'];
 window.MODAL_FIT_POLICY = { side: 'right', minHalfW: 640, gapDefault: 10 };
 // 붙은 모달이 있어도 페이지를 비키지 않는 탭(화면 전체를 쓰는 페이지) — 탭 이름은 사이드바 data-tab
-window.MODAL_DOCK_SKIP_TABS = ['gantt', 'projectlist'];
+window.MODAL_DOCK_SKIP_TABS = ['gantt', 'projectlist', 'calendar'];
 window._modalFitRect = function() {
     const main = document.getElementById('app-main');
     if (!main) return null;
