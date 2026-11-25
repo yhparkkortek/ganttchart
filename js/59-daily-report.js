@@ -3372,13 +3372,14 @@
                     var off = offDay(d);
                     return '<th style="padding:4px 2px; border:1px solid #cfe3e5; font-size:10.5px; color:' + (off ? '#c0c0c0' : '#2c5f8a') + ';">' + (+d.slice(8)) + '</th>';
                 }).join('');
-            var trs = peopleM.map(function (p) {
-                return '<tr><td style="padding:5px 7px; border:1px solid #e3e6ea; font-size:12px; font-weight:bold; white-space:nowrap;">' + esc(p.name || p.key) + '</td>'
+            var trs = peopleM.map(function (p, pi) {
+                // 🦓 줄 색은 다른 표와 같은 흰색/팔레트 제브라(사람 단위). 작성함·주말 칸만 클래스로 제 색(styles.css·js/21)
+                return '<tr' + ((pi % 2) ? ' class="daily-mrow-b"' : '') + '><td style="padding:5px 7px; border:1px solid #e3e6ea; font-size:12px; font-weight:bold; white-space:nowrap;">' + esc(p.name || p.key) + '</td>'
                     + daysM.map(function (d) {
                         var off = offDay(d), has = !!(byKeyM[p.key] && byKeyM[p.key][d]);
-                        var bg = off ? '#f6f7f8' : (has ? '#eaf6ec' : '#fdf0ee');
+                        var cls = off ? ' class="daily-mcell-off"' : (has ? ' class="daily-mcell-has"' : '');
                         var mk = off ? '' : (has ? '✓' : '·');
-                        return '<td onclick="window._dailyGoDay(\'' + d + '\')" title="' + d + '" style="cursor:pointer; text-align:center; padding:3px 0; border:1px solid #e3e6ea; background:' + bg + '; font-size:11px; color:' + (has ? '#2f7d3a' : '#b1432f') + ';">' + mk + '</td>';
+                        return '<td' + cls + ' onclick="window._dailyGoDay(\'' + d + '\')" title="' + d + '" style="cursor:pointer; text-align:center; padding:3px 0; border:1px solid #e3e6ea; font-size:11px; color:' + (has ? '#2f7d3a' : '#b1432f') + ';">' + mk + '</td>';
                     }).join('') + '</tr>';
             }).join('');
             box.innerHTML =
