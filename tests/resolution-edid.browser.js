@@ -152,6 +152,23 @@ window.__resEdidTest = async function (opt) {
         window.populateTabData();
         var ms2 = window._docModelSpecFields('model-spec');
         check(ms2.edidDpSum === '0x36' && ms2.edidDviSum === '' && ms2.edidDpFile === '', '포트 표시 없는 옛 값은 DP 칸에만 (' + ms2.edidDpSum + ')');
+
+        // ⑥ 📑 Sample Report 'EDID CHECK SUM'(포트 구분 없는 칸 하나, 시제품 제작의뢰서와 같은 구역) — `edid:ALL:sum`
+        var hdBytes = mk([D1080], [16, 4]);
+        window.tabData.resolutionEdidByUnit = {};
+        window.tabData.resolutionEdidByUnit[window.resActiveUnit()] = {
+            DP: { file: 'P12_DP_SR.bin', hex: window.EDID.hex(dpBytes) }, HDMI: { file: 'H.bin', hex: window.EDID.hex(hdBytes) } };
+        var want6 = 'HDMI ' + window.EDID.parse(hdBytes).checksums.map(function (c) { return c.value; }).join('/') + ' · DP ' + dpSum;
+        var srF = window._docSampleReportFields('sample-report').fields;
+        check(srF['EDID CHECK SUM'] === want6, '원본저장(.docx)으로 보내는 값 = 불러 둔 EDID 전부, 포트 순서 (' + srF['EDID CHECK SUM'] + ')');
+        var srRow = (window._docToAoa('sample-report') || []).filter(function (r) { return r && r.indexOf('EDID CHECK SUM') >= 0; })[0] || [];
+        check(srRow[srRow.indexOf('EDID CHECK SUM') + 1] === want6, '화면·엑셀·워드 공용 목록에도 (' + srRow.join(' | ') + ')');
+        window.tabData.resolutionEdidByUnit = {};
+        check(window._docSampleReportFields('sample-report').fields['EDID CHECK SUM'] === '0x36', 'EDID 가 없으면 Customer SPEC 그대로(예전 동작)');
+        // 사람이 적은 값이 이긴다(문서 칸 공통 규칙)
+        window.tabData.resolutionEdidByUnit[window.resActiveUnit()] = { DP: { file: 'P12_DP_SR.bin', hex: window.EDID.hex(dpBytes) } };
+        window._docSetField('sample-report', 'EDID CHECK SUM', 'DP 0xAA (손으로)');
+        check(window._docSampleReportFields('sample-report').fields['EDID CHECK SUM'] === 'DP 0xAA (손으로)', '사람이 적은 값이 EDID 보다 먼저');
     } catch (e) {
         fail++; log.push('💥 ' + (e && e.stack || e));
     } finally {

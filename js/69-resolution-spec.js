@@ -684,6 +684,19 @@
     window.DOC_AUTO_HOOKS = window.DOC_AUTO_HOOKS || {};
     window.DOC_AUTO_HOOKS.edid = function (ctx, arg) {
         var a = String(arg || '').split(':'), port = a[0], what = a[1] || 'sum';
+        // 📑 [2026-11-25] `edid:ALL:sum` — 포트 구분 없는 칸 하나(Sample Report·시제품 제작의뢰서 'EDID CHECK SUM').
+        //   불러 둔 EDID 전부를 Customer SPEC 에 쓰는 것과 **같은 글**로(`resEdidSpecSumText`), 하나도 없으면 Customer SPEC 그대로.
+        if (port === 'ALL') {
+            var all = window.resEdidSpecSumText();
+            if (all) return { v: all, src: _t('🧬 EDID ▸ ', '🧬 EDID ▸ ') + Object.keys(_edidStore(false)).join(' · ') };
+            var sv = '';
+            try {
+                var hitA = ((ctx && ctx.spec) || []).filter(function (r) { return _isSumType(r.label); })[0];
+                sv = hitA ? String(hitA.value == null ? '' : hitA.value).trim() : '';
+            } catch (eA) { sv = ''; }
+            return sv ? { v: sv, src: 'Customer SPEC ▸ EDID Check Sum' }
+                      : { v: '', src: _t('EDID 를 안 불러왔고 Customer SPEC 도 비어 있음', 'no EDID loaded, Customer SPEC empty') };
+        }
         var rec = _edidStore(false)[port];
         var res = rec && rec.hex && window.EDID ? window.EDID.parse(rec.hex) : null;
         var portName = ((window.RES_PORTS || []).filter(function (p) { return p.key === port; })[0] || {}).label || port;

@@ -86,7 +86,8 @@
                     { key: 'Y',  from: 'specY',  hint: '예: 0.335' },
                     { key: 'Lv', from: 'specLv', hint: '예: 500~550' },
                     { key: 'FW Ver',         from: 'specFw',   hint: '확정 전이면 비워 두세요' },
-                    { key: 'EDID CHECK SUM', from: 'specEdid', hint: '예: DP 0x36' }
+                    // 🧬 [2026-11-25] 불러 둔 EDID(js/69) 가 먼저 — 없으면 Customer SPEC 그대로
+                    { key: 'EDID CHECK SUM', from: 'edid:ALL:sum', hint: '예: DP 0x36' }
                 ]
             },
             // 🖥 EDID 가 어떤 해상도를 어느 입력으로 받는가 — 고르는 건 팝업(js/69)이 한다.
@@ -305,7 +306,7 @@
         {
             id: 'model-spec', icon: '📘', label: '모델명세서', folder: '모델명세서',
             perRevision: true,
-            note: 'Optical·F/W(1)·EDID(DP)는 Customer SPEC 값을 자동으로 가져오고, RESOLUTION SPEC 은'
+            note: 'Optical·F/W(1)는 Customer SPEC 값을, EDID 는 지원 해상도에서 불러 둔 EDID 파일(없으면 Customer SPEC)을 자동으로 가져오고, RESOLUTION SPEC 은'
                 + ' 기존 "지원 해상도" 선택을 그대로 씁니다. 사진 5종은 사진을 누르면 번호 표시(📍)를'
                 + ' 붙일 수 있습니다(라벨 목록이 없는 사진이라 라벨사양서의 부착위치 표시와는 다른 방식'
                 + ' 입니다). M.C Table·라벨사양서와 같은 R1/R2/R3… 리비전 관리가 됩니다.',
@@ -6550,7 +6551,7 @@
             '총 제작수량': val('총 제작수량'), '조립 예상일': val('조립 예상일'), '출고 수량': val('출고 수량'),
             '제작 기간': val('제작 기간'), '개발 단계': val('개발 단계', 'round'), '제작 회차': val('제작 회차'),
             X: val('X', 'specX'), Y: val('Y', 'specY'), Lv: val('Lv', 'specLv'),
-            'FW Ver': val('FW Ver', 'specFw'), 'EDID CHECK SUM': val('EDID CHECK SUM', 'specEdid'),
+            'FW Ver': val('FW Ver', 'specFw'), 'EDID CHECK SUM': val('EDID CHECK SUM', 'edid:ALL:sum'),
             '요청사항': val('요청사항'), '라벨 인쇄 사양': val('라벨 인쇄 사양'), '부착 위치': val('부착 위치'),
             '작 성 일': val('작 성 일', 'today'), '작 성 부 서': val('작 성 부 서'), '작 성 자': val('작 성 자'),
             '제품 출고일': val('제품 출고일'), '제 목': val('제 목'), '요청부서': val('요청부서', 'meta.팀'),
