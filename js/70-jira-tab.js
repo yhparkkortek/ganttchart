@@ -522,7 +522,7 @@
                     + '<td style="padding:6px 8px; text-align:center;">' + esc(it.reporter || '—') + '</td>'
                     + '<td style="padding:6px 8px; text-align:center;">' + esc(it.priority || '—') + '</td>'
                     + '<td style="padding:6px 8px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#555;" title="' + esc(metaTxt) + '">' + (metaTxt ? esc(metaTxt) : '—') + '</td>'
-                    + '<td style="padding:6px 8px; text-align:center; color:#888; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + esc((it.updated || '').slice(0, 16).replace('T', ' ')) + '</td>'
+                    + '<td class="' + (window._dateDayCls ? window._dateDayCls(it.updated) : '') + '" style="padding:6px 8px; text-align:center; color:#888; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + esc((it.updated || '').slice(0, 16).replace('T', ' ')) + '</td>'
                     + '<td style="padding:6px 8px;">' + srcChip(it.src) + '</td>'
                     + '</tr>';
             }).join('')
@@ -1018,7 +1018,7 @@
                     + '<td style="' + td + ' text-align:center; color:' + (it.resolution ? '#1f7a3d' : '#bbb') + ';">' + esc(it.resolution || '—') + '</td>'
                     + '<td style="' + td + ' text-align:center;">' + esc(it.assignee || '—') + '</td>'
                     + '<td style="' + td + ' text-align:center;">' + esc(it.reporter || '—') + '</td>'
-                    + '<td style="padding:6px 8px; text-align:center; color:#888;">' + esc((it.updated || '').slice(0, 10)) + '</td>'
+                    + '<td class="' + (window._dateDayCls ? window._dateDayCls(it.updated) : '') + '" style="padding:6px 8px; text-align:center; color:#888;">' + esc((it.updated || '').slice(0, 10)) + '</td>'
                     + '</tr>';
             }).join('')
             : '<tr><td colspan="' + (sim ? 9 : 8) + '" style="padding:24px; text-align:center; color:#999;">'
