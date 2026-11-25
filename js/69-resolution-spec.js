@@ -611,6 +611,7 @@
 
     window.resEdidSetPort = function (p) { if (_edidPending) { _edidPending.port = p; _edidRender(); } };
     window.resEdidSetOff = function (on) { if (_edidPending) { _edidPending.offMissing = !!on; } };
+    window.resEdidSetWriteSum = function (on) { if (_edidPending) { _edidPending.writeSum = !!on; _edidPending.sumTouched = true; } };
     window.resEdidClose = function () {
         _edidPending = null;
         var ov = document.getElementById('resedid-overlay');
@@ -624,14 +625,93 @@
         return { key: key, label: hit ? hit.label : m.label, inList: !!hit, g: hit ? hit.g : '' };
     };
 
-    // Customer SPEC 의 EDID Check Sum 칸 — 같은지 대조만 한다(그 칸은 사람이 적는 문서 값이라 덮지 않는다)
-    var _edidSpecSum = function () {
-        try {
-            var ctx = window._dgCollect ? window._dgCollect() : null;
-            var rows = (ctx && ctx.spec) || [];
-            var hit = rows.filter(function (r) { return /^edid/i.test(String(r.label || '').replace(/\s+/g, '')); })[0];
-            return hit ? String(hit.value == null ? '' : hit.value).trim() : null;
-        } catch (e) { return null; }
+    // ── 📝 [2026-11-25] Customer SPEC `EDID Check Sum` 칸 자동 채우기 (사용자: "그 칸도 자동으로 채워줘")
+    //   값 = 이 모델에 불러 둔 포트마다 `포트 0x체크섬`(확장 블록이 있으면 `/0x..` 로 블록 순서대로), RES_PORTS 순서, ' · ' 로 잇는다.
+    //   ⚠️ 사람이 적은 값은 함부로 덮지 않는다 — 칸이 비었거나 **지난번에 앱이 적은 그대로**일 때만 자동으로 쓰고,
+    //      사람이 다른 값을 적어 뒀으면 미리보기에 둘을 나란히 보여 주고 [덮어쓰기] 를 사람이 켤 때만 쓴다.
+    //   ⚠️ Customer SPEC 은 저장할 때 **화면 표를 다시 읽는다**(js/22g collectTabData) — 그래서 데이터와 화면 칸을 **둘 다** 고친다.
+    //   항목 이름은 데이터(js/43 BS_EXTRA_ITEMS 가 만드는 그 항목) — 없으면 `_bsEnsureExtraItems` 로 제자리에 만든다.
+    window.RES_EDID_SPEC_ITEM = window.RES_EDID_SPEC_ITEM || ['EDID Check Sum', 'EDID CHECK SUM', 'EDID Checksum'];
+    var _specNorm = function (s) { return String(s == null ? '' : s).replace(/\s+/g, '').toUpperCase(); };
+    var _isSumType = function (t) {
+        var n = _specNorm(t);
+        return !!n && (window.RES_EDID_SPEC_ITEM || []).some(function (x) { return _specNorm(x) === n; });
+    };
+    var _specSumDomTr = function () {
+        var tb = document.getElementById('briefspec-body');
+        if (!tb) return null;
+        var trs = tb.querySelectorAll('tr');
+        for (var i = 0; i < trs.length; i++) {
+            var ti = trs[i].querySelector('input[data-field="type"]');
+            if (ti && _isSumType(ti.value)) return trs[i];
+        }
+        return null;
+    };
+    var _specSumDataRow = function () {
+        return (_td().briefSpec || []).filter(function (r) { return r && _isSumType(r.type); })[0] || null;
+    };
+    /** 지금 칸 값 — 화면 표가 있으면 화면이 진실(저장이 화면을 읽는다), 없으면 데이터. 항목 자체가 없으면 null */
+    window.resEdidSpecSumCurrent = function () {
+        var tb = document.getElementById('briefspec-body');
+        if (tb && tb.querySelector('input[data-field="type"]')) {
+            var tr = _specSumDomTr();
+            if (tr) { var inp = tr.querySelector('input[data-field="modelA"]'); return inp ? String(inp.value || '').trim() : ''; }
+            return null;
+        }
+        var row = _specSumDataRow();
+        return row ? String(row.modelA != null ? row.modelA : (row.desc || '')).trim() : null;
+    };
+    var _sumOfHex = function (hex) {
+        var r = window.EDID ? window.EDID.parse(hex) : null;
+        return (r && r.ok) ? r.checksums.map(function (c) { return c.value; }).join('/') : '';
+    };
+    /** 칸에 쓸 글 — 저장된 포트들 + (있으면) 지금 적용하려는 포트를 그 EDID 로 바꿔 넣은 결과 */
+    window.resEdidSpecSumText = function (pendingPort, pendingRes) {
+        var st = _edidStore(false), parts = [];
+        var order = (window.RES_PORTS || []).map(function (p) { return p.key; });
+        Object.keys(st).concat(pendingPort ? [pendingPort] : []).forEach(function (p) { if (order.indexOf(p) < 0) order.push(p); });
+        order.forEach(function (p) {
+            var sum = (p === pendingPort && pendingRes) ? pendingRes.checksums.map(function (c) { return c.value; }).join('/')
+                    : (st[p] && st[p].hex ? _sumOfHex(st[p].hex) : '');
+            if (sum) parts.push(p + ' ' + sum);
+        });
+        return parts.join(' · ');
+    };
+    var _lastSumStore = function () { var td = _td(); td.resolutionEdidSpecSum = td.resolutionEdidSpecSum || {}; return td.resolutionEdidSpecSum; };
+    /** 자동으로 써도 되나 — 비었거나·항목이 없거나·지난번 앱이 쓴 값 그대로거나·이미 같은 값 */
+    var _specSumAuto = function (cur, next) {
+        var last = _lastSumStore()[window.resActiveUnit()] || '';
+        return cur === null || cur === '' || (last && cur === last) || _specNorm(cur) === _specNorm(next);
+    };
+    /** 칸에 쓴다 → { ok, added } (데이터 + 화면 칸 둘 다) */
+    window.resEdidWriteSpecSum = function (text) {
+        var tb = document.getElementById('briefspec-body');
+        var hasDom = !!(tb && tb.querySelector('input[data-field="type"]'));
+        // 화면에서 사람이 고친 칸이 사라지지 않게 화면 → 데이터를 먼저 담는다 — 아래에서 다시 그릴(populateTabData) 수 있어
+        //   Customer SPEC 만이 아니라 **모든 탭**을(자동저장이 쓰는 그 함수, js/43 이 감싸 제품구분자 칸에도 담는다)
+        if (hasDom) {
+            try { if (window.collectTabData) window.collectTabData(); else if (window.bsCommitCurrent) window.bsCommitCurrent(); }
+            catch (e) { console.warn('[res edid spec collect]', e); }
+        }
+        var td = _td();
+        if (!Array.isArray(td.briefSpec)) td.briefSpec = [];
+        var row = _specSumDataRow(), added = false;
+        if (!row && window._bsEnsureExtraItems) { try { window._bsEnsureExtraItems(); } catch (e) { /* 아래에서 직접 */ } row = _specSumDataRow(); added = !!row; }
+        if (!row) { row = { type: (window.RES_EDID_SPEC_ITEM || ['EDID Check Sum'])[0], sub: '', modelA: '', note: '' }; td.briefSpec.push(row); added = true; }
+        row.modelA = text;
+        if (window.bsSyncAlias) { try { window.bsSyncAlias(); } catch (e) { /* 별칭 실패가 흐름을 막지 않게 */ } }
+        var tr = hasDom && !added ? _specSumDomTr() : null;
+        if (tr) {
+            var inp = tr.querySelector('input[data-field="modelA"]');
+            if (inp) inp.value = text;
+            tr.style.display = '';                // 값이 없어 숨겨져 있던 줄을 드러낸다
+        } else if (tb) {
+            // 화면에 그 줄이 없다(새로 만든 항목·빈 표) → 데이터대로 다시 그린다(제품구분자 전환이 쓰는 그 함수)
+            if (window.populateTabData) { try { window.populateTabData(); } catch (e) { console.warn('[res edid spec]', e); } }
+        }
+        _lastSumStore()[window.resActiveUnit()] = text;
+        _markDirty();
+        return { ok: true, added: added };
     };
 
     var _edidRender = function () {
@@ -678,14 +758,25 @@
                  return (r.blocks > 1 ? _esc(_t('블록 ', 'block ') + c.block + ' ') : '') + '<b>' + _esc(c.value) + '</b>'
                       + (c.valid ? ' <span style="color:#2b8a3e;">✓</span>' : ' <span style="color:#c92a2a;">✗ ' + _esc(_t('맞지 않음', 'invalid')) + '</span>');
              }).join(' · ');
-        var spec = _edidSpecSum();
-        if (spec !== null) {
-            var same = !!spec && spec.toUpperCase().replace(/\s+/g, '').indexOf(r.checksum.slice(2).toUpperCase()) >= 0;
-            h += ' &nbsp; <span style="color:' + (same ? '#2b8a3e' : '#c92a2a') + ';">'
-               + _esc(_t('Customer SPEC EDID Check Sum: ', 'Customer SPEC: ') + (spec || _t('(비어 있음)', '(empty)'))
-                      + (same ? _t(' — 같음', ' — same') : _t(' — 다름/없음 (문서 값이라 자동으로 고치지 않습니다)', ' — differs'))) + '</span>';
-        }
         h += '</td></tr>';
+        // ── 📝 Customer SPEC EDID Check Sum 칸 — 포트를 골라야 무엇을 쓸지 정해진다
+        if (P.port) {
+            var curSum = window.resEdidSpecSumCurrent(), nextSum = window.resEdidSpecSumText(P.port, r);
+            var autoOk = _specSumAuto(curSum, nextSum);
+            if (!P.sumTouched) P.writeSum = autoOk;
+            var sameSum = curSum !== null && _specNorm(curSum) === _specNorm(nextSum);
+            h += '<tr><td style="' + th + '">Customer SPEC</td><td style="' + cell + '">'
+               + 'EDID Check Sum: ' + (curSum === null ? '<span style="color:#868e96;">' + _esc(_t('(항목 없음 — 만들어서 적습니다)', '(no row — will add)')) + '</span>'
+                                       : '<b>' + _esc(curSum || _t('(비어 있음)', '(empty)')) + '</b>')
+               + (sameSum ? ' <span style="color:#2b8a3e;">✓ ' + _esc(_t('같음', 'same')) + '</span>'
+                  : ' → <b style="color:#2b8a3e;">' + _esc(nextSum) + '</b>'
+                    + (autoOk ? ' <span style="color:#868e96;">(' + _esc(_t('적용하면 자동으로 적습니다', 'written on apply')) + ')</span>'
+                       : '<div style="margin-top:4px; color:#c92a2a;">' + _esc(_t('사람이 적은 값과 다릅니다 — 문서 값이라 기본으로 그대로 둡니다.', 'A person wrote a different value — kept by default.'))
+                         + ' <label style="cursor:pointer; color:#333;"><input type="checkbox" id="resedid-sum"' + (P.writeSum ? ' checked' : '')
+                         + ' onchange="window.resEdidSetWriteSum(this.checked)"> ' + _esc(_t('EDID 값으로 덮어쓰기', 'Overwrite with EDID')) + '</label></div>'))
+               + '</td></tr>';
+            P.sumNext = sameSum ? '' : nextSum;
+        }
         // ── 포트
         var ports = window.RES_PORTS || [];
         h += '<tr><td style="' + th + '">' + _esc(_t('입력 포트', 'Port')) + '</td><td style="' + cell + '">'
@@ -803,12 +894,18 @@
             hex: window.EDID.hex(r.bytes), at: new Date().toISOString(),
             modes: r.modes.map(function (m) { return m.label; }), native: r.native ? r.native.label : ''
         };
+        // 📝 Customer SPEC EDID Check Sum 칸 — 미리보기가 정한 대로(자동 또는 사람이 덮어쓰기를 켠 경우만)
+        var sumWritten = '';
+        if (P.writeSum && P.sumNext) {
+            try { window.resEdidWriteSpecSum(P.sumNext); sumWritten = P.sumNext; } catch (eS) { console.warn('[res edid spec]', eS); }
+        }
         _markDirty();
         window.resEdidClose();
         var ov = document.getElementById('respick-overlay');
         if (ov && ov.style.display !== 'none') { _paintRows(); _paintFoot(); _paintEdidStatus(); }
         _toast('🧬 ' + port + ' — ' + _t('EDID 적용: ' + nOn + '개 켬' + (nAdd ? ', CUSTOMER ' + nAdd + '줄 추가' : '') + (nOff ? ', ' + nOff + '개 끔' : ''),
-                                          'EDID applied: ' + nOn + ' on' + (nAdd ? ', ' + nAdd + ' added' : '') + (nOff ? ', ' + nOff + ' off' : '')), 'success');
-        return { on: nOn, added: nAdd, off: nOff };
+                                          'EDID applied: ' + nOn + ' on' + (nAdd ? ', ' + nAdd + ' added' : '') + (nOff ? ', ' + nOff + ' off' : ''))
+               + (sumWritten ? _t(' · Customer SPEC EDID Check Sum = ', ' · Customer SPEC checksum = ') + sumWritten : ''), 'success');
+        return { on: nOn, added: nAdd, off: nOff, sum: sumWritten };
     };
 })();
