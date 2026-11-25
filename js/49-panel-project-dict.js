@@ -165,7 +165,7 @@ window._ppOpenPicker = async function (onPick) {
         + ' box-shadow:0 8px 32px rgba(0,0,0,0.22); overflow:hidden; min-width:360px; min-height:300px;">'
         + '  <div id="pp-pick-drag" style="padding:13px 18px; border-bottom:1px solid #a5c8f0; font-weight:bold; font-size:14px; background:#e7f3ff;'
         + '       border-radius:10px 10px 0 0; display:flex; justify-content:space-between; align-items:center; cursor:grab; color:#1971c2;">'
-        + '    <span>🏷 <span>' + _t('사내 프로젝트 목록', 'In-house project list') + '</span></span>'
+        + '    <span>🏷 <span id="pp-pick-title">' + _t('사내 프로젝트 목록', 'In-house project list') + '</span></span>'
         + '    <button onclick="document.getElementById(\'pp-pick-modal\').style.display=\'none\'" style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border);'
         + '       border-radius:6px; color:var(--modal-icon-text); font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; display:flex; align-items:center; justify-content:center;">✕</button>'
         + '  </div>'

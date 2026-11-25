@@ -536,7 +536,9 @@ Document 실제 서식 4종, Weekly 카드·표·타임라인 14업무, Project 
 
 ## 🌐 페이지 이름 한/영 (2026-11-25)
 
-사이드 메뉴와 각 페이지 헤더 제목은 `window.PAGE_TITLES`(js/23, 데이터) **한 곳**을 읽는다 — `_applyPageTitles()` 가 처음 한 번 + `toggleLang()` 마다 칠한다. 새 페이지는 표에 한 줄 + 헤더 제목 요소에 `data-page-title="<탭>"`. ⚠️ 제목 옆에 ℹ️ 도움말 같은 자식이 있으면 글자만 `<span data-page-title>` 로 감쌀 것(textContent 로 덮는다). 검증 `tests/page-titles-lang.html`(헤드리스 크롬, 12건).
+사이드 메뉴와 각 페이지 헤더 제목은 `window.PAGE_TITLES`(js/23, 데이터) **한 곳**을 읽는다 — `_applyPageTitles()` 가 처음 한 번 + `toggleLang()` 마다 칠한다. 새 페이지는 표에 한 줄 + 헤더 제목 요소에 `data-page-title="<탭>"`. ⚠️ 제목 옆에 ℹ️ 도움말 같은 자식이 있으면 글자만 `<span data-page-title>` 로 감쌀 것(textContent 로 덮는다). 
+
+**모달 제목**: 대부분은 열 때 `_t()` 로 그 언어로 그린다. 문제는 **한 번 만들어 두고 다시 쓰는 모달** — 만든 뒤 언어를 바꾸면 제목이 그대로였다. 그런 모달의 **고정 제목**은 id 를 달고 `MODAL_TITLES`(js/23) 또는 04j `LANG.ui` 에 한 줄(둘 다 `toggleLang` 이 다시 칠한다). ⚠️ 건수·이름이 들어가는 제목, 열 때마다 다시 채우는 제목은 적지 말 것 — 덮어쓰면 그 내용이 사라진다(ep-spec 등). 검증 `tests/page-titles-lang.html`(헤드리스 크롬, 15건 — 모달 9개를 한국어로 만든 뒤 영어로 바꿔 본다).
 
 ## 📋 보고 페이지 헤더 — 일일 보고·주간 보고·프로젝트 리뷰 (2026-11-25, 합치기 1단계)
 

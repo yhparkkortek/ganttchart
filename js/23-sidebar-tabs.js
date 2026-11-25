@@ -146,7 +146,31 @@
         var t = window._currentLang === 'en' ? m.en : m.ko;
         return withIcon ? m.icon + ' ' + t : t;
     };
+    // 🌐 [2026-11-25] 모달 제목 한/영 — **한 번만 만들어 두고 다시 쓰는** 모달은 만들 때의 언어로
+    //    제목이 굳는다(만든 뒤 언어를 바꾸면 그대로였다). 그런 모달의 **고정 제목**만 여기 적는다:
+    //    열 때마다 다시 그리는 모달·건수나 이름이 들어가는 제목은 적지 말 것(덮어쓰면 그 내용이 사라진다).
+    //    04j LANG.ui 에 이미 있는 id(ai-summary-title 등)는 거기서 바뀌므로 여기 다시 적지 않는다.
+    window.MODAL_TITLES = {
+        'holiday-modal-title': ['🗓️ 휴일 등록 (추가 휴일)', '🗓️ Holiday Registration'],
+        'sap-pn-find-title':   ['KTK PN_모델명 찾기 — Project list → SAP', 'Find KTK PN_Model — Project list → SAP'],
+        'npw-devplan-title':   ['그룹웨어에서 개발 계획 가져오기', 'Import development plan from Groupware'],
+        'matcart-title':       ['자재 보관함', 'Material Cart'],
+        'saplogin-title':      ['자동 로그인 설정', 'Auto-login settings'],
+        'ds-cfg-title':        ['NAS 문서 저장소 설정', 'NAS document store settings'],
+        'pp-pick-title':       ['사내 프로젝트 목록', 'In-house project list'],
+        'ovc-title':           ['밀린 업무 정리', 'Overdue cleanup'],
+        'jira-link-title':     ['JIRA 연결 설정', 'JIRA link settings'],
+        'jira-create-title':   ['새 이슈', 'New issue'],
+        'cp-modal-title':      ['컬러 팔레트', 'Color Palette'],
+        'bc-title':            ['미분류 백로그 일괄 정리', 'Consolidate unclassified backlog'],
+        'mnb-title':           ['KORTEK 모델명 만들기', 'Build a KORTEK model name'],
+    };
     window._applyPageTitles = function() {
+        var _mEn = window._currentLang === 'en';
+        Object.keys(window.MODAL_TITLES).forEach(function (id) {
+            var el = document.getElementById(id);
+            if (el) el.textContent = window.MODAL_TITLES[id][_mEn ? 1 : 0];
+        });
         document.querySelectorAll('#sb-nav .sb-item[data-tab]').forEach(function (el) {
             var lab = el.querySelector('.sb-label'), t = window._pageTitle(el.dataset.tab);
             if (lab && t) lab.textContent = t;

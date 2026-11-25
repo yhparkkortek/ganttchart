@@ -20,6 +20,13 @@ f.onload = async function () {
     function sb() { var o = {}; D.querySelectorAll('#sb-nav .sb-item[data-tab]').forEach(function (el) { o[el.dataset.tab] = el.querySelector('.sb-label').textContent; }); return o; }
     function hd() { var o = {}; D.querySelectorAll('[data-page-title]').forEach(function (el) { o[el.getAttribute('data-page-title')] = el.textContent; }); return o; }
     var tabs = Object.keys(T);
+    // 모달 — 한국어일 때 한 번 만들어 두고(다시 쓰는 모달) 언어를 바꾼다
+    ['_mcOpen', '_mnbOpen', 'openOverdueCleanup', '_jiraOpenLinkSettings', '_bcOpenModal', 'openHolidayManager', '_dsOpenSettings', 'openSapLoginSettings']
+      .forEach(function (fn) { try { var r = W[fn] && W[fn](); if (r && r.catch) r.catch(function () {}); } catch (e) {} });
+    await sleep(800);
+    var MT = W.MODAL_TITLES || {};
+    var built = Object.keys(MT).filter(function (id) { return D.getElementById(id); });
+    chk(built.length >= 6 && built.every(function (id) { return D.getElementById(id).textContent === MT[id][0]; }), '모달 ' + built.length + '개 제목 한국어 — ' + built.join(','));
     var s0 = sb(), h0 = hd();
     chk(tabs.every(function (k) { return s0[k] === T[k].ko; }), '처음(한국어) 사이드 메뉴 ' + tabs.length + '개 한국어 — ' + JSON.stringify(s0));
     chk(Object.keys(h0).length >= 10 && Object.keys(h0).every(function (k) { return h0[k] === T[k].icon + ' ' + T[k].ko; }), '처음 헤더 제목 ' + Object.keys(h0).length + '개 한국어');
@@ -29,6 +36,9 @@ f.onload = async function () {
     chk(tabs.every(function (k) { return s1[k] === T[k].en; }), '영어로 바꾸면 사이드 메뉴 영어 — ' + JSON.stringify(s1));
     chk(Object.keys(h1).every(function (k) { return h1[k] === T[k].icon + ' ' + T[k].en; }), '헤더 제목 영어 — ' + JSON.stringify(h1));
     chk(D.getElementById('alarm-view-trigger-label').textContent === '🔔 Alarm', '알람 헤더 = 🔔 Alarm');
+    var bad = built.filter(function (id) { return D.getElementById(id).textContent !== MT[id][1]; });
+    chk(!bad.length, '이미 만든 모달 제목도 영어로 바뀐다' + (bad.length ? ' — 안 바뀜: ' + bad.join(',') : ''));
+    chk(D.getElementById('cp-modal-title').textContent === 'Color Palette', '컬러 팔레트 제목 = Color Palette');
     chk(!!D.querySelector('#tab-bom .inbox-help-ico, h2 .inbox-help-ico'), 'BOM·M.C 제목 옆 ℹ️ 도움말이 지워지지 않았다');
     W.switchTab('projectlist'); await sleep(400);
     chk(D.querySelector('#pl-header-box h2').textContent === '📒 Project list', 'Project list 탭이 제목을 다시 그려도 영어');

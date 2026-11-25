@@ -78,7 +78,7 @@
                 // SAP 계열 → 하늘색 헤더(ui-conventions)
                 + '<div id="saplogin-drag" style="padding:10px 14px; background:#e7f3ff; border-bottom:1px solid #a5c8f0; color:#1971c2;'
                 + ' cursor:grab; display:flex; align-items:center; gap:8px;">'
-                + '<strong style="font-size:14px;">🔑 ' + T('자동 로그인 설정', 'Auto-login settings') + '</strong>'
+                + '<strong style="font-size:14px;">🔑 <span id="saplogin-title">' + T('자동 로그인 설정', 'Auto-login settings') + '</span></strong>'
                 + '<span style="flex:1;"></span>'
                 + '<button onclick="document.getElementById(\'saplogin-modal\').style.display=\'none\'"'
                 + ' style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); color:var(--modal-icon-text);'

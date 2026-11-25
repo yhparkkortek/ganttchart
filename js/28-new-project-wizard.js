@@ -829,7 +829,7 @@ window._sapPnFind = function (target, hint) {
         ov.innerHTML =
             '<div id="sap-pn-find-box" style="pointer-events:all; position:fixed; left:50%; top:50%; transform:translate(-50%,-50%); width:560px; max-width:94vw; max-height:80vh; display:flex; flex-direction:column; background:#fff; border-radius:10px; box-shadow:0 10px 30px rgba(0,0,0,.25); overflow:hidden;">'
           +   '<div id="sap-pn-find-drag" style="padding:13px 18px; cursor:grab; display:flex; align-items:center; justify-content:space-between; font-weight:bold; font-size:14px;">'
-          +     '<span>🏭 ' + T('KTK PN_모델명 찾기 — Project list → SAP', 'Find KTK PN_Model — Project list → SAP') + '</span>'
+          +     '<span>🏭 <span id="sap-pn-find-title">' + T('KTK PN_모델명 찾기 — Project list → SAP', 'Find KTK PN_Model — Project list → SAP') + '</span></span>'
           +     '<button type="button" onclick="document.getElementById(\'sap-pn-find-overlay\').style.display=\'none\'" style="width:28px; height:28px; border:1px solid #ddd; border-radius:6px; background:#fff; cursor:pointer; font-size:16px;">✕</button>'
           +   '</div>'
           +   '<div style="padding:12px 16px; display:flex; flex-direction:column; gap:8px; min-height:0; flex:1;">'
@@ -1003,7 +1003,7 @@ window._npwDevPlanOpen = function () {
         ov.innerHTML =
             '<div id="npw-devplan-box" style="pointer-events:all; position:fixed; left:50%; top:50%; transform:translate(-50%,-50%); width:620px; max-width:94vw; max-height:82vh; display:flex; flex-direction:column; background:#fff; border-radius:10px; box-shadow:0 10px 30px rgba(0,0,0,.25); overflow:hidden;">'
           +   '<div id="npw-devplan-drag" style="padding:13px 18px; cursor:grab; display:flex; align-items:center; justify-content:space-between; font-weight:bold; font-size:14px;">'
-          +     '<span>🏢 ' + T('그룹웨어에서 개발 계획 가져오기', 'Import development plan from Groupware') + '</span>'
+          +     '<span>🏢 <span id="npw-devplan-title">' + T('그룹웨어에서 개발 계획 가져오기', 'Import development plan from Groupware') + '</span></span>'
           +     '<button type="button" id="npw-devplan-close" title="' + T('닫기', 'Close') + '" style="width:28px; height:28px; border:1px solid #ddd; border-radius:6px; background:#fff; cursor:pointer; font-size:16px;">✕</button>'
           +   '</div>'
           +   '<div style="padding:12px 16px; display:flex; flex-direction:column; gap:8px; min-height:0; flex:1; overflow-y:auto;">'

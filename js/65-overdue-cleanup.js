@@ -210,7 +210,7 @@
             m.innerHTML =
                 '<div id="ovc-box" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); width:min(760px,94vw); max-height:88vh; display:flex; flex-direction:column; background:#fff; border-radius:10px; box-shadow:0 8px 32px rgba(0,0,0,.22); overflow:hidden;">' +
                   '<div id="ovc-drag" style="flex-shrink:0; padding:12px 17px; background:#e7f3ff; border-bottom:1px solid #a5c8f0; color:#1971c2; font-weight:bold; font-size:14px; display:flex; justify-content:space-between; align-items:center; cursor:grab;">' +
-                    '<span>🧹 ' + esc(T('밀린 업무 정리', 'Overdue cleanup')) + '</span>' +
+                    '<span>🧹 <span id="ovc-title">' + esc(T('밀린 업무 정리', 'Overdue cleanup')) + '</span></span>' +
                     '<div style="display:flex; gap:6px; align-items:center;">' +
                       '<button onclick="window.ovcScan(true)" style="background:#e8f4fd; border:none; border-radius:6px; color:#1a4f7a; font-size:11px; font-weight:bold; cursor:pointer; padding:0 10px; height:28px;">🔄 ' + esc(T('다시 읽기', 'Reload')) + '</button>' +
                       '<button onclick="document.getElementById(\'' + C.modalId + '\').style.display=\'none\'" style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); border-radius:6px; color:var(--modal-icon-text); width:28px; height:28px; cursor:pointer; font-size:16px; line-height:1;">✕</button>' +
