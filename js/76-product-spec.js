@@ -162,9 +162,14 @@
     (function () {
         for (var tr = 0; tr <= 14; tr++) for (var tc = 1; tc <= 6; tc++) {
             var tk = 'tim.r' + tr + '.c' + tc;
-            if (!window.PS_AUTO[tk]) window.PS_AUTO[tk] = ['fn:tim:' + tr + ':' + tc];
+            // 🧬 [2026-11-25] 이 모델에 불러 둔 실제 EDID(js/69 🧬 EDID 불러오기)가 **맨 앞** — 다른 사양서·표준값보다 먼저
+            if (!window.PS_AUTO[tk]) window.PS_AUTO[tk] = ['fn:edid:' + tr + ':' + tc, 'fn:tim:' + tr + ':' + tc];
         }
     })();
+    // 🧬 EDID 를 어느 포트 것에서 읽을지(데이터) — 패널 원래 해상도와 기본 해상도(DTD1)가 같은 포트가 먼저, 없으면 이 순서
+    window.PS_EDID_PORTS = window.PS_EDID_PORTS || ['DP', 'HDMI', 'DVI', 'RGB'];
+    // 칸 출처 중 📑 참고 사양서(`first` 묶음)보다도 **앞에 두는** 출처(데이터) — 이 모델 자신의 실제 값
+    window.PS_TOP_SOURCES = window.PS_TOP_SOURCES || /^fn:edid:/;
     // 🕒 표준 타이밍(데이터) — 'WxH@Hz' → 규격·도트클럭(MHz)·H(활성/싱크시작/싱크끝/전체)·V(〃)·극성.
     //   ⚠️ 실제 제품 EDID(스케일러 펌웨어)는 표준과 몇 값이 다를 수 있다 — 실측(2026-11-24, 32" QHD 원본 사양서):
     //   800x600·1024x768 은 DMT 와 글자까지 같고, 나머지 넷은 V Total·싱크 자리·극성이 몇 개 달랐다.
@@ -333,7 +338,12 @@
             if (!g) return;
             var tok = 'fn:ref:' + k, list = window.PS_AUTO[k] = window.PS_AUTO[k] || [];
             if (list.indexOf(tok) >= 0) return;
-            if (g.first) list.unshift(tok); else list.push(tok);
+            if (g.first) {
+                // 🧬 이 모델의 실제 EDID 같은 출처(PS_TOP_SOURCES)는 다른 사양서보다 앞에 남긴다
+                var at = 0;
+                while (at < list.length && window.PS_TOP_SOURCES && window.PS_TOP_SOURCES.test(list[at])) at++;
+                list.splice(at, 0, tok);
+            } else list.push(tok);
         });
     };
     // 화면 구역 만들기 — 양식 본문 순서(bodyIndex)대로, 그룹 제목으로 나눈다.
@@ -702,6 +712,27 @@
         var m = String(nat).match(/(\d{3,5})\D{1,8}?(\d{3,5})/);
         if (!m) return null;
         return { w: +m[1], h: +m[2], src: fromLib ? 'PARTS ▸ PANEL ▸ Dot Resolution' + _libSrcTail(rec, 'Dot Resolution') : 'Customer SPEC ▸ Native Resolution' };
+    };
+    // 🧬 이 모델에 불러 둔 EDID(js/69 `resEdidSaved()` — 모델×포트) 중 타이밍 표에 쓸 하나 → { port, file, res } | null
+    //   패널 원래 해상도와 EDID 기본 해상도(DTD1)가 같은 포트가 먼저, 없으면 PS_EDID_PORTS 순서. 판독은 hex 기준으로 한 번만.
+    var _edidParsed = {};
+    var _edidPick = function (ctx) {
+        if (!window.resEdidSaved || !window.EDID) return null;
+        var saved = window.resEdidSaved() || {};
+        var order = (window.PS_EDID_PORTS || []).concat(Object.keys(saved)).filter(function (p, i, arr) { return saved[p] && saved[p].hex && arr.indexOf(p) === i; });
+        if (!order.length) return null;
+        var list = order.map(function (p) {
+            var hx = saved[p].hex;
+            if (!_edidParsed[hx]) _edidParsed[hx] = window.EDID.parse(hx);
+            return { port: p, file: saved[p].file || '', res: _edidParsed[hx] };
+        }).filter(function (x) { return x.res && x.res.ok; });
+        if (!list.length) return null;
+        var nat = _nativeRes(ctx);
+        if (nat) {
+            var same = list.filter(function (x) { return x.res.native && x.res.native.w === nat.w && x.res.native.h === nat.h; })[0];
+            if (same) return same;
+        }
+        return list[0];
     };
     var _otherRevField = function (n, key) {
         var f = window._docRevisionFields ? window._docRevisionFields(FORM_ID, 'R' + n) : null;
@@ -1103,6 +1134,52 @@
             }
             return pick ? { v: pick.name, src: 'PARTS ▸ AD BOARD ▸ ' + pick.key + _libSrcTail(rec, pick.key) } : { v: '', src: '' };
         },
+        // 🧬 [2026-11-25] 타이밍 표 한 칸 — 이 모델에 불러 둔 **실제 EDID** 에서(사용자: "PRODUCT SPEC 타이밍 표도 EDID 값으로")
+        //   열 구성은 원본 사양서의 블록 이름 그대로: 1열 Preferred = DTD1 · 2·3열 Detail Block = DTD2·DTD3 ·
+        //   4~6열 Established = EDID 기본 지원 타이밍(이건 EDID 에 숫자가 없어 표준 DMT 값 — 출처에 밝힌다).
+        //   EDID 가 없으면 아무것도 안 하고 다음 출처(📑 참고 사양서 → 표준 초안)로 넘긴다.
+        //   EDID 가 있는데 그 열이 비면(DTD 가 둘뿐 등) **여기서 끝**(stop) — 다른 출처 값이 섞이면 EDID 와 다른 표가 된다.
+        edid: function (ctx, a) {
+            var e = _edidPick(ctx);
+            if (!e) return { v: '', src: '' };
+            var r = FN._edidCell(e, +a[0], +a[1]);
+            r.stop = true;          // EDID 가 있으면 이 표는 EDID 하나로만 — 빈 칸도 다른 출처로 채우지 않는다
+            return r;
+        },
+        _edidCell: function (e, row, col) {
+            var C = window.PS_TIMING_COLS;
+            var base = _t('EDID ▸ ', 'EDID ▸ ') + e.port + (e.file ? ' ▸ ' + e.file : '');
+            var dt = e.res.modes.filter(function (m) { return m.timing && /^DTD\d$/.test(m.src); })
+                .sort(function (x, y) { return +x.src.slice(3) - +y.src.slice(3); });
+            var est = e.res.modes.filter(function (m) { return m.srcs.indexOf('Established') >= 0 && !m.i; });
+            var m = col <= 3 ? dt[col - 1] : est[col - 4];
+            if (!m) return { v: '', src: base + _t(' (이 열에 해당하는 모드 없음)', ' (no mode for this column)'), stop: true };
+            var isDetail = col <= 3;
+            if (row === 0) return { v: C.priority[col - 1] || '', src: base };
+            if (row === 2) return { v: C.block[col - 1] || '', src: base };
+            if (row === 1) return { v: m.w + 'x' + m.h, src: base + ' ▸ ' + (isDetail ? m.src : 'Established') };
+            if (row === 14) return { v: isDetail ? C.refresh : '', src: base };
+            if (isDetail) {
+                var t = m.timing, src = base + ' ▸ ' + m.src;
+                var vAct = t.vTotal - t.vFront - t.vSync - t.vBack;
+                var clk = String(Math.round(t.pclkMHz * 1000) / 1000);
+                if (row === 3) return { v: clk, src: src };
+                if (row >= 4 && row <= 7) return { v: String([m.w, m.w + t.hFront, m.w + t.hFront + t.hSync, t.hTotal][row - 4]), src: src };
+                if (row >= 8 && row <= 11) return { v: String([vAct, vAct + t.vFront, vAct + t.vFront + t.vSync, t.vTotal][row - 8]), src: src };
+                if (row === 12) return { v: t.hPol ? t.hPol + 'hsync' : '', src: src, stop: true };
+                if (row === 13) return { v: t.vPol ? t.vPol + 'vsync' : '', src: src, stop: true };
+                return { v: '', src: src, stop: true };
+            }
+            // Established — EDID 엔 "이 모드를 받는다" 는 비트뿐이라 숫자는 표준 DMT 표에서
+            var k = m.w + 'x' + m.h + '@' + Math.round(m.hz);
+            var st = window.PS_STD_TIMINGS[k];
+            var esrc = base + ' ▸ Established ▸ ' + _t('값은 표준 ', 'values: standard ') + (st ? st.std : '');
+            if (!st) return { v: '', src: base + _t(' ▸ 표준 타이밍 표에 ' + k + ' 없음', ' ▸ ' + k + ' not in standard table'), stop: true };
+            if (row === 3) return { v: st.clk, src: esrc };
+            if (row >= 4 && row <= 7) return { v: String(st.h[row - 4]), src: esrc };
+            if (row >= 8 && row <= 11) return { v: String(st.v[row - 8]), src: esrc };
+            return { v: '', src: esrc, stop: true };
+        },
         // 🕒 타이밍 표 한 칸 — 열 계획(원래 해상도 + 상세 2 + Established 3)을 세우고 표준 표에서 값을 꺼낸다
         tim: function (ctx, a) {
             var row = +a[0], col = +a[1];
@@ -1303,6 +1380,7 @@
                 return { v: out, src: r.src };
             }
             if (r.src && !lastSrc) lastSrc = r.src;
+            if (r.stop) break;      // 출처가 "여기서 끝"이라 했다(예: EDID 에 그 열이 없다) — 다음 출처로 섞지 않는다
         }
         return { v: '', src: lastSrc ? _t('앱에 값 없음 — ', 'empty — ') + lastSrc : '' };
     };

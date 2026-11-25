@@ -267,6 +267,56 @@ window.__psTest = async function (opt) {
         var cT2 = window._dgCollect();
         check(HT(cT2, 'tim.r1.c1').v === '480x272' && HT(cT2, 'tim.r3.c1').v === '' && /없음/.test(HT(cT2, 'tim.r3.c1').src)
               && HT(cT2, 'tim.r1.c4').v === '', '표준 표에 없는 해상도는 비우고 이유 · 원래 해상도보다 큰 열은 안 넣음');
+        // 🧬 [2026-11-25] 이 모델에 불러 둔 실제 EDID(js/69) 가 있으면 타이밍 표는 EDID 에서 — 합성 EDID 둘(DP·HDMI)
+        var mkEdid = function (dtds, est35) {
+            var b = []; for (var z = 0; z < 128; z++) b.push(0);
+            [0, 255, 255, 255, 255, 255, 255, 0].forEach(function (v, i) { b[i] = v; });
+            b[18] = 1; b[19] = 3; b[20] = 0x80; b[35] = est35;
+            for (var s = 38; s < 54; s++) b[s] = 1;
+            dtds.forEach(function (t, k) {
+                var o = 54 + k * 18, p = t[0] / 10;
+                b[o] = p & 255; b[o + 1] = p >> 8; b[o + 2] = t[1] & 255; b[o + 3] = t[2] & 255; b[o + 4] = ((t[1] >> 8) << 4) | (t[2] >> 8);
+                b[o + 5] = t[5] & 255; b[o + 6] = t[6] & 255; b[o + 7] = ((t[5] >> 8) << 4) | (t[6] >> 8);
+                b[o + 8] = t[3]; b[o + 9] = t[4]; b[o + 10] = (t[7] << 4) | t[8]; b[o + 17] = t[9];
+            });
+            for (var d = 54 + dtds.length * 18; d < 126; d += 18) b[d + 3] = 0x10;
+            var sum = 0; for (var q = 0; q < 127; q++) sum += b[q]; b[127] = (256 - (sum & 255)) & 255;
+            return window.EDID.hex(b);
+        };
+        //   [kHz, H활성, H블랭크, H앞, H싱크, V활성, V블랭크, V앞, V싱크, 플래그] — 2560x1440 CVT-RB(+h −v) · 1920x1080 CTA
+        var D2560 = [241500, 2560, 160, 48, 32, 1440, 41, 3, 5, 0x1A], D1080 = [148500, 1920, 280, 88, 44, 1080, 45, 4, 5, 0x1E];
+        var edUnit = window.resActiveUnit();
+        window.tabData.resolutionEdidByUnit = {};
+        window.tabData.resolutionEdidByUnit[edUnit] = {
+            HDMI: { file: 'EDID_HDMI.bin', hex: mkEdid([D1080], 0x20) },
+            DP: { file: 'EDID_DP.bin', hex: mkEdid([D2560, D1080], 0xA1) }      // Established: 720x400@70 · 640x480@60 · 800x600@60
+        };
+        pSp['Dot Resolution'] = '2560 x 1440';
+        var cE = window._dgCollect();
+        var ev = function (r, c, o) { return HT(cE, 'tim.r' + r + '.c' + c, o).v; };
+        var eRes = [1, 2, 3, 4, 5, 6].map(function (c) { return ev(1, c); }).join(',');
+        check(eRes === '2560x1440,1920x1080,,720x400,640x480,800x600', 'EDID 열 구성 = DTD1·DTD2·(없음)·Established (' + eRes + ')');
+        var col1 = [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14].map(function (r) { return ev(r, 1); }).join('|');
+        check(col1 === '241.5|2560|2608|2640|2720|1440|1443|1448|1481|+hsync|-vsync|YES', 'Preferred 열 = EDID DTD1 숫자 그대로 (' + col1 + ')');
+        check(/EDID ▸ DP ▸ EDID_DP\.bin ▸ DTD1/.test(HT(cE, 'tim.r3.c1').src), '출처에 포트·파일·DTD (' + HT(cE, 'tim.r3.c1').src + ')');
+        check([0, 1, 3, 4, 7, 12, 14].every(function (r) { return ev(r, 3) === ''; }) && /모드 없음/.test(HT(cE, 'tim.r1.c3').src),
+              'EDID 에 DTD3 이 없으면 3열은 비운다 — 표준·다른 사양서로 섞지 않는다');
+        check(ev(3, 5) === '25.175' && /Established ▸ 값은 표준 VESA DMT/.test(HT(cE, 'tim.r3.c5').src) && ev(12, 5) === '',
+              'Established 열은 표준 DMT 숫자·극성 없음 (' + ev(3, 5) + ')');
+        check(ev(1, 4) === '720x400' && ev(3, 4) === '' && /720x400@70 없음/.test(HT(cE, 'tim.r3.c4').src),
+              '표준 표에 없는 Established 모드는 숫자 비우고 이유');
+        check(ev(3, 1, { hardOnly: true }) === '241.5', 'EDID 는 "앱 값" — 불러온 사양서보다 이긴다(hardOnly)');
+        var pE = window._psPayload();
+        check(pE.values['tim.r3.c1'] === '241.5' && pE.values['tim.r11.c1'] === '1481' && (pE.values['tim.r1.c3'] || '') === '',
+              '원본저장(.docx)으로 보내는 값에도 EDID 가 실린다 (' + [pE.values['tim.r3.c1'], pE.values['tim.r11.c1']].join('|') + ')');
+        pSp['Dot Resolution'] = '1920 x 1080';
+        var cE2 = window._dgCollect();
+        check(HT(cE2, 'tim.r1.c1').v === '1920x1080' && /EDID ▸ HDMI/.test(HT(cE2, 'tim.r1.c1').src) && HT(cE2, 'tim.r1.c2').v === '',
+              '패널 해상도와 기본 해상도가 같은 포트(HDMI)의 EDID 를 고른다 (' + HT(cE2, 'tim.r1.c1').src + ')');
+        delete window.tabData.resolutionEdidByUnit;
+        pSp['Dot Resolution'] = '2560 x 1440';
+        var cE3 = window._dgCollect();
+        check(HT(cE3, 'tim.r3.c1').v === '312.25' && /표준 타이밍/.test(HT(cE3, 'tim.r3.c1').src), 'EDID 가 없으면 예전처럼 표준 초안');
         delete pSp['Dot Resolution'];
         window._epLibCache = libSaved;
         // 🔌 전원 — Customer SPEC 의 소비전력(하위 줄 'LCD Monitor')·입력 커넥터('/' 뒤, 핀 수 표기 떼기)
