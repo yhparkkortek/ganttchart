@@ -248,9 +248,20 @@ window.__psTest = async function (opt) {
         pSp['White Color Coordinates'] = 'x=0.313, y=0.329'; pSp['Color Temperature'] = '6500K';
         pSp['Brightness (Min/Typ) (cd/m²)'] = '450 (Typ)';
         var cK = window._dgCollect(), HK = window.DOC_AUTO_HOOKS.ps;
-        var pk = ['scr.r12.c1', 'cie.r2.c1', 'cie.r2.c2', 'scr.r11.c1', 'scr.r10.c1', 'lumYL'].map(function (k) { return HK(cK, k).v; });
-        check(pk.join('|') === 'x=0.313, y=0.329|0.313|0.329|6500|450 (Typ)|450 (Typ) cd/m2' && /PARTS ▸ PANEL/.test(HK(cK, 'cie.r2.c1').src),
+        var pk = ['scr.r12.c1', 'cie.r2.c1', 'cie.r2.c2', 'scr.r11.c1'].map(function (k) { return HK(cK, k).v; });
+        check(pk.join('|') === 'x=0.313, y=0.329|0.313|0.329|6500' && /PARTS ▸ PANEL/.test(HK(cK, 'cie.r2.c1').src),
               '패널 특성은 PARTS 기록 먼저 — 화면 사양·CIE 표가 같은 백색 좌표 (' + pk.join('|') + ')');
+        // 휘도만 예외 — 완제품 값(Customer SPEC '400~450') 먼저, 없으면 패널(450 Typ)
+        var lu = ['scr.r10.c1', 'lumYL'].map(function (k) { return HK(cK, k).v; });
+        check(lu.join('|') === '400 ~ 450cd/m2|400 ~ 450 cd/m2' && /Customer SPEC/.test(HK(cK, 'scr.r10.c1').src),
+              '휘도는 완제품(Customer SPEC) 먼저 (' + lu.join('|') + ')');
+        var bsL = window.tabData.briefSpec;
+        window.tabData.briefSpec = bsL.filter(function (r) { return !/Brightness/i.test(r.sub || ''); });
+        var cKL = window._dgCollect();
+        var lu2 = ['scr.r10.c1', 'lumYL'].map(function (k) { return HK(cKL, k).v; });
+        check(lu2.join('|') === '450 (Typ)|450 (Typ) cd/m2' && /PARTS ▸ PANEL/.test(HK(cKL, 'lumYL').src),
+              'Customer SPEC 에 휘도가 없으면 패널 기록 (' + lu2.join('|') + ')');
+        window.tabData.briefSpec = bsL;
         pSp['White Color Coordinates'] = '-'; pSp['Color Temperature'] = '';
         var cK2 = window._dgCollect();
         var pk2 = ['cie.r2.c1', 'scr.r11.c1'].map(function (k) { return HK(cK2, k).v; });

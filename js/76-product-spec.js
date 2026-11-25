@@ -95,7 +95,9 @@
         // ⚠️ [2026-11-25 사용자 결정] 패널 특성은 **PARTS 패널 기록이 기준** — 비었을 때만('-' 포함) Customer SPEC·Project list.
         //    (전엔 Customer SPEC·Project list 가 먼저라 같은 문서에서 백색 좌표가 PARTS 값·Project list 값 둘로 나왔다 — SHUFFLER 3.0 실측)
         //    균일도는 예외 — PARTS 칸('White Variation (Max/Min)')은 최대/최소 **비율**이라 문서의 균일도 %와 다른 값이다
-        'scr.r10.c1': ['panel:Brightness (Min/Typ) (cd/m²)', SPEC.lv],
+        //    휘도도 예외(사용자 결정) — **완제품 값(Customer SPEC) 먼저**. 패널 위에 터치·커버 유리가 얹히면 완제품이 패널보다 어둡다
+        //    (실측 SHUFFLER 3.0: PARTS 패널 450 vs 사양서 230~280)
+        'scr.r10.c1': [SPEC.lv, 'panel:Brightness (Min/Typ) (cd/m²)'],
         'scr.r11.c1': ['panel:Color Temperature', SPEC.temp, 'pl:colorTemp'],
         'scr.r12.c1': ['panel:White Color Coordinates', 'fn:xyPair'],
         'scr.r13.c1': ['panel:NTSC Ratio', SPEC.gamut, 'pl:colorGamut'],
@@ -103,7 +105,7 @@
         panelVendor: ['pl:panelMfr', 'panel:Panel Brand'],
         // 시야각 표 — Right · Left · Up · Down (패널 'L/R/U/D' 를 쪼갠다)
         'va.r0.c4': ['fn:va:1'], 'va.r1.c4': ['fn:va:0'], 'va.r2.c4': ['fn:va:2'], 'va.r3.c4': ['fn:va:3'],
-        lumYL: ['panel:Brightness (Min/Typ) (cd/m²)', 'fn:lumYL'],
+        lumYL: ['fn:lumYL', 'panel:Brightness (Min/Typ) (cd/m²)'],   // 휘도 — 완제품(Customer SPEC) 먼저, 없으면 패널
         // ⚠️ BLU 전류·전압·전력은 **안 잇는다** — 라이브러리엔 값이 하나뿐인데 표는 Min/Typ/Max 세 칸이라
         //    어느 칸인지 모른다(실측: 라이브러리 전압 값은 원본의 Max 칸 값이었다 — Typ 에 넣으면 조용한 오답이 된다).
         'blu.r5.c2': ['panel:Lamp Life Time (Hrs)'],
