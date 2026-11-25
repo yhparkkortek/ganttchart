@@ -285,6 +285,25 @@ window.__psTest = async function (opt) {
         });
         window._docState.formId = 'product-spec';
 
+        // 📚 양식 계열(2026-11-25) — 'psFamily' 칸으로 칸 목록·원본저장 양식이 바뀐다. 같은 뜻 칸은 같은 열쇠라 자동값이 그대로 통한다.
+        var fF = window._docDataOf('product-spec').fields;
+        var pS = window._psPayload();
+        check(pS.family === 'stellar', '계열을 안 정하면 stellar');
+        fF.psFamily = 'obsidian';
+        var pO = window._psPayload();
+        var secO = f.sections.map(function (s) { return s.title || ''; }).join(' | ');
+        check(pO.family === 'obsidian' && 'scr.r113.c1' in pO.values && 'amr.r3.c2' in pO.values && 'adp2.r1.c7' in pO.values
+              && !('adp10.r1.c0' in pO.values) && !('tim.r1.c6' in pO.values),
+              'obsidian 칸 목록 — Gamma·충격 줄·8열 핀 표 있음, 커넥터 10번째·타이밍 6열 없음 (' + pO.family + ')');
+        check(/LED Driver/.test(secO) && /VCP Code Table/.test(secO), 'obsidian 화면 구역 제목 (' + secO.slice(0, 80) + '…)');
+        var same = ['cover.r1.c0', 'cover.r1.c2', 'parts.r1.c3', 'scr.r12.c1', 'cie.r2.c1', 'cert.r2.c3', 'rev.r1.c2'];
+        check(same.every(function (k) { return pO.values[k] === pS.values[k] && pS.values[k] !== ''; }),
+              '같은 뜻 칸은 같은 열쇠 — 앱 자동값이 계열과 상관없이 같다 (' + same.map(function (k) { return k + '=' + pO.values[k] + '/' + pS.values[k]; }).join(', ') + ')');
+        check(pO.values.hdrKtkPn === undefined, 'OBSIDIAN 머리글엔 KTK PN 칸이 없다(원본이 그렇다)');
+        fF.psFamily = 'nope';
+        check(window._psPayload().family === 'stellar', '모르는 계열 이름이면 stellar');
+        delete fF.psFamily;
+
         // 📥 불러오기 섞임 3가지(2026-11-25, OBSIDIAN 27 사양서를 OBSIDIAN27 DB 에 불러와 Word 로 보고 찾음) — 합성 문서로 늘 돈다
         //   ① A/D 연결표는 원본 줄을 Symbol 로 BOM 줄에 맞춘다(순서로 넣으면 'J2 = DC JACK') · BOM 에 없는 설치지점은 뺀다
         //   ② 다른 제품(KTK PN 다름) 사양서의 개정 이력은 안 가져온다 · 같은 제품이면 가져온다

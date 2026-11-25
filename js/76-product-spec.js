@@ -252,18 +252,51 @@
     };
 
     // ── 📋 칸 목록(양식에서 뽑은 JSON) ──────────────────────────────────
-    var _schema = null, _schemaErr = '';
+    // 📚 양식 계열(데이터, 2026-11-25) — 계열마다 양식 Word·칸 목록이 따로다(백엔드 `_PS_FAMILIES` 와 같은 이름).
+    //   같은 뜻의 칸은 계열이 달라도 **같은 열쇠**라 자동값·📑 참고 사양서·불러오기가 그대로 통한다.
+    //   이 문서가 어느 계열인지는 칸 'psFamily'(불러오기가 원본에 맞춰 정한다, 비면 STELLAR).
+    window.PS_FAMILIES = window.PS_FAMILIES || [
+        { id: 'stellar', label: 'STELLAR', schema: 'templates/PRODUCT SPEC_schema.json' },
+        { id: 'obsidian', label: 'OBSIDIAN', schema: 'templates/PRODUCT SPEC_schema_OBSIDIAN.json' }
+    ];
+    var _schema = null, _schemaErr = '', _schemas = {};
+    var _famOf = function () {
+        var own = window._docFieldOwn ? window._docFieldOwn(FORM_ID, 'psFamily') : undefined;
+        var f = String(own || '').trim().toLowerCase();
+        return _schemas[f] ? f : 'stellar';
+    };
+    // 지금 문서의 계열 칸 목록으로 바꿔 끼운다 — 칸 목록을 읽는 곳(화면·원본저장·칸 열쇠)마다 먼저 부른다
+    var _useFam = function () {
+        var s = _schemas[_famOf()] || _schemas.stellar || null;
+        if (s !== _schema) { _schema = s; _built = null; }
+        return _schema;
+    };
     var _loadSchema = function () {
         var ver = (document.querySelector('script[src*="76-product-spec"]') || {}).src || '';
         var v = (ver.match(/[?&]v=([^&]+)/) || [])[1] || String(Date.now());
-        return fetch('templates/PRODUCT SPEC_schema.json?v=' + v, { cache: 'no-store' })
-            .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
-            .then(function (j) {
-                _schema = j; _wireRefs(j); _built = null;
-                if (window._docState && window._docState.formId === FORM_ID && window._docRender) window._docRender();
-            })
-            .catch(function (e) { _schemaErr = (e && e.message) || String(e); });
+        return Promise.all(window.PS_FAMILIES.map(function (fam) {
+            return fetch(fam.schema + '?v=' + v, { cache: 'no-store' })
+                .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+                .then(function (j) { _schemas[fam.id] = j; _wireRefs(j); })
+                .catch(function (e) { if (fam.id === 'stellar') _schemaErr = (e && e.message) || String(e); });
+        })).then(function () {
+            _useFam(); _built = null;
+            if (window._docState && window._docState.formId === FORM_ID && window._docRender) window._docRender();
+        });
     };
+    // 계열·터치 칸을 바꾸면 구역 구성이 바뀐다 — 그 자리에서 다시 그린다(js/67 `_docSetField` 는 다시 그리지 않는다)
+    if (window._docSetField && !window._docSetField.__psWrapped) {
+        var _origSetField = window._docSetField;
+        window._docSetField = function (id, key, value) {
+            var r = _origSetField.apply(this, arguments);
+            if (id === FORM_ID && (key === 'psFamily' || key === 'hasTouch')) {
+                _useFam(); _built = null;
+                if (window._docRender) setTimeout(window._docRender, 0);
+            }
+            return r;
+        };
+        window._docSetField.__psWrapped = true;
+    }
 
     // 📑 참고 사양서 묶음에 드는 칸마다 'fn:ref:<칸>' 출처를 단다 — 보통은 맨 끝(앱 값이 먼저), `first` 묶음은 맨 앞
     var _wireRefs = function (j) {
@@ -282,6 +315,7 @@
     // 화면 구역 만들기 — 양식 본문 순서(bodyIndex)대로, 그룹 제목으로 나눈다.
     var _built = null;
     var _buildSections = function () {
+        _useFam();
         if (!_schema) {
             return [{ title: _t('양식 목록을 불러오는 중…', 'Loading…'), cols: 2,
                       fields: [{ key: '__psLoading', label: _schemaErr ? ('⚠️ ' + _schemaErr) : '…' }] }];
@@ -310,6 +344,10 @@
         var out = [];
         // 맨 앞 — 터치 장 스위치(이게 출력 양식 두 판 중 하나를 고른다)
         out.push({ title: _t('출력 설정', 'Output'), cols: 2, fields: [
+            { key: 'psFamily', label: _t('양식 계열 (' + window.PS_FAMILIES.map(function (f) { return f.id; }).join(' / ') + ')',
+                                          'Template family'),
+              hint: _t('비우면 stellar. [📂 불러오기]가 원본 사양서에 맞춰 정합니다 — 지금: ', 'blank = stellar. Now: ')
+                    + ((window.PS_FAMILIES.filter(function (f) { return f.id === _famOf(); })[0] || {}).label || _famOf()) },
             { key: 'hasTouch', label: _t('Touch Controller 장 (YES/NO)', 'Touch Controller chapter (YES/NO)'),
               from: 'ps:hasTouch', hint: 'YES / NO' },
             { key: 'refSummary', label: _t('📑 참고 사양서 (앱에 없는 칸을 가져오는 문서 — 출력엔 안 나감)', '📑 Reference specs (not printed)'),
@@ -1274,6 +1312,7 @@
     // ── 📤 원본저장 — 칸 값·그림을 모아 백엔드 양식 채우기로 ─────────────────
     var _allKeys = function () {
         var keys = [];
+        _useFam();
         if (!_schema) return keys;
         Object.keys(_schema.paras).forEach(function (k) { keys.push(k); });
         Object.keys(_schema.header || {}).forEach(function (k) { keys.push(k); });
@@ -1310,8 +1349,10 @@
             });
         });
         var variant = _touchOn() ? 'touch' : 'base';
-        var lay = d.psLayout && d.psLayout.variant === variant ? d.psLayout.gaps : null;
-        return { variant: variant, values: values, images: images, layout: lay,
+        var fam = _famOf();
+        // 쪽 맞춤 빈 줄은 **그 계열·그 판의 양식**에서 읽은 것만 쓴다(다른 양식에 대면 내용 요소 수가 달라 버려진다)
+        var lay = d.psLayout && d.psLayout.variant === variant && (d.psLayout.family || 'stellar') === fam ? d.psLayout.gaps : null;
+        return { family: fam, variant: variant, values: values, images: images, layout: lay,
                  author: window._appUserKey || window.currentUserName || '' };
     };
     var _fileName = function (ctx) {
@@ -1326,6 +1367,7 @@
     };
 
     var _docxSave = async function (ctx, name) {
+        _useFam();
         if (!_schema) { _toast('⚠️ ' + _t('양식 목록을 아직 못 불러왔습니다.', 'Template list not loaded.'), 'error'); return true; }
         var payload = window._psPayload();
         payload.name = name;
@@ -1390,6 +1432,10 @@
         var msg = _t('이 사양서에서 칸 ' + nVal + '개 · 그림 ' + nImg + '장을 가져옵니다.\n',
                      'Import ' + nVal + ' cells and ' + nImg + ' images.\n')
             + _t('터치 장: ', 'Touch chapter: ') + (j.variant === 'touch' ? 'YES' : 'NO') + '\n'
+            + (j.family ? _t('양식 계열: ', 'Template family: ') + ((window.PS_FAMILIES.filter(function (f) { return f.id === j.family; })[0] || {}).label || j.family)
+                + (j.families ? ' (' + Object.keys(j.families).map(function (k) {
+                      return k + ' ' + Math.round((j.families[k].ratio || 0) * 100) + '%' + (j.families[k].shape ? '·표 ' + j.families[k].shape + '개 다름' : '');
+                  }).join(' / ') + ')' : '') + '\n' : '')
             + _t('양식과 맞는 정도: ', 'Structure match: ') + Math.round((ratio || 0) * 100) + '%'
             + (ratio < 0.9 ? _t('\n⚠️ 양식과 구조가 많이 달라 일부 칸이 엉뚱한 자리로 갈 수 있습니다.', '\n⚠️ Structure differs.') : '')
             // 장·제목은 맞대어 찾지만(백엔드 `_ps_align`) 표 모양(행·열 수)은 양식 그대로 나간다 — 넘치는 행·없는 열을 미리 알린다
@@ -1408,6 +1454,12 @@
         var _own = function (k) { return Object.prototype.hasOwnProperty.call(d.fields, k); };
         var _hard = function (k) { return window.PS_AUTO[k] ? window.DOC_AUTO_HOOKS.ps(ctx, k, { hardOnly: true }).v : ''; };
         j.values = j.values || {};
+        // 📚 원본에 가장 잘 맞는 양식 계열(백엔드가 계열마다 맞대 보고 고른다) — **먼저** 정한다(아래 ③ 이 그 계열 칸 목록을 본다).
+        //   구버전 백엔드는 family 를 안 준다 — 그땐 지금 계열 그대로.
+        if (j.family) {
+            if (j.family === 'stellar') delete d.fields.psFamily; else d.fields.psFamily = j.family;
+            _useFam(); _built = null;
+        }
         // ① 다른 제품의 사양서면 그 문서에만 속한 칸(개정 이력)은 안 가져온다 — 지난번 불러오기가 넣은 같은 값은 걷어 낸다
         var srcPn = String(j.values['cover.r1.c0'] || j.values.hdrKtkPn || '').trim();
         var appPn = String(_hard('cover.r1.c0') || _hard('hdrKtkPn') || '').trim();
@@ -1479,7 +1531,7 @@
         });
         if (blanked) notes.push(_t('원본에서 읽은 표의 빈 칸 ' + blanked + '개는 초안으로 안 채움', blanked + ' draft cells left empty'));
         d.fields.hasTouch = j.variant === 'touch' ? 'YES' : 'NO';
-        d.psLayout = j.layout ? { variant: j.variant, gaps: j.layout } : null;
+        d.psLayout = j.layout ? { variant: j.variant, family: j.family || 'stellar', gaps: j.layout } : null;
         // 그림 — NAS 첨부로 올리고(문서엔 참조만) 원래 크기·자리도 같이 둔다
         var keys = Object.keys(j.images || {});
         for (var i = 0; i < keys.length; i++) {

@@ -5,6 +5,7 @@
 에서 **값 자리마다 표식(`{{칸}}`)을 박은 빈 양식**과 화면용 목록(JSON)을 뽑는다.
 
   py -3 -I tools/build-product-spec-template.py <터치없는.docx> <터치있는.docx> [templates]
+  py -3 -I tools/build-product-spec-template.py --family obsidian <터치있는.docx> [templates]   (다른 계열 — 아래 FAMILY_CONFIGS)
 
 만드는 것
   templates/PRODUCT SPEC_양식.docx         터치 장이 없는 판
@@ -361,6 +362,12 @@ def build(src, variant, out_docx, schema):
             docpr.set('name', 'slot %s' % key)
         schema['images'][key] = {'bodyIndex': bi, 'label': label, 'when': when, 'count': len(drs)}
 
+    _finalize(doc)
+    doc.save(out_docx)
+
+
+def _finalize(doc):
+    """공통 마무리 — OLE 원본·문서 속성·안 쓰는 그림 관계를 뗀다(원본 사진·작성자가 파일 속에 남지 않게)."""
     # 5) 공통 그림의 OLE 원본(그림판 편집용 바이너리) 떼기 — 미리보기 그림은 남는다.
     for obj in doc.element.body.iter(qn('w:object')):
         for ole in list(obj.iter('{%s}OLEObject' % O_NS)):
@@ -391,10 +398,400 @@ def build(src, variant, out_docx, schema):
         if rel.reltype.endswith('/image') or rel.reltype.endswith('/oleObject') or rel.reltype.endswith('/package'):
             del doc.part.rels[rid]
 
-    doc.save(out_docx)
+
+# ══ 📚 다른 계열 양식 (2026-11-25) ════════════════════════════════════════════════════════
+#   STELLAR 양식은 위의 **위치 목록**(TABLES/PARAS/IMAGES)으로 만든다. 다른 계열은 장·표 모양이 달라 그 목록을 못 쓴다 —
+#   그래서 칸 짝은 **불러오기와 같은 맞대기**(백엔드 `_ps_parse(..., trace=True)`)로 STELLAR 칸에서 얻고, 같은 뜻이면
+#   **같은 열쇠**를 붙인다(앱 자동값·📑 참고 사양서·불러오기가 계열과 상관없이 통한다). 짝이 없는 칸만 새 열쇠.
+#   계열마다 다른 것(데이터)만 아래 FAMILY_CONFIGS 에 적는다 — 위치 숫자는 적지 않고 **글(제목)로** 찾는다.
+FAMILY_CONFIGS = {
+    'obsidian': {
+        'outs': {'base': 'PRODUCT SPEC_양식_OBSIDIAN.docx', 'touch': 'PRODUCT SPEC_양식_OBSIDIAN_TOUCH.docx'},
+        'schema': 'PRODUCT SPEC_schema_OBSIDIAN.json',
+        # 터치 없는 판 = 이 제목부터 다음 장 제목 앞까지(구역 나눔째) 지운다 + 뒤 장의 손으로 쓴 번호를 하나 당긴다
+        'touch': {'from': 'Touch Integrations', 'to': 'Incoming Inspection Standard', 'renumber': (12, 11)},
+        # 커넥터 핀 표 = A/D 연결표 다음부터 이 제목 앞까지의 표(순서대로 adp1, adp2 …) — 제목은 바로 앞 글 문단
+        'adpEnd': 'LED Driver Specification',
+        # 문단 앞머리가 STELLAR 와 다른 칸
+        'paraPrefix': {'convIn': r'(?:LED Driver|Converter Board) Input Connector\s*:\s*',
+                       'convOut': r'(?:LED Driver|Converter Board) Output Connector\s*:\s*'},
+        # 이 계열에선 값이 아니라 고정 글인 칸(OBSIDIAN 은 VCP 장 제목이 고객 이름 없는 'VCP Code Table')
+        'skipParas': ['vcpTitle'],
+        # 그림 칸 — (판, 열쇠, 기준 글, 방향(+1 뒤 / -1 앞), 도형 채움 그림인가)
+        'images': [
+            ('both', 'img_pwrconn', 'Input power connector pinout in the table below.', 1, False),
+            ('both', 'img_block', 'Block Diagram', 1, False),
+            ('both', 'img_adbd', 'A/D Board connector and dimension', 1, False),
+            ('both', 'img_conv', 'LED Driver Dimension', 1, False),
+            ('both', 'img_osdkey', 'OSD Key Description', 1, False),
+            ('both', 'img_osdmenu', 'OSD Menu Structure', 1, False),
+            ('touch', 'img_touchmech', 'Cover Glass Requirements', 1, False),
+            # 외형도는 옛 방식(VML w:pict) 그림 + 그 위를 덮는 흰 사각형 도형 — 그림만 자리 그림으로(도형은 그대로)
+            ('both', 'img_outline', 'Mechanical Specification', -1, 'vml'),
+        ],
+        'groups': [('1. Cover · Revision', 'TFT LCD MONITOR'), ('2~4. Scope · Features · Certification', 'Scope'),
+                   ('5. Electrical Specification', 'Electrical Specification'), ('6. LCD Panel Specifications', 'LCD Panel Specifications'),
+                   ('7. A/D Board', 'A/D Board'), ('8. LED Driver Specification', 'LED Driver Specification'),
+                   ('9. User Interface', 'User Interface'), ('10. VCP Code Table', 'VCP Code Table'),
+                   ('11. Touch Integrations', 'Touch Integrations'), ('Mechanical Specification', '@img_outline')],
+        'sensitive': [r'\bTULW\d', r'\bTULIP\b', r'\bKM\d{3}[A-Z]{3}', r'\bPP\d{2}KT', r'\bXP\d{2}HD', r'Yeon\s*Ho',
+                      r'(?i)obsidian', r'\bKTS\d{3}DPS', r'\bSMA?W200', r'\b62U020S', r'\b1102SB9', r'\bDC005-',
+                      r'\b12505WR', r'\b12507WR'],
+        'sensitiveDocOnly': [r'(?i)obsidian'],
+    },
+}
 
 
-def _scan_sensitive(path):
+def _blips(el):
+    return list(el.iter('{%s}blip' % A_NS))
+
+
+V_NS = 'urn:schemas-microsoft-com:vml'
+
+
+def _vml_imgs(el):
+    return list(el.iter('{%s}imagedata' % V_NS))
+
+
+def _vml_slot(doc, p_el, key):
+    """옛 방식(VML) 그림 — 바이트를 회색 자리 그림으로, `o:title` 을 `slot:<열쇠>` 로(원본 제목엔 PN 이 들어 있었다)."""
+    n = 0
+    for imd in _vml_imgs(p_el):
+        shp = imd.getparent()
+        st = shp.get('style') or ''
+        wm = re.search(r'width:\s*([\d.]+)pt', st)
+        hm = re.search(r'height:\s*([\d.]+)pt', st)
+        w = float(wm.group(1)) * 4 / 3 if wm else 400
+        h = float(hm.group(1)) * 4 / 3 if hm else 300
+        rid, _img = doc.part.get_or_add_image(io.BytesIO(_placeholder_png(w / 2, h / 2)))
+        imd.set('{%s}id' % R_NS, rid)
+        imd.set('{%s}title' % O_NS, 'slot:%s' % key)
+        n += 1
+    return n
+
+
+def _slot_drawings(p_el, key, shape_fill):
+    """문단의 그림(또는 그림으로 채운 도형)을 회색 자리 그림 + `slot:<열쇠>` 로. 옛 Word 용 대체 그림(VML, mc:Fallback)은
+    떼어 낸다 — 남겨 두면 원본 도면이 그쪽 관계로 파일 속에 남는다."""
+    n = 0
+    for dr in list(p_el.iter(qn('w:drawing'))):
+        gd = dr.find('.//{%s}graphicData' % A_NS)
+        if gd is None or not _blips(dr):
+            continue
+        if not (gd.get('uri', '').endswith('/picture') or shape_fill):
+            continue
+        ext = dr.find('.//' + qn('wp:extent'))
+        cx, cy = int(ext.get('cx')), int(ext.get('cy'))
+        yield_png = _placeholder_png(cx / 9525 / 2, cy / 9525 / 2)
+        # 그림 속성의 원래 파일 이름도 지운다(실측: '<날짜>_<제품명> TSP.png' 가 남았다)
+        for nv in dr.iter('{http://schemas.openxmlformats.org/drawingml/2006/picture}cNvPr'):
+            nv.set('name', 'slot %s' % key)
+            nv.set('descr', '')
+        n += 1
+        yield dr, yield_png
+    MC = 'http://schemas.openxmlformats.org/markup-compatibility/2006'
+    for fb in list(p_el.iter('{%s}Fallback' % MC)):
+        fb.getparent().remove(fb)
+
+
+def build_family(src, fam, outdir):
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
+    import kortek_backend as kb
+    cfg = FAMILY_CONFIGS[fam]
+    raw = open(src, 'rb').read()
+    tr = kb._ps_parse(raw, family='stellar', variant='touch', trace=True)['trace']
+    st = kb._ps_load_schema('stellar')
+    doc = Document(io.BytesIO(raw))
+    body = list(doc.element.body.iterchildren())
+    tbl_body = [i for i, el in enumerate(body) if el.tag == qn('w:tbl')]
+    tbl_of_body = {bi: k for k, bi in enumerate(tbl_body)}
+
+    def text_of(i):
+        return _para_text(body[i]).strip() if body[i].tag == W_P else ''
+
+    def find_text(t, start=0):
+        for i in range(start, len(body)):
+            if text_of(i) == t:
+                return i
+        raise SystemExit('기준 글을 못 찾음: %r' % t)
+
+    schema = {'version': 1, 'family': fam, 'tables': {}, 'paras': {}, 'images': {}, 'header': {}, 'labels': {}}
+    ranges = {p: (r0, r1, c0, c1, when, title) for (_ti, p, title, (r0, r1), (c0, c1), when) in TABLES}
+
+    # 1) 표 — 어느 원본 표가 어느 칸 묶음인가
+    assign = {}           # prefix → 원본 표 번호
+    for prefix, info in tr['tables'].items():
+        if prefix.startswith('adp') or info.get('el') is None or prefix not in ranges:
+            continue
+        assign[prefix] = tbl_of_body[info['el']]
+    adc_bi = tbl_body[assign['adc']]
+    end_bi = find_text(cfg['adpEnd'])
+    adp_bis = [bi for bi in tbl_body if adc_bi < bi < end_bi]
+    adp_titles = []
+    for k, bi in enumerate(adp_bis):
+        assign['adp%d' % (k + 1)] = tbl_of_body[bi]
+        j = bi - 1
+        while j > 0 and not (body[j].tag == W_P and text_of(j)):
+            j -= 1
+        adp_titles.append(j)
+    tables = doc.tables
+    table_imgs = []
+    for prefix, ti in sorted(assign.items(), key=lambda x: x[1]):
+        base_pre = 'adp1' if prefix.startswith('adp') else prefix
+        r0, r1, c0, c1, when, title = ranges[base_pre]
+        if prefix.startswith('adp'):
+            title = 'A/D connector %s' % prefix[3:]
+        grid = _cell_grid(tables[ti])
+        nrows = len(grid)
+        r1 = nrows - 1 if r1 is ALL else min(r1, nrows - 1)
+        inv = {}
+        rowmap, colmap = {}, {}      # 이 표에서 찾은 원본 행·열 → STELLAR 행·열(짝 없는 칸도 같은 대응을 따른다)
+        if not prefix.startswith('adp'):
+            for key, (sr, sc) in (tr['tables'][prefix].get('cells') or {}).items():
+                if sr < nrows and sc < len(grid[sr]):
+                    inv[id(grid[sr][sc])] = key
+                    mm = re.match(r'^[A-Za-z0-9]+\.r(\d+)\.c(\d+)$', key)
+                    if mm:
+                        rowmap.setdefault(sr, int(mm.group(1)))
+                        colmap.setdefault(sc, int(mm.group(2)))
+        used = set(inv.values())
+        seen, rows_out = {}, []
+        for r in range(nrows):
+            cells_out, row_seen = [], set()
+            for c, tc in enumerate(grid[r]):
+                if id(tc) in row_seen:
+                    continue
+                row_seen.add(id(tc))
+                cc1 = len(grid[r]) - 1 if c1 is ALL else c1
+                is_val = r0 <= r <= r1 and c0 <= c <= cc1
+                if id(tc) in seen:
+                    cells_out.append({'fixed': '', 'merged': True})
+                    continue
+                if is_val and _blips(tc):
+                    # 표 칸 안 그림(OSD 표 Figure 열) — 글 칸이 아니라 그림 칸
+                    ik = 'img_%sfig%d' % (prefix, r)
+                    seen[id(tc)] = ik
+                    table_imgs.append((ik, tc, prefix, r, c, when))
+                    cells_out.append({'fixed': '🖼'})
+                    continue
+                if is_val:
+                    key = inv.get(id(tc))
+                    if not key:
+                        rr, cc = rowmap.get(r, r), colmap.get(c, c)
+                        key = '%s.r%d.c%d' % (prefix, rr, cc)
+                        if key in used:
+                            key = '%s.r%d.c%d' % (prefix, r + 100, cc)
+                        used.add(key)
+                    seen[id(tc)] = key
+                    _mark_cell(tc, '{{%s}}' % key)
+                    cells_out.append({'key': key})
+                else:
+                    seen[id(tc)] = None
+                    cells_out.append({'fixed': _para_text(tc).strip()})
+            rows_out.append({'cells': cells_out})
+        schema['tables'][prefix] = {'title': title, 'index': ti, 'when': when, 'bodyIndex': tbl_body[ti], 'rows': rows_out}
+    for ti_, r, c, key in TABLE_LABEL_MARKS:
+        tc = tables[assign['cover']].cell(r, c)._tc
+        _mark_cell(tc, '{{%s}}' % key)
+        schema['labels'][key] = {'table': assign['cover'], 'row': r, 'col': c}
+        cell = schema['tables']['cover']['rows'][r]['cells'][c]
+        cell.pop('fixed', None)
+        cell['key'] = key
+
+    # 2) 문단 — 맞대기로 찾은 자리(커넥터 제목은 표 순서대로)
+    para_at = {}
+    for _bi, prefix_re, key, label in PARAS:
+        k = key.lstrip('?')
+        if k in cfg['skipParas'] or k.startswith('adH'):
+            continue
+        if tr['paras'].get(k) is not None:
+            para_at[key] = (tr['paras'][k], cfg['paraPrefix'].get(k, prefix_re), label)
+    for n, j in enumerate(adp_titles):
+        para_at['adH%d' % (n + 1)] = (j, None, 'A/D connector %d — title' % (n + 1))
+    # ⚠️ 원본에 없는 선택 줄(Features 4)은 **만들지 않는다** — 하나만 더해도 내용 요소 수가 원본과 달라져
+    #    불러온 쪽 맞춤 빈 줄(layout)을 못 쓴다(실측). 그 계열 원본이 가진 줄만 둔다.
+    marked = []
+    for key, (at, prefix_re, label) in para_at.items():
+        p = at if not isinstance(at, int) else body[at]
+        text = _para_text(p)
+        if prefix_re is None:
+            _replace_span(p, 0, len(text), '{{%s}}' % key)
+        else:
+            m = re.match(prefix_re, text.lstrip())
+            assert m, (fam, key, 'prefix not found', prefix_re, text[:40])
+            lead = len(text) - len(text.lstrip())
+            _replace_span(p, lead + m.end(), len(text), '{{%s}}' % key)
+        marked.append((key, p, prefix_re, label))
+
+    # 3) 머리글
+    for sec in doc.sections:
+        for hf in (sec.header, sec.footer, sec.first_page_header, sec.even_page_header):
+            try:
+                ps = list(hf._element.iter(W_P))
+            except Exception:
+                continue
+            for p in ps:
+                for rx, key in HEADER_MARKS:
+                    text = _para_text(p)
+                    m = re.search(rx, text)
+                    if m and '{{' not in m.group(1):
+                        _replace_span(p, m.start(1), m.end(1), '{{%s}}' % key)
+                        schema['header'][key] = rx
+
+    # 4) 그림
+    labels = {k: v.get('label') for k, v in st['images'].items()}
+    img_at = {}
+    for when, key, anchor, step, shape_fill in cfg['images']:
+        i = find_text(anchor)
+        j, hit = i + step, None
+        while 0 <= j < len(body) and abs(j - i) <= 4:
+            if body[j].tag == W_P and (_vml_imgs(body[j]) if shape_fill == 'vml' else _blips(body[j])):
+                hit = j
+                break
+            j += step
+        assert hit is not None, (fam, key, 'no picture near', anchor)
+        if shape_fill == 'vml':
+            cnt = _vml_slot(doc, body[hit], key)
+            assert cnt, (fam, key, 'nothing slotted')
+            img_at[key] = body[hit]
+            schema['images'][key] = {'label': labels.get(key, key), 'when': when, 'count': cnt, 'vml': True}
+            continue
+        cnt = 0
+        for dr, png in list(_slot_drawings(body[hit], key, shape_fill)):
+            rid, _img = doc.part.get_or_add_image(io.BytesIO(png))
+            for b in _blips(dr):
+                b.set('{%s}embed' % R_NS, rid)
+            docpr = dr.find('.//' + qn('wp:docPr'))
+            docpr.set('descr', 'slot:%s' % key)
+            docpr.set('name', 'slot %s' % key)
+            cnt += 1
+        assert cnt, (fam, key, 'nothing slotted')
+        img_at[key] = body[hit]
+        schema['images'][key] = {'label': labels.get(key, key), 'when': when, 'count': cnt}
+        if shape_fill:
+            schema['images'][key]['shapeFill'] = True
+    for ik, tc, prefix, r, c, when in table_imgs:
+        cnt = 0
+        for dr, png in list(_slot_drawings(tc, ik, False)):
+            rid, _img = doc.part.get_or_add_image(io.BytesIO(png))
+            for b in _blips(dr):
+                b.set('{%s}embed' % R_NS, rid)
+            docpr = dr.find('.//' + qn('wp:docPr'))
+            docpr.set('descr', 'slot:%s' % ik)
+            docpr.set('name', 'slot %s' % ik)
+            cnt += 1
+        schema['images'][ik] = {'label': '%s figure (row %d)' % (schema['tables'][prefix]['title'], r), 'when': when,
+                                'count': cnt, 'table': prefix, 'row': r, 'col': c}
+    _finalize(doc)
+
+    # 5) 두 판 — 터치 판은 그대로, 없는 판은 터치 장을 구역째 지운다
+    def _write(d, path):
+        d.save(path)
+
+    def _index_schema(d, sc, variant):
+        kids = list(d.element.body.iterchildren())
+        pos = {id(el): i for i, el in enumerate(kids)}
+        out = {}
+        for key, p, prefix_re, label in marked:
+            if id(p) in pos:
+                out[key] = pos[id(p)]
+        return pos, out
+
+    outs = {v: os.path.join(outdir, cfg['outs'][v]) for v in ('touch', 'base')}
+    _write(doc, outs['touch'])
+    pos_t, para_t = _index_schema(doc, schema, 'touch')
+    for key, p, prefix_re, label in marked:
+        schema['paras'][key.lstrip('?')] = {'bodyIndex': para_t[key], 'label': label, 'prefix': prefix_re,
+                                            'optional': key.startswith('?')}
+    for key, el in img_at.items():
+        schema['images'][key]['bodyIndex'] = pos_t[id(el)]
+    for ik, tc, prefix, r, c, when in table_imgs:
+        schema['images'][ik]['bodyIndex'] = schema['tables'][prefix]['bodyIndex']
+    tbody = [i for i, el in enumerate(doc.element.body.iterchildren()) if el.tag == qn('w:tbl')]
+    for t in schema['tables'].values():
+        t['bodyIndex'] = tbody[t['index']]
+
+    based = Document(outs['touch'])
+    kids = list(based.element.body.iterchildren())
+    texts = [(_para_text(el).strip() if el.tag == W_P else '') for el in kids]
+    a, b = texts.index(cfg['touch']['from']), texts.index(cfg['touch']['to'])
+    for el in kids[a:b]:
+        based.element.body.remove(el)
+    old, new = cfg['touch']['renumber']
+    after_ids = set()
+    for el in list(based.element.body.iterchildren()):
+        if el.tag != W_P:
+            continue
+        ts = _texts(el)
+        if ts and re.match(r'^\s*%d\.(\d)' % old, ts[0].text or ''):
+            ts[0].text = re.sub(r'^(\s*)%d\.' % old, r'\g<1>%d.' % new, ts[0].text)   # 손으로 쓴 번호 '12.1'
+        np_ = el.find(qn('w:pPr') + '/' + qn('w:numPr') + '/' + qn('w:numId'))
+        if np_ is not None and kids.index(el) >= b:
+            after_ids.add(np_.get(qn('w:val')))
+    # 자동 번호 목록 중 **시작 번호를 장 번호로 정해 둔 것**(실측 'Inspection Criteria' 12.2 · 13.1 Outline) — 지운 장만큼 당긴다
+    numbering = based.part.numbering_part.element
+    absids = set()
+    for n in numbering.findall(qn('w:num')):
+        if n.get(qn('w:numId')) in after_ids:
+            absids.add(n.find(qn('w:abstractNumId')).get(qn('w:val')))
+            for so in n.iter(qn('w:startOverride')):
+                v = int(so.get(qn('w:val')))
+                if v >= old:
+                    so.set(qn('w:val'), str(v - (old - new)))
+    for an in numbering.findall(qn('w:abstractNum')):
+        if an.get(qn('w:abstractNumId')) not in absids:
+            continue
+        for lvl in an.findall(qn('w:lvl')):
+            st = lvl.find(qn('w:start'))
+            if lvl.get(qn('w:ilvl')) == '0' and st is not None and int(st.get(qn('w:val'))) >= old:
+                st.set(qn('w:val'), str(int(st.get(qn('w:val'))) - (old - new)))
+    _write(based, outs['base'])
+    kb_ = list(based.element.body.iterchildren())
+    for key in img_at:
+        if schema['images'][key]['when'] == 'touch':
+            continue
+        descr = 'slot:%s' % key
+        for i, el in enumerate(kb_):
+            if any((dp.get('descr') or '') == descr for dp in el.iter(qn('wp:docPr'))) \
+                    or any((im.get('{%s}title' % O_NS) or '') == descr for im in _vml_imgs(el)):
+                schema['images'][key]['bodyIndexByVariant'] = {'touch': schema['images'][key]['bodyIndex'], 'base': i}
+                break
+
+    # 6) 화면 묶음 — 제목 글로(그림 기준이면 그 그림 자리)
+    groups = []
+    kt = list(doc.element.body.iterchildren())
+    tt = [(_para_text(el).strip() if el.tag == W_P else '') for el in kt]
+    for title, anchor in cfg['groups']:
+        if anchor.startswith('@'):
+            groups.append({'title': title, 'from': schema['images'][anchor[1:]]['bodyIndex']})
+        else:
+            groups.append({'title': title, 'from': tt.index(anchor)})
+    schema['groups'] = groups
+    sp = os.path.join(outdir, cfg['schema'])
+    with io.open(sp, 'w', encoding='utf-8') as f:
+        json.dump(schema, f, ensure_ascii=False, indent=1)
+
+    pats = SENSITIVE_PATTERNS + cfg['sensitive']
+    bad = []
+    for v, p in outs.items():
+        hits = _scan_sensitive(p, pats)
+        if hits:
+            bad.append((p, hits[:20]))
+        print('%s  %dKB  %s' % (v, os.path.getsize(p) // 1024, 'OK' if not hits else 'SENSITIVE %d' % len(hits)))
+    sj = io.open(sp, encoding='utf-8').read()
+    for pat in pats:
+        if pat in cfg.get('sensitiveDocOnly', []):
+            continue                      # 칸 목록엔 계열 이름이 들어간다(그게 정상)
+        if re.search(pat, sj):
+            bad.append((sp, pat))
+    if bad:
+        for x in bad:
+            print('!!', x)
+        sys.exit(1)
+    print('schema: %d tables, %d paras, %d images' % (len(schema['tables']), len(schema['paras']), len(schema['images'])))
+
+
+def _scan_sensitive(path, patterns=None):
     z = zipfile.ZipFile(path)
     hits = []
     for n in z.namelist():
@@ -410,13 +807,19 @@ def _scan_sensitive(path):
         else:
             txt = ' '.join(re.findall(r'<(?:w|a):t(?:\s[^>]*)?>([^<]*)</(?:w|a):t>', s))
             txt += ' ' + ' '.join(re.findall(r'(?:descr|title|name)="([^"]*)"', s))
-        for pat in SENSITIVE_PATTERNS:
+        for pat in (patterns or SENSITIVE_PATTERNS):
             for m in re.finditer(pat, txt):
                 hits.append((n, m.group(0)))
     return hits
 
 
 def main():
+    if len(sys.argv) >= 4 and sys.argv[1] == '--family':
+        # 📚 다른 계열: py -3 -I tools/build-product-spec-template.py --family obsidian <터치 있는 원본.docx> [templates]
+        fam = sys.argv[2]
+        outdir = sys.argv[4] if len(sys.argv) > 4 else os.path.join(os.path.dirname(__file__), '..', 'templates')
+        build_family(sys.argv[3], fam, outdir)
+        return
     if len(sys.argv) < 3:
         print(__doc__)
         sys.exit(2)

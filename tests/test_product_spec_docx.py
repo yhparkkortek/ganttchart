@@ -61,10 +61,17 @@ def pictures(doc):
 
 
 schema = json.load(io.open(os.path.join(ROOT, 'templates', 'PRODUCT SPEC_schema.json'), encoding='utf-8'))
+FAM_SCHEMA = {'stellar': schema}
+for _fam in kb._ps_families_ready():
+    FAM_SCHEMA[_fam] = kb._ps_load_schema(_fam)
+# 계열마다 터치 장에만 있는 칸(터치 판 확인용)
+TOUCH_PROBE = {'stellar': 'V_tperf.r1.c2', 'obsidian': 'V_tgen.r1.c2'}
 
-# ── 1. 합성 값으로 채우기 (원본 없이 도는 부분) ────────────────────────────────
-print('1. 합성 값 채우기')
-for variant in ('base', 'touch'):
+# ── 1. 합성 값으로 채우기 (원본 없이 도는 부분) — 계열마다 ───────────────────────
+print('1. 합성 값 채우기 (계열: %s)' % ', '.join(FAM_SCHEMA))
+for family, variant in [(f, v) for f in FAM_SCHEMA for v in ('base', 'touch')]:
+    schema = FAM_SCHEMA[family]
+    variant_label = '%s/%s' % (family, variant)
     vals = {}
     for k in schema['paras']:
         vals[k] = 'P_' + k
@@ -84,7 +91,9 @@ for variant in ('base', 'touch'):
     im.save(bio, 'PNG')
     b64 = base64.b64encode(bio.getvalue()).decode()
     imgs = {'img_block': [{'b64': b64}]}
-    r = client.post('/doc/product-spec-docx', json={'name': 'x', 'variant': variant, 'values': vals, 'images': imgs})
+    r = client.post('/doc/product-spec-docx', json={'name': 'x', 'family': family, 'variant': variant, 'values': vals, 'images': imgs})
+    variant_ = variant
+    variant = variant_label           # 아래 메시지는 계열/판 이름으로
     check(r.status_code == 200, '%s: 200 이어야 (%s)' % (variant, r.status_code))
     d = Document(io.BytesIO(r.data))
     allxml = ''.join(el.xml for el in [d.element.body] + [s.header._element for s in d.sections])
@@ -93,21 +102,26 @@ for variant in ('base', 'touch'):
     joined = '\n'.join(texts)
     check('P_feat3' in joined and 'P_feat4' not in joined, '%s: 빈 선택 줄(feat4)은 지워져야' % variant)
     check('V_tim.r1.c1' in joined, '%s: 타이밍 표 칸이 채워져야' % variant)
-    check(any(t.startswith('H:') and 'H_hdrKtkPn' in t for t in texts), '%s: 머리글 KTK PN' % variant)
+    if 'hdrKtkPn' in schema['header']:           # OBSIDIAN 머리글엔 KTK PN 이 없다(원본이 그렇다)
+        check(any(t.startswith('H:') and 'H_hdrKtkPn' in t for t in texts), '%s: 머리글 KTK PN' % variant)
     check('첫 줄' in joined and '둘째 줄' in joined, '%s: 여러 줄 값' % variant)
-    has_touch = 'V_tperf.r1.c2' in joined
-    check(has_touch == (variant == 'touch'), '%s: 터치 장 유무' % variant)
+    has_touch = TOUCH_PROBE[family] in joined
+    check(has_touch == (variant_ == 'touch'), '%s: 터치 장 유무' % variant)
     # 그림: img_block 하나만 들어가고 나머지 자리 그림은 지워진다 → 남는 그림 = 공통 정의 그림 + 1
     slots_left = sum(1 for dr in d.element.body.iter(qn('wp:docPr')) if (dr.get('descr') or '').startswith('slot:'))
+    slots_left += sum(1 for im in d.element.body.iter('{urn:schemas-microsoft-com:vml}imagedata')
+                      if (im.get('{urn:schemas-microsoft-com:office:office}title') or '').startswith('slot:'))
     check(slots_left == 0, '%s: 자리 그림이 남으면 안 된다(%d)' % (variant, slots_left))
     check('Picture img_block' in d.element.body.xml, '%s: img_block 그림이 들어가야' % variant)
     # 덧그림 — 그림이 들어간 문단(img_block)의 덧그림은 남고, 그림이 빠진 문단(img_osdkey)의 덧그림 둘은 지워진다
     #   (2026-11-24 실측: 그림 없이 남은 회색 사각형·빨간 점선 상자가 OSD 설명 글을 덮었다)
-    WSP = '{http://schemas.microsoft.com/office/word/2010/wordprocessingShape}wsp'
-    tpl_doc = Document(os.path.join(ROOT, 'templates', 'PRODUCT SPEC_양식%s.docx' % ('_TOUCH' if variant == 'touch' else '')))
-    n_tpl = sum(1 for _ in tpl_doc.element.body.iter(WSP))
-    n_out = sum(1 for _ in d.element.body.iter(WSP))
-    check(n_out == n_tpl - 2, '%s: 그림 빠진 자리의 덧그림만 지워져야 (양식 %d → %d)' % (variant, n_tpl, n_out))
+    #   ⚠️ OBSIDIAN 은 그 상자가 그림 문단이 아니라 **위 제목 문단**에 걸려 있어 이 규칙이 안 닿는다(알려진 한계 — docs)
+    if family == 'stellar':
+        WSP = '{http://schemas.microsoft.com/office/word/2010/wordprocessingShape}wsp'
+        tpl_doc = Document(os.path.join(ROOT, 'templates', 'PRODUCT SPEC_양식%s.docx' % ('_TOUCH' if variant_ == 'touch' else '')))
+        n_tpl = sum(1 for _ in tpl_doc.element.body.iter(WSP))
+        n_out = sum(1 for _ in d.element.body.iter(WSP))
+        check(n_out == n_tpl - 2, '%s: 그림 빠진 자리의 덧그림만 지워져야 (양식 %d → %d)' % (variant, n_tpl, n_out))
     # 쪽 끝에 장 제목만 남지 않게(2026-11-25 OBSIDIAN27 실측: 5.2·6·6.2·6.3 이 쪽 맨 아래에 홀로) — 제목엔 keepNext, 글머리표엔 없음
     kn = {}
     for p in d.element.body.iterchildren(qn('w:p')):
@@ -118,6 +132,22 @@ for variant in ('base', 'touch'):
           and kn.get('Viewing Angle') and kn.get('Test Equipment Setup'), '%s: 장 제목·짧은 ① 제목에 다음 문단과 함께' % variant)
     check(any(k.startswith('Voltage') for k in kn) and not any(v for k, v in kn.items() if k.startswith('Voltage') or k.startswith('Contrast Ratio (CR)')),
           '%s: 글머리표·긴 ① 문장엔 안 건다' % variant)
+    variant = variant_
+schema = FAM_SCHEMA['stellar']      # 아래 1-b 는 STELLAR 양식으로
+
+# ── 1-c. 빈 표 칸의 번호 목록 서식 (2026-11-25 실측: OBSIDIAN 개정 이력 빈 줄 요약 칸에 '①' 만 찍혔다) ──
+if 'obsidian' in FAM_SCHEMA:
+    print('1-c. 빈 표 칸 번호')
+    r = client.post('/doc/product-spec-docx', json={'name': 'x', 'family': 'obsidian', 'variant': 'touch',
+                                                    'values': {'rev.r3.c3': 'V_rev3'}})
+    d = Document(io.BytesIO(r.data))
+    from docx.table import Table as _T0
+    rev_el = [el for el in d.element.body.iterchildren(qn('w:tbl'))][FAM_SCHEMA['obsidian']['tables']['rev']['index']]
+    cells = [c for row in _T0(rev_el, d._body).rows for c in row.cells]
+    numbered_empty = [c for c in cells if not c.text.strip() and c._tc.find('.//' + qn('w:numPr')) is not None]
+    numbered_full = [c for c in cells if c.text.strip() == 'V_rev3' and c._tc.find('.//' + qn('w:numPr')) is not None]
+    check(not numbered_empty, '빈 칸엔 번호 서식이 없어야 (%d칸)' % len(numbered_empty))
+    check(len(numbered_full) == 1, '값이 있으면 원본처럼 번호 서식 그대로 (%d)' % len(numbered_full))
 
 # ── 1-a. 파일 이름에 줄바꿈 (2026-11-25 실측: 고객 PN 칸이 두 줄이라 이름에 \r\n → 응답 헤더 거부 → HTTP 500) ──
 print('1-a. 줄바꿈 든 파일 이름')
@@ -187,7 +217,7 @@ rev_t = [t for t in d.tables if 'V_rev.r1.c0' in _ptext(t._tbl)][0]
 rev_t._tbl.remove(rev_t._tbl.findall(qn('w:tr'))[-1])
 bio = io.BytesIO()
 d.save(bio)
-pj = kb._ps_parse(bio.getvalue())
+pj = kb._ps_parse(bio.getvalue(), family='stellar')   # 비튼 STELLAR 문서를 STELLAR 양식으로 맞대 읽는 시험
 v = pj['values']
 check(pj['align']['ratio'] >= 0.9, '비튼 문서도 일치율 90%% 이상 (%s)' % pj['align'])
 for k in ('pwrVoltage', 'pwrConnPn', 'lumYL', 'panelVendor', 'ledBar', 'adH1', 'adH10', 'vcpTitle', 'scope', 'feat3'):
@@ -217,16 +247,18 @@ for src in srcs:
                     content_type='multipart/form-data')
     check(r.status_code == 200, '%s: parse 200' % name)
     pj = r.get_json()
-    print('   %s → variant=%s, 값 %d · 그림 %d · 못 읽음 %s · 일치율 %s' % (
-        name[-40:], pj['variant'], len(pj['values']), len(pj['images']), pj['skipped'], pj['align']))
+    print('   %s → family=%s variant=%s, 값 %d · 그림 %d · 못 읽음 %s · 일치율 %s' % (
+        name[-40:], pj.get('family'), pj['variant'], len(pj['values']), len(pj['images']), pj['skipped'], pj['align']))
+    check(not pj.get('shape'), '%s: 고른 계열 양식과 표 모양이 같아야 %s' % (name, pj.get('shape')))
     check(pj['align']['ratio'] >= 0.95, '%s: 공통 글 일치율이 95%% 이상이어야' % name)
     check(not pj['skipped'], '%s: 못 읽은 칸이 없어야 %s' % (name, pj['skipped']))
     # 화면은 그림을 NAS 에 올리고 {folder,name,cx,cy} 로 보낸다 — 여기선 b64 로 같은 크기 정보를 싣는다
     imgs = {k: [dict({'b64': v['b64']}, **{x: v[x] for x in ('cx', 'cy', 'ph', 'pv') if x in v})]
             for k, v in pj['images'].items()}
-    check(all(v.get('cx') and v.get('cy') for v in pj['images'].values()), '%s: 그림마다 원래 크기(cx,cy)' % name)
+    vml = {k for k, v in (FAM_SCHEMA.get(pj.get('family') or 'stellar', {}).get('images') or {}).items() if v.get('vml')}
+    check(all(v.get('cx') and v.get('cy') for k, v in pj['images'].items() if k not in vml), '%s: 그림마다 원래 크기(cx,cy)' % name)
     check(isinstance(pj.get('layout'), list), '%s: 쪽 맞춤 빈 줄(layout)을 돌려줘야' % name)
-    r2 = client.post('/doc/product-spec-docx', json={'name': 'rt', 'variant': pj['variant'],
+    r2 = client.post('/doc/product-spec-docx', json={'name': 'rt', 'family': pj.get('family'), 'variant': pj['variant'],
                                                      'values': pj['values'], 'images': imgs,
                                                      'layout': pj.get('layout')})
     check(r2.status_code == 200, '%s: fill 200' % name)

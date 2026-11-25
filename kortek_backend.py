@@ -7570,6 +7570,10 @@ _SELF_UPDATE_FILES = [
     'templates/PRODUCT SPEC_양식.docx',
     'templates/PRODUCT SPEC_양식_TOUCH.docx',
     'templates/PRODUCT SPEC_schema.json',
+    # 📚 양식 계열 OBSIDIAN(2026-11-25) — 없으면 그 PC 는 STELLAR 로만 낸다(`_ps_family` 가 파일 유무로 판단)
+    'templates/PRODUCT SPEC_양식_OBSIDIAN.docx',
+    'templates/PRODUCT SPEC_양식_OBSIDIAN_TOUCH.docx',
+    'templates/PRODUCT SPEC_schema_OBSIDIAN.json',
 ]
 # ⚠️⚠️ [2026-09-16 실사용 버그수정] Windows 배치(.bat)/VBScript(.vbs) 파일은 git이 텍스트
 # 파일을 저장소 안에서는 항상 LF로 정규화해 저장하므로(로컬 작업 사본의 줄바꿈과 무관하게)
@@ -9790,13 +9794,37 @@ _PS_TEMPLATES = {
     'touch': os.path.join(BASE_DIR, 'templates', 'PRODUCT SPEC_양식_TOUCH.docx'),
 }
 _PS_SCHEMA = os.path.join(BASE_DIR, 'templates', 'PRODUCT SPEC_schema.json')
+# 📚 양식 계열(데이터, 2026-11-25) — 사양서는 제품 계열마다 장·표 모양이 다르다(OBSIDIAN 27: 커넥터 9개·핀 표 8열·
+#   Gamma 줄·충격/진동 줄·터치 장 'Touch Integrations'). 계열마다 양식 Word 두 판(터치 없음/있음)과 칸 목록 하나.
+#   칸 열쇠는 계열이 달라도 **같은 뜻이면 같은 열쇠**(빌더가 불러오기 맞대기로 STELLAR 칸과 짝짓는다) — 앱 자동값·
+#   📑 참고 사양서·불러오기가 계열과 상관없이 통한다. 'touchHeading' = 그 계열에서 터치 장 제목(판 고르기).
+_PS_FAMILIES = {
+    'stellar': {'templates': _PS_TEMPLATES, 'schema': _PS_SCHEMA, 'touchHeading': ['Touch Controller']},
+    'obsidian': {'templates': {
+                     'base': os.path.join(BASE_DIR, 'templates', 'PRODUCT SPEC_양식_OBSIDIAN.docx'),
+                     'touch': os.path.join(BASE_DIR, 'templates', 'PRODUCT SPEC_양식_OBSIDIAN_TOUCH.docx')},
+                 'schema': os.path.join(BASE_DIR, 'templates', 'PRODUCT SPEC_schema_OBSIDIAN.json'),
+                 'touchHeading': ['Touch Integrations']},
+}
+
+
+def _ps_family(name):
+    """있는 계열만 — 모르는 이름·파일이 없는 계열은 STELLAR(처음 양식)로."""
+    f = _PS_FAMILIES.get(str(name or '').lower())
+    if not f or not os.path.exists(f['schema']) or not all(os.path.exists(p) for p in f['templates'].values()):
+        return 'stellar'
+    return str(name).lower()
+
+
+def _ps_families_ready():
+    return [k for k in _PS_FAMILIES if _ps_family(k) == k]
 _PS_MARK_RE = re.compile(r'\{\{(\??)([A-Za-z0-9_.]+)\}\}')
 _PS_A = 'http://schemas.openxmlformats.org/drawingml/2006/main'
 _PS_R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships'
 
 
-def _ps_load_schema():
-    with open(_PS_SCHEMA, 'r', encoding='utf-8') as f:
+def _ps_load_schema(family='stellar'):
+    with open(_PS_FAMILIES[_ps_family(family)]['schema'], 'r', encoding='utf-8') as f:
         return json.load(f)
 
 
@@ -9856,6 +9884,13 @@ def _ps_fill_text(doc, values):
             p_el = t.getparent()
             while p_el is not None and p_el.tag != qn('w:p'):
                 p_el = p_el.getparent()
+            # 빈 표 칸이 번호 목록 서식이면 번호만 찍힌다(실측: OBSIDIAN 개정 이력 빈 줄에 '①') — 그 칸은 번호를 뗀다
+            if not new.strip() and p_el is not None and p_el.getparent() is not None \
+                    and p_el.getparent().tag == qn('w:tc'):
+                ppr = p_el.find(qn('w:pPr'))
+                np_ = ppr.find(qn('w:numPr')) if ppr is not None else None
+                if np_ is not None:
+                    ppr.remove(np_)
             if len(lines) > 1 and p_el is not None and p_el.getparent() is not None \
                     and p_el.getparent().tag == qn('w:tc'):
                 import copy as _copy
@@ -10108,6 +10143,33 @@ def _ps_fill_images(doc, images):
         docpr.set('descr', '')
         docpr.set('name', 'Picture %s' % key)
         filled.append(key)
+    # 옛 방식(VML) 그림 칸 — `o:title="slot:<열쇠>"`(OBSIDIAN 외형도). 상자 크기(style)는 그대로, 바이트만.
+    V, O = 'urn:schemas-microsoft-com:vml', 'urn:schemas-microsoft-com:office:office'
+    for imd in list(doc.element.body.iter('{%s}imagedata' % V)):
+        title = imd.get('{%s}title' % O) or ''
+        if not title.startswith('slot:'):
+            continue
+        key = title[5:]
+        blob = None
+        for it in (images.get(key) or []) if isinstance(images.get(key), list) else [images.get(key)]:
+            blob = _ps_image_bytes(it) if it else None
+            if blob:
+                break
+        if blob:
+            try:
+                rid, _img = doc.part.get_or_add_image(io.BytesIO(blob))
+                imd.set('{%s}id' % _PS_R, rid)
+                imd.set('{%s}title' % O, '')
+                filled.append(key)
+                continue
+            except Exception:
+                pass
+        pict = imd
+        while pict is not None and pict.tag != qn('w:pict'):
+            pict = pict.getparent()
+        if pict is not None and pict.getparent() is not None:
+            pict.getparent().remove(pict)
+        removed.append(key)
     return filled, removed
 
 
@@ -10122,7 +10184,8 @@ def doc_product_spec_docx():
         return jsonify({'ok': False, 'error': 'python-docx 가 없습니다: %s' % e}), 500
     req = request.get_json(silent=True) or {}
     variant = 'touch' if req.get('variant') == 'touch' else 'base'
-    tpl = _PS_TEMPLATES[variant]
+    family = _ps_family(req.get('family'))          # 📚 양식 계열 — 모르거나 파일이 없으면 STELLAR
+    tpl = _PS_FAMILIES[family]['templates'][variant]
     if not os.path.exists(tpl):
         return jsonify({'ok': False, 'error': '양식 파일을 찾을 수 없습니다 — 백엔드를 재시작해 주세요.'}), 404
     values = req.get('values') or {}
@@ -10236,11 +10299,12 @@ def _ps_apply_layout(doc, gaps):
     return True
 
 
-def _ps_detect_variant(doc):
-    """터치 장('Touch Controller' 제목 문단)이 있으면 touch 판."""
+def _ps_detect_variant(doc, family='stellar'):
+    """터치 장 제목 문단이 있으면 touch 판 — 제목은 계열마다 다르다(STELLAR 'Touch Controller' · OBSIDIAN 'Touch Integrations')."""
     from docx.oxml.ns import qn
+    heads = set(_PS_FAMILIES[_ps_family(family)].get('touchHeading') or [])
     for el in doc.element.body.iterchildren():
-        if el.tag == qn('w:p') and _ps_para_text(el).strip() == 'Touch Controller':
+        if el.tag == qn('w:p') and _ps_para_text(el).strip() in heads:
             return 'touch'
     return 'base'
 
@@ -10331,19 +10395,42 @@ def _ps_align(tpl_items, src_items):
     return out
 
 
-def _ps_parse(src_bytes):
+def _ps_parse(src_bytes, family=None, variant=None, trace=False):
+    """기존 사양서(.docx) → 칸 값·그림. 📚 계열을 안 주면 **있는 계열 양식 전부와 맞대 보고** 가장 잘 맞는 계열로 읽는다
+    (모양이 다른 표가 적은 쪽 → 일치율 높은 쪽). 돌려주는 `family` 로 화면이 출력 양식을 고른다.
+    `families` 에 계열마다 일치율·모양 다른 표 수를 같이 싣는다(왜 그 계열인지 드러낸다)."""
+    if family:
+        return _ps_parse_one(src_bytes, _ps_family(family), variant, trace)
+    tried = {}
+    best = None
+    for fam in _ps_families_ready():
+        r = _ps_parse_one(src_bytes, fam, variant, trace)
+        tried[fam] = {'ratio': (r.get('align') or {}).get('ratio', 0), 'shape': len(r.get('shape') or []),
+                      'skipped': len(r.get('skipped') or [])}
+        key = (-tried[fam]['shape'], tried[fam]['ratio'], -tried[fam]['skipped'])
+        if best is None or key > best[0]:
+            best = (key, r)
+    out = best[1]
+    out['families'] = tried
+    return out
+
+
+def _ps_parse_one(src_bytes, family, variant=None, trace=False):
     """기존 사양서(.docx) → 칸 값·그림. 양식과 **같은 자리**(본문 몇 번째 요소·몇 번째 표의 몇 행 몇 열)에서 읽는다.
     ⚠️ 구조가 다른 문서면 자리가 어긋난다 — 그래서 표식이 없는 문단(공통 글)을 양식과 맞대어 본
-    **일치율**을 같이 돌려준다(낮으면 화면이 경고한다). 맞추지 못한 칸은 `skipped` 로 드러낸다."""
+    **일치율**을 같이 돌려준다(낮으면 화면이 경고한다). 맞추지 못한 칸은 `skipped` 로 드러낸다.
+    `trace=True` 면 칸마다 원본 어디서 읽었는지(본문 요소 번호·행·열)도 — 양식 빌더가 계열 사이 칸 짝을 이걸로 정한다."""
     import base64
     from docx import Document
     from docx.oxml.ns import qn
-    schema = _ps_load_schema()
+    schema = _ps_load_schema(family)
     src = Document(io.BytesIO(src_bytes))
-    variant = _ps_detect_variant(src)
-    tpl = Document(_PS_TEMPLATES[variant])
+    variant = variant if variant in ('base', 'touch') else _ps_detect_variant(src, family)
+    tpl = Document(_PS_FAMILIES[family]['templates'][variant])
     sb_all = list(src.element.body.iterchildren())
     tb_all = list(tpl.element.body.iterchildren())
+    sidx = {id(el): i for i, el in enumerate(sb_all)}
+    tr_ = {'paras': {}, 'tables': {}, 'images': {}}
     values, images, skipped = {}, {}, []
 
     # 📍 자리 맞추기 — **빈 문단은 빼고** "내용 있는 요소"(표·글 문단·그림 문단)의 순서로 맞춘다.
@@ -10421,6 +10508,7 @@ def _ps_parse(src_bytes):
                 skipped.append(key)
             continue
         text = _ps_para_text(s_el)
+        tr_['paras'][key] = sidx.get(id(s_el))
         if info.get('prefix'):
             lead = len(text) - len(text.lstrip())
             m = re.match(info['prefix'], text[lead:])
@@ -10443,6 +10531,7 @@ def _ps_parse(src_bytes):
     from docx.table import Table as _DocxTable
     tpl_tbl_idx = [i for i, el in enumerate(tb_all) if el.tag == qn('w:tbl')]
     shape = []
+    tmaps = {}
     for prefix, info in (schema.get('tables') or {}).items():
         if info.get('when') == 'touch' and variant != 'touch':
             continue
@@ -10482,24 +10571,38 @@ def _ps_parse(src_bytes):
                 cmap = {a: b for a, (b, _s) in _ps_align(_lab_items(tgrid[0], True), _lab_items(sgrid[0], False)).items()}
             shape.append({'table': prefix, 'tpl': '%dx%d' % (tr_n, tcn), 'src': '%dx%d' % (sr_n, scn)})
 
-        def _read(rr, cc):
+        tmaps[prefix] = (sgrid, rmap, cmap)
+        tcells = tr_['tables'][prefix] = {'el': sidx.get(id(s_el)), 'cells': {}}
+
+        def _read(rr, cc, _k=None):
             sr_, sc_ = rmap.get(rr), cmap.get(cc)
             if sr_ is None or sc_ is None or sr_ >= len(sgrid) or sc_ >= len(sgrid[sr_]):
                 raise IndexError
+            if _k:
+                tcells['cells'][_k] = [sr_, sc_]
             return sgrid[sr_][sc_].text
+        # 열쇠가 양식 표의 **어느 칸에 박혀 있나** — 열쇠 이름 속 숫자는 자리가 아니다(다른 계열 양식은 같은 뜻이면
+        #   STELLAR 열쇠를 쓰므로 'vcp.r1.c4' 가 1행 2열에 있다). 표식을 찾고, 못 찾을 때만 이름 숫자로.
+        tpos = {}
+        for r_, row_ in enumerate(tgrid):
+            for c_, cell_ in enumerate(row_):
+                for mk in _PS_MARK_RE.finditer(cell_.text or ''):
+                    tpos.setdefault(mk.group(2), (r_, c_))
         for r, row in enumerate(info.get('rows') or []):
             for cell in row.get('cells') or []:
                 key = cell.get('key')
                 if not key:
                     continue
                 m = re.match(r'^[A-Za-z0-9]+\.r(\d+)\.c(\d+)$', key)
-                if m:
+                if key in tpos:
+                    rr, cc = tpos[key]
+                elif m:
                     rr, cc = int(m.group(1)), int(m.group(2))
                 else:
                     lab = (schema.get('labels') or {}).get(key) or {}
                     rr, cc = lab.get('row'), lab.get('col')
                 try:
-                    values[key] = _read(rr, cc)
+                    values[key] = _read(rr, cc, key)
                 except Exception:
                     skipped.append(key)
 
@@ -10519,15 +10622,29 @@ def _ps_parse(src_bytes):
         when = info.get('when')
         if when in ('base', 'touch') and when != variant:
             continue
-        bi = (info.get('bodyIndexByVariant') or {}).get(variant, info.get('bodyIndex'))
-        s_el = _src_at(bi) if bi is not None else None
+        if info.get('table'):
+            # 표 칸 안 그림(OBSIDIAN OSD 표의 Figure 열) — 그 표를 맞댄 행·열 짝으로 원본 칸을 찾는다
+            tm = tmaps.get(info['table'])
+            s_el = None
+            if tm:
+                sgrid, rmap, cmap = tm
+                sr_, sc_ = rmap.get(info.get('row')), cmap.get(info.get('col'))
+                if sr_ is not None and sc_ is not None and sr_ < len(sgrid) and sc_ < len(sgrid[sr_]):
+                    s_el = sgrid[sr_][sc_]._tc
+        else:
+            bi = (info.get('bodyIndexByVariant') or {}).get(variant, info.get('bodyIndex'))
+            s_el = _src_at(bi) if bi is not None else None
         if s_el is None:
             skipped.append(key)
             continue
+        tr_['images'][key] = sidx.get(id(s_el))
         got = None
         for dr in s_el.iter(qn('w:drawing')):
             gd = dr.find('.//{%s}graphicData' % _PS_A)
-            if gd is None or not gd.get('uri', '').endswith('/picture'):
+            # 그림(pic) 또는 **그림으로 채운 도형**(OBSIDIAN 외형도 — wsp 의 blipFill)
+            if gd is None or dr.find('.//{%s}blip' % _PS_A) is None:
+                continue
+            if not (gd.get('uri', '').endswith('/picture') or info.get('shapeFill')):
                 continue
             blip = dr.find('.//{%s}blip' % _PS_A)
             rid = blip.get('{%s}embed' % _PS_R) if blip is not None else None
@@ -10545,6 +10662,15 @@ def _ps_parse(src_bytes):
                     if po is not None and (po.text or '').strip().lstrip('-').isdigit():
                         got['p' + axis.lower()] = int(po.text.strip())
                 break
+        if not got and info.get('vml'):
+            # 옛 방식(VML w:pict) 그림 — OBSIDIAN 외형도
+            for imd in s_el.iter('{urn:schemas-microsoft-com:vml}imagedata'):
+                rid = imd.get('{%s}id' % _PS_R)
+                if rid and rid in src.part.rels:
+                    part = src.part.rels[rid].target_part
+                    got = {'b64': base64.b64encode(part.blob).decode('ascii'),
+                           'mime': part.content_type, 'ext': os.path.splitext(part.partname)[1].lstrip('.')}
+                    break
         if got:
             images[key] = got
         else:
@@ -10553,10 +10679,13 @@ def _ps_parse(src_bytes):
     layout = _ps_layout_of(list(src.element.body.iterchildren()))
     if len(layout) != len(_ps_layout_of(tb_all)):
         layout = None
-    return {'ok': True, 'variant': variant, 'values': values, 'images': images, 'skipped': skipped,
+    out = {'ok': True, 'family': family, 'variant': variant, 'values': values, 'images': images, 'skipped': skipped,
             'layout': layout, 'shape': shape,
             'align': {'checked': checked, 'same': same,
                       'ratio': round(same / float(checked), 3) if checked else 0}}
+    if trace:
+        out['trace'] = tr_
+    return out
 
 
 @app.route('/doc/product-spec-parse', methods=['POST'])
