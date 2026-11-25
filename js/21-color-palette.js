@@ -407,6 +407,9 @@ window._cpApplyLive = function(hex, skipSave) {
         + '#psummary-page .ps-date-wk { color: #555 !important; }\n'
         + '#psummary-page .ps-date-hol { color: #d32f2f !important; font-weight: bold; }\n'
         + '#psummary-page .ps-date-sat { color: #1e6fe8 !important; font-weight: bold; }\n'
+        + '#tab-alarm td.date-day-wk { color: #555 !important; }\n'
+        + '#tab-alarm td.date-day-hol { color: #d32f2f !important; font-weight: bold; }\n'
+        + '#tab-alarm td.date-day-sat { color: #1e6fe8 !important; font-weight: bold; }\n'
         + '.ui-round-wrap { border-color: ' + gen.border + ' !important; }\n'
         // Project list 마우스 올림 색도 팔레트를 따른다(고정 청록이었다)
         + '.pl-table tbody tr:hover td { background: ' + gen.bg + ' !important; }\n'

@@ -300,7 +300,7 @@ window.renderAlarmTab = async function() {
             <td style="padding:7px 10px; text-align:center; font-size:11px; color:#555; ${_ell}">${emailCell2(item.assigneeEmail, item.missingPeople, item.blockedByDomain)}</td>
             <td style="padding:7px 10px; text-align:center; font-size:11.5px; ${_ell}">${nameCell(item.receiverStr)}</td>
             <td style="padding:7px 10px; text-align:center; font-size:11px; color:#555; ${_ell}">${emailCell2(item.receiverEmail, item.missingPeople, item.blockedByDomain)}</td>
-            <td style="padding:7px 10px; text-align:center; font-size:11.5px; white-space:nowrap;">${item.dueStr}</td>
+            <td class="${window._dateDayCls(item.dueStr)}" style="padding:7px 10px; text-align:center; font-size:11.5px; white-space:nowrap;">${item.dueStr}</td>
             <td style="padding:7px 10px; text-align:center;">${dDayLabel(item.diffDays)}</td>
             <td style="padding:7px 10px; text-align:center; font-size:11.5px;">${sentStatus(item.sentLog, item.diffDays, item.sentHidden, idx)}</td>
             <td style="padding:7px 10px; text-align:center; font-size:11px; color:#888;">${lastSent(item.sentLog)}</td>

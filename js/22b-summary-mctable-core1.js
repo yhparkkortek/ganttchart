@@ -115,7 +115,7 @@ window.renderNoticeTab = function() {
             <div style="font-size:11px;color:#888;margin-top:2px;max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${n.body}</div>
           </td>
           <td style="padding:10px 12px;text-align:center;font-size:12.5px;color:#555;">${targetLabel}</td>
-          <td style="padding:10px 12px;text-align:center;font-size:12.5px;color:${isPast?'#aaa':'#333'};">${n.deadline}</td>
+          <td class="${window._dateDayCls(n.deadline)}" style="padding:10px 12px;text-align:center;font-size:12.5px;color:${isPast?'#aaa':'#333'};${isPast?' opacity:.6;':''}">${n.deadline}</td>
           <td style="padding:10px 12px;text-align:center;">
             <span style="font-size:12px;font-weight:bold;color:${diffDays<=3&&diffDays>=0?'#e03131':diffDays<0?'#aaa':'#2c5f8a'};">${dDayStr}</span>
             <div style="font-size:10px;color:#aaa;">${dDaysLabel}</div>

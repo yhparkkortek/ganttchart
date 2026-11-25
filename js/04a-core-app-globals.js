@@ -211,6 +211,13 @@ ${mailText}`;
     // 💊 [2026-11-23 사용자 요청 "일일 업무보고 칩 버튼도 AI 요약(기준)으로 통일"] 칩 버튼·작은 드롭다운의
     //    모양 **한 벌** — js/62(AI 요약)·js/59(일일보고)가 같이 쓴다. 따로 적으면 한쪽만 바뀐다.
     //    [2026-11-23 2차 "칩 버튼 크기 모양 통일"] 칩·버튼·드롭다운·입력칸이 **같은 높이(22px)·같은 둥근 모서리**.
+    /** 🎨 [2026-11-25] 날짜 글자색 클래스 — 일요일·공휴일=빨강, 토요일=파랑, 평일=회색(Daily Report·Calendar 와 같은 규칙, 색은 styles.css/js/21). YYYY-MM-DD 만 받고 아니면 ''. */
+    window._dateDayCls = function (s) {
+        var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s || ''); if (!m) return '';
+        var wd = new Date(+m[1], +m[2] - 1, +m[3]).getDay();
+        var hol = (wd === 0) || !!(window.isHoliday && window.isHoliday(m[1] + '-' + m[2] + '-' + m[3]));
+        return hol ? 'date-day-hol' : (wd === 6 ? 'date-day-sat' : 'date-day-wk');
+    };
     var _UI_BOX = ' box-sizing:border-box; height:22px; border-radius:11px; font-size:11px; vertical-align:middle;';
     // 🎨 [2026-11-24 "배지·칩 색 통일"] 기본 색은 **팔레트**(`--ui-accent*`, styles.css :root — 모달 헤더와 같은 세 색).
     //    예전엔 켜진 칩이 고정 파랑 #1971c2 인데 꺼진 칩 글자(#2c5f8a)는 js/21 이 테마색으로 갈아 끼워, 한 줄에 파랑·초록이 섞였다.
