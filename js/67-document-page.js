@@ -4084,7 +4084,7 @@
         //    (사용자가 "다른 서식에도 드래그 핸들 아이콘 보여줘"로 요청, 끌기 자체는 손잡이가
         //    아니라 행 전체에 걸려 있다 — 아이콘은 "끌 수 있다"는 신호일 뿐).
         pop.innerHTML = _docOrderForms(window._docVisibleForms()).map(function (f) {
-            return window._ddReorder.itemHtml({ id: f.id, attr: 'data-doc-form-id', active: f.id === cur, activeBg: '#00707d',
+            return window._ddReorder.itemHtml({ id: f.id, attr: 'data-doc-form-id', active: f.id === cur,   // 켜진 항목 색은 공용 기본(#2c5f8a) — 알람/공지·PARTS·보고/리뷰와 같다(예전엔 Document 만 #00707d 라 테마를 바꾸면 트리거와 어긋났다)
                 onclick: "window._docPick('" + _esc(f.id) + "')",
                 labelHtml: (f.icon || '📄') + ' ' + _esc(f.label) + (f.builder ? '<span style="margin-left:6px; font-size:10px; font-weight:normal; opacity:.7;">PPT</span>' : '') });
         }).join('');
