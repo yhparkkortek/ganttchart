@@ -299,6 +299,36 @@
                 _wrapTextNodes(td, regex);
             }
         });
+        _highlightDatesInRow(tr, (window._searchTokens ? window._searchTokens(_gsJoinKoDate(kw)) : [kw]).filter(Boolean));   // "1월 12일" 은 한 날짜(찾기와 같은 규칙)
+    }
+
+    // 📅 [2026-11-25 사용자 요청 "날짜 칸에도 강조"] 날짜 낱말로 걸린 행은 시작·완료 칸을 칠한다.
+    //    칸 글자("11/25'26")는 검색어와 모양이 달라 글자 강조로는 안 걸린다 → 칸의 날짜 값으로 판정.
+    //    그 날이 시작일이나 완료일이면 그 칸만, 기간 한가운데면(둘 다 아니면) 두 칸 다 — "이 기간에 걸쳐 있다".
+    //    칸은 `span.date-clickable` 의 showCalendar(this, ts, 행, 열) 인자에서 어느 열인지 읽는다(몇 번째 td 로 안 집는다).
+    function _highlightDatesInRow(tr, parts) {
+        if (typeof colIdx === 'undefined') return;
+        var row = (typeof globalData !== 'undefined') ? globalData[parseInt(tr.getAttribute('data-row-index'), 10)] : null;
+        if (!row || !row._calcStartTs) return;
+        var ranges = parts.map(function (p) { return _gsDateRange(p); }).filter(Boolean);
+        if (!ranges.length) return;
+        var s = row._calcStartTs, e = row._calcPlanTs || row._calcStartTs;
+        var hitS = false, hitE = false, any = false;
+        ranges.forEach(function (r) {
+            if (!_gsRowOnDate(row, r)) return;
+            any = true;
+            var to = r.to + _DAY - 1;
+            if (s >= r.from && s <= to) hitS = true;
+            if (e >= r.from && e <= to) hitE = true;
+        });
+        if (!any) return;
+        if (!hitS && !hitE) { hitS = hitE = true; }
+        tr.querySelectorAll('span.date-clickable').forEach(function (sp) {
+            var m = String(sp.getAttribute('onclick') || '').match(/showCalendar\(this,\s*[\d.]+,\s*\d+,\s*(\d+)\)/);
+            if (!m) return;
+            var ci = parseInt(m[1], 10);
+            if ((ci === colIdx.start && hitS) || (ci === colIdx.plan && hitE)) sp.classList.add('gantt-search-hl-date');
+        });
     }
 
     // 모든 텍스트 하이라이트 제거 (<mark> 제거 + 텍스트노드 병합)
@@ -313,6 +343,7 @@
         tbody.querySelectorAll('td[data-hl-done]').forEach(function(td) {
             td.removeAttribute('data-hl-done');
         });
+        tbody.querySelectorAll('.gantt-search-hl-date').forEach(function(sp) { sp.classList.remove('gantt-search-hl-date'); });
     }
 
     // ─── 오늘 날짜 기준 네비게이션 위치 계산 ────────────────────────────────────────
@@ -1488,6 +1519,7 @@
             // 텍스트 하이라이트 mark
             'mark.gantt-search-hl { background: #fff176; color: #333; border-radius: 2px;' +
             '  padding: 0 1px; font-weight: inherit; font-style: inherit; }' +
+            '.gantt-search-hl-date { background: #fff176; color: #333; border-radius: 2px; padding: 0 2px; }' +
             // 셀 키보드 포커스: outline은 _setKbFocus가 inline style로 동적 적용(보색 대응)
             // .gantt-kb-active는 식별자 역할만(clear 시 querySelector 용도)
             'td.gantt-kb-active { }' +

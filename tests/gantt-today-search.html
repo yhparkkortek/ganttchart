@@ -41,6 +41,16 @@ f.onload = async function () {
       return [].slice.call(D.querySelectorAll('#table-body tr[data-row-index]')).filter(function (tr) { return tr.style.display !== 'none' && tr.getBoundingClientRect().height > 0; })
         .map(function (tr) { var r = W.globalData[+tr.getAttribute('data-row-index')]; return r._origT2 || r._origT1 || r._origDev; });
     }
+    function hl(name) {   // 그 업무 줄에서 강조된 날짜 칸: 'S'(시작)·'E'(완료)
+      var ci = W.colIdx, res = '';
+      [].slice.call(D.querySelectorAll('#table-body tr[data-row-index]')).forEach(function (tr) {
+        var r = W.globalData[+tr.getAttribute('data-row-index')]; if ((r._origT2 || r._origT1 || r._origDev) !== name) return;
+        tr.querySelectorAll('span.gantt-search-hl-date').forEach(function (sp) {
+          var m = sp.getAttribute('onclick').match(/,\s*(\d+)\)/); res += (+m[1] === ci.start ? 'S' : +m[1] === ci.plan ? 'E' : '?');
+        });
+      });
+      return res;
+    }
     var s0 = shown();
     chk(s0.indexOf('오늘하루업무') === -1 && s0.indexOf('오늘걸친업무') === -1, '처음엔 접혀서 오늘 업무가 안 보인다 — ' + s0.join(','));
     var btn = D.getElementById('gantt-today-btn');
@@ -51,17 +61,21 @@ f.onload = async function () {
     chk(s1.indexOf('오늘하루업무') !== -1 && s1.indexOf('오늘걸친업무') !== -1, '접힌 가지 안의 오늘 업무가 펼쳐져 보인다 — ' + s1.join(','));
     chk(s1.indexOf('지난업무') === -1 && s1.indexOf('다음업무') === -1 && s1.indexOf('일월업무') === -1, '다른 날 업무는 숨김(상세내용에 "오늘" 글자가 든 행도)');
     chk(D.getElementById('gantt-ai-search-filtermode').checked, '비매칭 숨기기 체크된 채');
+    chk(hl('오늘하루업무') === 'SE', '[강조] 오늘 하루 업무 — 시작·완료 칸 둘 다 — ' + hl('오늘하루업무'));
+    chk(hl('오늘걸친업무') === 'SE', '[강조] 기간 한가운데 — 두 칸 다 — ' + hl('오늘걸친업무'));
     btn.click(); await sleep(500);
     var s2 = shown();
+    chk(D.querySelectorAll('.gantt-search-hl-date').length === 0, '[강조] 해제하면 날짜 강조도 지워진다');
     chk(D.getElementById('gantt-ai-search-input').value === '' && s2.indexOf('오늘하루업무') === -1, '한 번 더 누르면 해제되고 접힌 상태로 돌아간다 — ' + s2.join(','));
     var inp = D.getElementById('gantt-ai-search-input');
-    var qs = [['2026-01-11', '일월업무'], ["01/11'26", '일월업무'], ['2026.01.10', '일월업무']];
+    var qs = [['2026-01-11', '일월업무', 'SE'], ["01/11'26", '일월업무', 'SE'], ['2026.01.10', '일월업무', 'S'], ['1월 12일', '일월업무', 'E']];
     for (var i = 0; i < qs.length; i++) {
       W.ganttAiSearchToggle && D.getElementById('gantt-ai-searchbar').style.display !== 'flex' && W.ganttAiSearchToggle();
       inp.value = qs[i][0]; inp.dispatchEvent(new W.Event('input'));
       D.getElementById('gantt-search-now').click(); await sleep(400);
       var s3 = shown();
       chk(s3.indexOf(qs[i][1]) !== -1 && s3.indexOf('오늘하루업무') === -1, '날짜를 쳐서 찾는다 "' + qs[i][0] + '" — ' + s3.join(','));
+      chk(hl(qs[i][1]) === qs[i][2], '[강조] "' + qs[i][0] + '" → ' + qs[i][2] + ' — ' + hl(qs[i][1]));
     }
     D.getElementById('gantt-ai-search-clear').click(); await sleep(300);
   } catch (e) { if (e.message !== 'skip') out.push('SETUP ' + e.message); }
