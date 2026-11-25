@@ -443,7 +443,7 @@
         var S = tblState(tbl);
         var col = S.byKey[colKey];
         var filterActive = !!S.filters[colKey];
-        return '<th style="padding:6px 8px; text-align:center; width:' + widthPct + '%; background:#eef6f7; border-bottom:2px solid #cfe3e5; white-space:nowrap;"'
+        return '<th style="padding:6px 8px; text-align:center; width:' + widthPct + '%; background:#eef6f7; border-bottom:1px solid #cfe3e5; white-space:nowrap;"'
             + (col.title ? (' title="' + esc(col.title) + '"') : '') + '>'
             + '<span onclick="window._jiraSetSort(' + qa(colKey, tbl) + ')" style="cursor:pointer;" title="' + esc(T('클릭해서 정렬', 'Click to sort')) + '">'
             + esc(col.label) + sortArrow(colKey, tbl) + '</span>'
@@ -496,7 +496,7 @@
         //    다시 안 한다 — merged는 renderFilteredSortedTable이 이미 정렬해서 넘긴다.
         var html = '<table class="concept-table" style="width:100%; table-layout:fixed; border-collapse:separate; border-spacing:0; font-size:12.5px;">'
             + '<thead><tr style="background:#eef6f7;">'
-            + '<th style="padding:6px 8px; text-align:center; width:4%; background:#eef6f7; border-bottom:2px solid #cfe3e5;">' + T('No.', 'No.') + '</th>'
+            + '<th style="padding:6px 8px; text-align:center; width:4%; background:#eef6f7; border-bottom:1px solid #cfe3e5;">' + T('No.', 'No.') + '</th>'
             // ⚠️ [2026-11-24] 보고자 열을 넣으며 수정일을 10% 로 줄였더니 '2026-11-19 16:42' 가 두 줄로 접혀
             //    **모든 행 높이가 두 배**가 됐다(사용자 신고) — 수정일 11%·요약 28% 는 그대로(요약도 26% 면 긴 제목이 접힌다, 실측), 줄인 폭은 상태·담당자·구성·출처에서
             + headerCell('key', 7, 'left')

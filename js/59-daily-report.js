@@ -3392,7 +3392,7 @@
             box.innerHTML =
                 '<div style="margin-bottom:9px; font-size:12.5px; color:#555;">' + esc(T('월 보기 — 칸을 누르면 그 날로 갑니다.',
                     'Month view — click a cell to open that day.')) + '</div>' +
-                '<div style="overflow-x:auto;"><table style="border-collapse:collapse; table-layout:fixed; width:' + (84 + daysM.length * 28) + 'px;"><colgroup><col style="width:84px;">' + daysM.map(function () { return '<col style="width:28px;">'; }).join('') + '</colgroup><thead><tr style="background:#eef6f7;">' + th + '</tr></thead>' +
+                '<div style="overflow-x:auto;"><table class="ui-line-tbl" style="border-collapse:collapse; table-layout:fixed; width:' + (84 + daysM.length * 28) + 'px;"><colgroup><col style="width:84px;">' + daysM.map(function () { return '<col style="width:28px;">'; }).join('') + '</colgroup><thead><tr style="background:#eef6f7;">' + th + '</tr></thead>' +
                 '<tbody>' + (trs || '<tr><td style="padding:24px 10px; text-align:center; color:#999; font-size:12.5px;">' + esc(T('이 달에 작성된 보고가 없습니다.', 'No reports this month.')) + '</td></tr>') + '</tbody></table></div>';
             return;
         }
@@ -3563,7 +3563,7 @@
             (roster && roster.length ? '' : ' <span style="color:#b1432f;">' + esc(T('(명단 파일이 없어 쓴 사람만 보입니다)', '(no roster file — showing authors only)')) + '</span>') +
           '</div>' +
           // ⭕ [2026-11-24] 모서리 둥글게 — collapse 표라 칸에 R 이 안 먹는다 → 둥근 상자(.ui-round-wrap)로 감싼다
-          '<div class="ui-round-wrap"><table style="width:100%; border-collapse:collapse; table-layout:fixed;">' +
+          '<div class="ui-round-wrap"><table class="ui-line-tbl" style="width:100%; border-collapse:collapse; table-layout:fixed;">' +
             '<colgroup>' + DAY_COLS.map(function (c) { return '<col' + (c.w ? ' style="width:' + c.w + ';"' : '') + '>'; }).join('') + '</colgroup>' +
             '<thead><tr style="background:#eef6f7;">' +
               DAY_COLS.map(function (c) {

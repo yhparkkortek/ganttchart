@@ -18,7 +18,7 @@
 <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
 
-<link rel="stylesheet" href="styles.css?v=2026112841">
+<link rel="stylesheet" href="styles.css?v=2026112861">
 <!-- 💡 [2026-09-04] FOUC 방지: 저장된 테마 CSS를 첫 렌더 전에 즉시 주입.
      styles.css가 파싱된 직후, <body>가 렌더되기 전에 실행되므로
      "청록 → 파랑" 깜빡임 없이 바로 올바른 테마색이 적용된다.
@@ -225,21 +225,21 @@
       <table class="concept-table" id="alarm-table" style="width:100%; table-layout:fixed; border-collapse:separate; border-spacing:0; font-size:12.5px;">
         <thead style="position:sticky; top:0; z-index:10;">
           <tr style="background:#eef6f7;">
-            <th style="padding:8px 6px; text-align:center; width:36px; white-space:nowrap; background:#eef6f7; border-bottom:2px solid #cfe3e5;">
+            <th style="padding:8px 6px; text-align:center; width:36px; white-space:nowrap; background:#eef6f7; border-bottom:1px solid #cfe3e5;">
               <input type="checkbox" id="alarm-select-all" title="전체 선택/해제" onchange="window._alarmToggleSelectAll(this.checked)" style="cursor:pointer; width:14px; height:14px; display:block; margin:0 auto;">
             </th>
-            <th style="padding:8px 6px; text-align:center; width:36px; white-space:nowrap; background:#eef6f7; border-bottom:2px solid #cfe3e5; color:#555; font-size:11.5px;">No.</th>
-            <th style="padding:8px 10px; text-align:center; width:16%; white-space:nowrap; background:#eef6f7; border-bottom:2px solid #cfe3e5;" data-i18n="th-task-name">업무명</th>
-            <th style="padding:8px 10px; text-align:center; width:6%; white-space:nowrap; background:#eef6f7; border-bottom:2px solid #cfe3e5;" data-i18n="th-status">업무상태</th>
-            <th style="padding:8px 10px; text-align:center; width:8%; white-space:nowrap; background:#eef6f7; border-bottom:2px solid #cfe3e5;" data-i18n="th-sender">발신인</th>
-            <th style="padding:8px 10px; text-align:center; width:12%; white-space:nowrap; background:#eef6f7; border-bottom:2px solid #cfe3e5;" data-i18n="th-sender-email">발신인 이메일</th>
-            <th style="padding:8px 10px; text-align:center; width:8%; white-space:nowrap; background:#eef6f7; border-bottom:2px solid #cfe3e5;" data-i18n="th-receiver">수신인</th>
-            <th style="padding:8px 10px; text-align:center; width:12%; white-space:nowrap; background:#eef6f7; border-bottom:2px solid #cfe3e5;" data-i18n="th-receiver-email">수신인 이메일</th>
-            <th style="padding:8px 10px; text-align:center; width:9%; white-space:nowrap; background:#eef6f7; border-bottom:2px solid #cfe3e5;" data-i18n="th-due-date">완료 예정일</th>
-            <th style="padding:8px 10px; text-align:center; width:5%; white-space:nowrap; background:#eef6f7; border-bottom:2px solid #cfe3e5;">D-Day</th>
-            <th style="padding:8px 10px; text-align:center; width:9%; white-space:nowrap; background:#eef6f7; border-bottom:2px solid #cfe3e5;" data-i18n="th-send-status">발송 상태</th>
-            <th style="padding:8px 10px; text-align:center; width:10%; white-space:nowrap; background:#eef6f7; border-bottom:2px solid #cfe3e5;" data-i18n="th-last-sent">마지막 발송</th>
-            <th style="padding:8px 10px; text-align:center; width:5%; white-space:nowrap; background:#eef6f7; border-bottom:2px solid #cfe3e5;" data-i18n="th-schedule">일정</th>
+            <th style="padding:8px 6px; text-align:center; width:36px; white-space:nowrap; background:#eef6f7; border-bottom:1px solid #cfe3e5; color:#555; font-size:11.5px;">No.</th>
+            <th style="padding:8px 10px; text-align:center; width:16%; white-space:nowrap; background:#eef6f7; border-bottom:1px solid #cfe3e5;" data-i18n="th-task-name">업무명</th>
+            <th style="padding:8px 10px; text-align:center; width:6%; white-space:nowrap; background:#eef6f7; border-bottom:1px solid #cfe3e5;" data-i18n="th-status">업무상태</th>
+            <th style="padding:8px 10px; text-align:center; width:8%; white-space:nowrap; background:#eef6f7; border-bottom:1px solid #cfe3e5;" data-i18n="th-sender">발신인</th>
+            <th style="padding:8px 10px; text-align:center; width:12%; white-space:nowrap; background:#eef6f7; border-bottom:1px solid #cfe3e5;" data-i18n="th-sender-email">발신인 이메일</th>
+            <th style="padding:8px 10px; text-align:center; width:8%; white-space:nowrap; background:#eef6f7; border-bottom:1px solid #cfe3e5;" data-i18n="th-receiver">수신인</th>
+            <th style="padding:8px 10px; text-align:center; width:12%; white-space:nowrap; background:#eef6f7; border-bottom:1px solid #cfe3e5;" data-i18n="th-receiver-email">수신인 이메일</th>
+            <th style="padding:8px 10px; text-align:center; width:9%; white-space:nowrap; background:#eef6f7; border-bottom:1px solid #cfe3e5;" data-i18n="th-due-date">완료 예정일</th>
+            <th style="padding:8px 10px; text-align:center; width:5%; white-space:nowrap; background:#eef6f7; border-bottom:1px solid #cfe3e5;">D-Day</th>
+            <th style="padding:8px 10px; text-align:center; width:9%; white-space:nowrap; background:#eef6f7; border-bottom:1px solid #cfe3e5;" data-i18n="th-send-status">발송 상태</th>
+            <th style="padding:8px 10px; text-align:center; width:10%; white-space:nowrap; background:#eef6f7; border-bottom:1px solid #cfe3e5;" data-i18n="th-last-sent">마지막 발송</th>
+            <th style="padding:8px 10px; text-align:center; width:5%; white-space:nowrap; background:#eef6f7; border-bottom:1px solid #cfe3e5;" data-i18n="th-schedule">일정</th>
           </tr>
         </thead>
         <tbody id="alarm-table-body">
@@ -271,9 +271,9 @@
       <div class="concept-section" style="background:#e0f5f7; border-color:#a3d9e0;">
       <!-- 공지 목록 테이블 -->
       <div style="background:#fff; border:1px solid #cfe3e5; border-radius:8px; overflow:hidden; margin-bottom:16px;">
-        <table style="width:100%; border-collapse:collapse; font-size:12.5px;">
+        <table class="ui-line-tbl" style="width:100%; border-collapse:collapse; font-size:12.5px;">
           <thead>
-            <tr style="background:#eef6f7; border-bottom:2px solid #cfe3e5;">
+            <tr style="background:#eef6f7; border-bottom:1px solid #cfe3e5;">
               <th style="padding:10px 6px; text-align:center; width:32px;">
                 <input type="checkbox" id="notice-select-all" title="전체 선택/해제" onchange="window._noticeToggleSelectAll(this.checked)" style="cursor:pointer; width:14px; height:14px; display:block; margin:0 auto;">
               </th>
@@ -304,9 +304,9 @@
                   onmouseover="this.style.background='#cfe6fa';" onmouseout="this.style.background='#e8f4fd';"
                   style="padding:3px 10px; border:none; color:#1a4f7a; background:#e8f4fd; border-radius:3px; font-size:11px; font-weight:bold; cursor:pointer; transition:background .15s;">🔄 새로고침</button>
         </div>
-        <table style="width:100%; border-collapse:collapse; font-size:12.5px;">
+        <table class="ui-line-tbl" style="width:100%; border-collapse:collapse; font-size:12.5px;">
           <thead>
-            <tr style="background:#eef6f7; border-bottom:2px solid #cfe3e5;">
+            <tr style="background:#eef6f7; border-bottom:1px solid #cfe3e5;">
               <th id="schedule-rule-th-status" style="padding:10px 8px; text-align:center; width:54px;">상태</th>
               <th id="schedule-rule-th-title" style="padding:10px 8px; text-align:center;">제목</th>
               <th id="schedule-rule-th-type" style="padding:10px 8px; text-align:center; width:120px;">종류</th>
@@ -2730,7 +2730,7 @@
     </div>
 </div>
 
-<script src="js/21-color-palette.js?v=2026112831"></script>
+<script src="js/21-color-palette.js?v=2026112861"></script>
 
 <!-- 22-tabs-summary-mctable.js 분리 (토큰 절약 · 협업용): 로딩 순서는 기존과 동일하게 유지 -->
 <script src="js/22a-summary-mctable-parse.js?v=2026112596"></script>
@@ -2794,7 +2794,7 @@
     <!-- 🔀 저장소 어댑터(Drive ↔ 사내 NAS). 플래그 OFF 기본 — 아무것도 감싸지 않는다 -->
     <script src="js/57-storage-adapter.js?v=2026112591"></script>
     <!-- 📦 Drive → NAS 일괄 이사. 미러는 "쓸 때만" 옮기므로 이게 한 번은 돌아야 한다 -->
-    <script src="js/59-daily-report.js?v=2026112841"></script>
+    <script src="js/59-daily-report.js?v=2026112861"></script>
     <script src="js/60-telegram-qa-bridge.js?v=20261124a4"></script>
     <script src="js/61-mail-evidence.js?v=20261125a1"></script>
     <script src="js/62-period-summary.js?v=2026112821"></script>
@@ -2806,7 +2806,7 @@
     <script src="js/66-doc-generate.js?v=20261124a4"></script>
     <script src="js/68-doc-checksheets.js?v=20261124a4"></script>
     <script src="js/69-resolution-spec.js?v=2026112831"></script>
-    <script src="js/70-jira-tab.js?v=2026112821"></script>
+    <script src="js/70-jira-tab.js?v=2026112861"></script>
     <script src="js/67-document-page.js?v=2026112831"></script>
     <script src="js/72-labelspec-import.js?v=20261124a4"></script>
     <script src="js/64-qa-route-log.js?v=20261124a4"></script>
