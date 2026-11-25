@@ -311,8 +311,11 @@ window._modalPosSave = function(boxId, withSize) {
 window.MODAL_FIT_WIDE = ['gantt-qa-box', 'mail-analyzer-modal', 'task-inbox-modal', 'jira-issue-box', 'jira-search-box',
                          'daily-box', 'matcart-box', 'ovc-box', 'ms-queue-box'];
 window.MODAL_FIT_POLICY = { side: 'right', minHalfW: 640, gapDefault: 10 };
-// 붙은 모달이 있어도 페이지를 비키지 않는 탭(화면 전체를 쓰는 페이지) — 탭 이름은 사이드바 data-tab
-window.MODAL_DOCK_SKIP_TABS = ['gantt', 'projectlist', 'calendar', 'weekly'];
+// 붙은 모달이 있어도 페이지를 비키지 않는 탭 — 탭 이름은 사이드바 data-tab.
+//    [2026-11-25 사용자 결정 번복] 처음엔 화면 전체를 쓰는 페이지(간트·목록·캘린더·주간 보고)를 넣었는데, 그러면
+//    모달을 연 채 탭을 오가면 그 페이지만 넓어 보였다("캘린더가 다른 페이지보다 크다") → 모든 페이지가 똑같이
+//    열면 줄고 닫으면 원래 폭. 목록은 비워 두고 장치만 남긴다.
+window.MODAL_DOCK_SKIP_TABS = [];
 window._modalFitRect = function() {
     const main = document.getElementById('app-main');
     if (!main) return null;
