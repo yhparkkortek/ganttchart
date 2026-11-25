@@ -71,5 +71,17 @@ ctx._mailRoutePlaced('OB', OB.file_name, { _routing: { basis: 'identifier', deci
 j = ctx.mailRouteJudge({ subject: 'RE: ' + S3, sender: UL, body: '', refs: [] }, C, null);
 ok('보통 프로젝트 자동 배치 스레드는 그대로', j.basis === 'thread' && j.target && j.target.drive_file_id === 'OB', j);
 
+console.log('\n[5] 범용어 — 형태 이름(btn)·문서 종류(환경 대응)는 단서가 아니다 (2026-11-25 실측)');
+const UN = { drive_file_id: 'UN', file_name: 'UNIDESA_BTN_14.0.json', model: 'BTN', customer: 'UNIDESA>BTN', keywords: ['UNIDESA'] };
+const CI = { drive_file_id: 'CI', file_name: 'LNW_Cosmic iDeck_18.5.json', model: 'Cosmic 18.5', customer: 'LNW>Cosmic iDeck', keywords: ['Cosmic 18.5', '환경 대응', 'ROHS'] };
+const CU = { drive_file_id: 'CU', file_name: 'LNW_Cosmic_Upright Profile_49.0.json', model: 'Cosmic Upright 49', customer: 'LNW>Cosmic_Upright Profile', keywords: ['Cosmic Upright 49', 'ANEMONE-8V'] };   // 실제 색인처럼 Cosmic 이 둘이어야 'cosmic' 이 고유어가 안 된다
+const C5 = [ST, UN, CI, CU];
+j = ctx.mailRouteJudge({ subject: 'RE: Light & Wonder Sustainability Data Request', sender: 'kimdh@kortek.co.kr', body: 'Dual MVD, TOPPER, BTN 3종 재활용률 BOM 정리', refs: [] }, C5, null);
+ok('본문의 BTN 으로 UNIDESA>BTN 에 안 간다', !(j.target && j.target.drive_file_id === 'UN'), j);
+j = ctx.mailRouteJudge({ subject: "[환경 대응 의뢰서] Cosmic Dual Main Top Cover Assy'", sender: 'x@kortek.co.kr', body: '', refs: [] }, C5, null);
+ok('"환경 대응" 하나로 Cosmic iDeck 에 안 간다', !(j.target && j.target.drive_file_id === 'CI'), j);
+j = ctx.mailRouteJudge({ subject: '[환경 대응 의뢰서] LNW _Cosmic 18.5" iDeck', sender: 'x@kortek.co.kr', body: '', refs: [] }, C5, null);
+ok('모델(Cosmic 18.5)이 적힌 건 그대로 간다', !!(j.target && j.target.drive_file_id === 'CI'), j);
+
 console.log('\n결과: ' + pass + '/' + (pass + fail) + ' 통과');
 process.exit(fail ? 1 : 0);

@@ -62,7 +62,7 @@
     var P = window.MAIL_ROUTING_POLICY;
     // 판정 규칙 버전 — 카드의 routing.v 에 적는다. 배경 재판정은 같은 버전으로 이미 본 카드를 건너뛴다.
     //  ⚠️ 판정 규칙(식별자·가족·문턱)을 바꾸면 이 값을 올릴 것 — 안 올리면 옛 판정 카드가 배경에서 다시 안 보인다.
-    var RULE_V = '2026-11-25a';
+    var RULE_V = '2026-11-25c';
     window.MAIL_ROUTING_RULE_V = RULE_V;
     /** 카드의 사유 글에서 AI 사유만 — 재판정마다 '🧭 판정 · 🤖 (이전 사유 전체)' 로 겹겹이 길어지던 것(실측) */
     function aiReasonOnly(mb) {
@@ -132,7 +132,14 @@
         'slim', 'narrow', 'ultraslim', 'thin', '1000r', '1500r', '1650r', '1800r', '2300r', '3000r', '4000r',
         // [2026-11-24 실측] 회사 공통 낱말 — 새 프로젝트 SLIM SLOT IDECK 키워드의 'GAME'(모든 ECO 제목 머리 'GAME_')·'VINA'(베트남 공장) 가
         //  식별자로 잡혀 실문서 287건 중 6건이 잘못 자동배치·13건이 대기로 떨어졌다. 'gaming' 도 같은 뜻으로 쓰인다.
-        'game', 'gaming', 'vina', 'vietnam'
+        'game', 'gaming', 'vina', 'vietnam',
+        // [2026-11-25 실측] 'data' 가 사람 배치 2건으로 STELLAR32 의 '배운 단서'가 되어 공지('마감 일정')·Sustainability Data 메일 등
+        //  10건을 STELLAR32 로 끌고 갔다. 새 프로젝트 키워드의 문서 종류·부품 종류 낱말('환경 대응'·'신뢰성 시험'·'EC Panel'·'AD BD')도
+        //  Cosmic Dual 결재를 Cosmic iDeck 로 보냈다 — 여러 프로젝트가 같이 쓰는 말이라 식별자가 아니다.
+        'data', 'request', 'report', 'notice', 'schedule', 'information',
+        '환경대응', '신뢰성시험', '분쟁광물', '제품인정시험', 'fai샘플', 'rohs', 'reach', 'ecpanel', 'adbd',
+        // [2026-11-25 실측] 제품 형태 이름 — 새 프로젝트 'UNIDESA>BTN' 의 'btn' 이 "Dual MVD, TOPPER, BTN" 이 적힌 L&W 공통 메일 3건을 끌고 갔다.
+        'btn', 'mvd', 'mvdc', 'tvd', 'tpr'
     ];
     var STOP = {}; window.MAIL_ROUTING_STOPWORDS.forEach(function (w) { STOP[norm(w)] = 1; });
     // [2026-11-23] 우리 회사 이름 — 서명·제목("> KORTEK")·주소에 **모든 메일**에 나온다. 고객/가족 단서로 쓰면
@@ -297,7 +304,7 @@
             var c = cands[i], root = customerRoot(c.customer);
             if (isCatchAll(c)) return;
             if (root && root.length >= 3 && !SELF[root]) toks[root] = 1;
-            String(c.customer || '').split('>').slice(1).forEach(function (p) { var n = norm(p); if (n.length >= 3 && !SELF[n]) toks[n] = 1; });
+            String(c.customer || '').split('>').slice(1).forEach(function (p) { var n = norm(p); if (n.length >= 3 && !SELF[n] && !STOP[n]) toks[n] = 1; });   // [2026-11-25] 'UNIDESA>BTN' 의 'btn' 처럼 범용어 조각은 가족 단어가 아니다
         });
         return toks;
     }
@@ -496,6 +503,7 @@
             if (!n || !/[a-z0-9]/.test(n) || /[가-힣]/.test(n)) return;            // 영문·숫자 낱말만 — 한글 낱말은 범용어가 대부분(의뢰서·신청서)
             if (n.length < P.identMinLen && !/^[a-z]{1,2}\d{2,}$/.test(n)) return;
             if (/^\d+$/.test(n) && n.length < 5) return;
+            if (/^2\d(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])$/.test(n)) return;   // [2026-11-25] YYMMDD 날짜 꼴('_LNW_260909' PO 날짜)
             if (/^20\d{6}$/.test(n) || /^(rev|ver|v|r|ecr|eco)\d+$/.test(n) || /^(eco|ecr)\d{4}[a-z]{2}\d{2}$/.test(n)) return;   // 날짜·리비전·ECO 번호
             if (STOP[n] || SELF[n] || CATCH[n] || isGeneric(w) || isPerson(w)) return;
             if (out.indexOf(n) === -1) out.push(n);
