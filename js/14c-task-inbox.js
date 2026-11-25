@@ -409,6 +409,19 @@ window.bringModalToFront = function(overlayId) {
     if (!el) return;
     window._topModalZ += 1;
     el.style.zIndex = String(window._topModalZ);
+    // 🌐 [2026-11-25] 영어일 때 모달 글자 번역(04j `_applyLangLight`) — 모달을 여는 함수는 거의 다 이걸 부른다.
+    //    js/19 의 '열림 감지' 가 닿지 않는 모달(예: 알람 상세)을 위한 두 번째 입구. 클릭마다도 불리므로 창마다 1초에 한 번만.
+    if (window._currentLang === 'en' && window._applyLangLight && !window._langLightQueued) {
+        var _now = Date.now();
+        if (!el._langLightAt || _now - el._langLightAt > 1000) {
+            el._langLightAt = _now;
+            window._langLightQueued = true;
+            requestAnimationFrame(function () {
+                window._langLightQueued = false;
+                try { window._applyLangLight(); } catch (e) { console.warn('[lang] 모달 글자 번역 실패', e); }
+            });
+        }
+    }
 };
 
 // 열려있는 모달을 클릭하면 항상 최상단으로 (겹칠 때 마지막 클릭한 창이 위로)

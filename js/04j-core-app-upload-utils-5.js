@@ -755,6 +755,7 @@
         'gantt-qa-improve-comment-modal', 'improve-comment-modal', 'npw-devplan-overlay', 'matcart-modal', 'saplogin-modal',
         'bc-modal', 'ds-cfg-modal', 'ds-pick-modal', 'overdue-cleanup-modal', 'jira-link-modal', 'mail-auto-config-modal',
         'mnb-modal', 'pp-pick-modal',
+        'inbox-mailraw-modal', 'inbox-ai-chat-modal', 'pc-add-modal', 'ep-add-modal', 'prompt-edit-modal', 'mc-imp-overlay',
     ];
     window._dropLangBakedModals = function() {
         window.LANG_REBUILD_MODALS.forEach(function (id) {

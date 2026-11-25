@@ -2646,11 +2646,11 @@
                 return '<input value="' + esc(m[k] == null ? '' : m[k]) + '" placeholder="' + esc(ph) + '" oninput="window._dailyRosterSet(' + i + ',\'' + k + '\',this.value)" style="width:' + w + '; padding:4px 6px; border:1px solid #ddd; border-radius:4px; font-size:11.5px;">';
             };
             return '<tr>' +
-              '<td style="padding:3px;">' + inp('key', '계정id', '90px') + '</td>' +
-              '<td style="padding:3px;">' + inp('name', '실명', '80px') + '</td>' +
-              '<td style="padding:3px;"><input value="' + esc((m.aliases || []).join(', ')) + '" placeholder="별칭,별칭" oninput="window._dailyRosterSet(' + i + ',\'aliases\',this.value)" style="width:110px; padding:4px 6px; border:1px solid #ddd; border-radius:4px; font-size:11.5px;"></td>' +
-              '<td style="padding:3px;">' + inp('team', '팀', '72px') + '</td>' +
-              '<td style="padding:3px;">' + inp('tgChatId', '텔레그램 ID', '100px') + '</td>' +
+              '<td style="padding:3px;">' + inp('key', T('계정id', 'Account id'), '90px') + '</td>' +
+              '<td style="padding:3px;">' + inp('name', T('실명', 'Full name'), '80px') + '</td>' +
+              '<td style="padding:3px;"><input value="' + esc((m.aliases || []).join(', ')) + '" placeholder="' + esc(T('별칭,별칭', 'alias,alias')) + '" oninput="window._dailyRosterSet(' + i + ',\'aliases\',this.value)" style="width:110px; padding:4px 6px; border:1px solid #ddd; border-radius:4px; font-size:11.5px;"></td>' +
+              '<td style="padding:3px;">' + inp('team', T('팀', 'Team'), '72px') + '</td>' +
+              '<td style="padding:3px;">' + inp('tgChatId', T('텔레그램 ID', 'Telegram ID'), '100px') + '</td>' +
               '<td style="padding:3px; text-align:center;"><input type="checkbox" ' + (m.active !== false ? 'checked' : '') + ' onchange="window._dailyRosterSet(' + i + ',\'active\',this.checked)"></td>' +
               '<td style="padding:3px; text-align:center;"><input type="radio" name="dr-notifier" ' + (m.notifier ? 'checked' : '') + ' onchange="window._dailyRosterNotifier(' + i + ')"></td>' +
               '<td style="padding:3px;"><button onclick="window._dailyRosterDrop(' + i + ')" style="width:22px; height:22px; border:1px solid #eeb0ac; background:#fbe4e2; color:#b1432f; border-radius:4px; cursor:pointer; font-size:11px;">✕</button></td>' +

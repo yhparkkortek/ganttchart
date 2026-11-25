@@ -34,15 +34,20 @@
     // ── 🔌 입력 포트 (데이터) ───────────────────────────────────────────
     //   ⚠️ 옛 문서의 `PC` = 아날로그 RGB. 용어를 RGB 로 통일한다(사용자 지시 2026-11-09).
     window.RES_PORTS = window.RES_PORTS || [
-        { key: 'RGB',  label: 'RGB',  title: '아날로그 RGB (D-Sub / VGA) — 옛 문서의 "PC" 칸' },
-        { key: 'DVI',  label: 'DVI',  title: 'DVI-D / DVI-I 디지털' },
+        { key: 'RGB',  label: 'RGB',  title: '아날로그 RGB (D-Sub / VGA) — 옛 문서의 "PC" 칸', titleEn: 'Analog RGB (D-Sub / VGA) — the "PC" column in old documents' },
+        { key: 'DVI',  label: 'DVI',  title: 'DVI-D / DVI-I 디지털', titleEn: 'DVI-D / DVI-I digital' },
         { key: 'HDMI', label: 'HDMI', title: 'HDMI' },
-        { key: 'DP',   label: 'DP',   title: 'DisplayPort (eDP 포함)' }
+        { key: 'DP',   label: 'DP',   title: 'DisplayPort (eDP 포함)', titleEn: 'DisplayPort (incl. eDP)' }
     ];
 
     // ── 📺 해상도 카탈로그 (데이터) ─────────────────────────────────────
     //   `기존 목록` 은 원본 문서 `4. RESOLUTION SPEC` 을 **그대로** 옮긴 것이다(실측 49행).
     //   나머지 묶음은 사용자 요청으로 보탠 VESA 표준 해상도다.
+    // 🌐 [2026-11-25] 묶음 이름 영어 — 묶음 이름(g)은 데이터 열쇠라 그대로 두고 보이는 글자만 바꾼다
+    window.RES_GROUP_EN = {
+        '기존 목록 (문서 실측)': 'Existing list (from documents)', 'VESA DMT (추가)': 'VESA DMT (added)',
+        'VESA CVT (와이드 · 고해상도)': 'VESA CVT (wide · high resolution)', 'CTA-861 (HDMI · DP 영상 포맷)': 'CTA-861 (HDMI · DP video formats)',
+    };
     window.RESOLUTION_CATALOG = window.RESOLUTION_CATALOG || [
         {
             g: '기존 목록 (문서 실측)',
@@ -441,7 +446,7 @@
               + '<th style="position:sticky; top:0; z-index:2; border:1px solid #cfe3e5; padding:5px; background:#eef6f7; width:44px;">NO</th>'
               + '<th style="position:sticky; top:0; z-index:2; border:1px solid #cfe3e5; padding:5px; background:#eef6f7; text-align:left;">RESOLUTION</th>'
               + ports.map(function (p) {
-                  return '<th title="' + _esc(p.title || p.label) + '" style="position:sticky; top:0; z-index:2;'
+                  return '<th title="' + _esc((window._currentLang === 'en' && p.titleEn) || p.title || p.label) + '" style="position:sticky; top:0; z-index:2;'
                        + ' border:1px solid #cfe3e5; padding:5px; background:#eef6f7; width:62px;">' + _esc(p.label) + '</th>';
               }).join('')
               + '</tr></thead><tbody>';
@@ -457,7 +462,7 @@
         rows.forEach(function (r) {
             if (r.g !== prevG) {
                 h += '<tr><td colspan="' + (2 + ports.length) + '" style="border:1px solid #cfe3e5; padding:4px 6px;'
-                   + ' background:#e0f5f7; color:#00707d; font-weight:bold;">' + _esc(r.g) + '</td></tr>';
+                   + ' background:#e0f5f7; color:#00707d; font-weight:bold;">' + _esc((window._currentLang === 'en' && window.RES_GROUP_EN && window.RES_GROUP_EN[r.g]) || r.g) + '</td></tr>';
                 prevG = r.g;
             }
             n++;

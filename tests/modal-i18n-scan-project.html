@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>모달 본문 한/영 점검 — 프로젝트가 있어야 뜨는 모달</title></head><body style="margin:0">
+<!-- 🌐 [2026-11-25] modal-i18n-scan.html 의 짝 — 합성 프로젝트(간트 행·메일 행·알람 항목)를 메모리에만 깔고
+     프로젝트가 있어야 뜨는 모달을 인자와 함께 하나씩 열어 **한글로 남은 글자**를 모달별로 센다.
+     저장은 막는다(saveToGoogleDrive 등 가짜, 열린 프로젝트 id 없음). 프로젝트가 열린 탭에서 돌리지 말 것.
+     네트워크(백엔드·SAP·JIRA)가 필요한 모달은 빈 채/오류 안내로 뜨거나 안 뜬다 — 안 뜬 것은 맨 아래 "안 열림" 에 적는다.
+     #kofirst = 한국어로 먼저 한 번씩 열어 만든 뒤 영어로 바꿔 본다.
+     실행: chrome --headless=new --allow-file-access-from-files --window-size=1500,900 --virtual-time-budget=120000
+           --dump-dom file:///.../tests/modal-i18n-scan-project.html → <pre id="out"> -->
+<iframe id="f" src="../kortek_pm.html?misp=1" style="border:0;width:1400px;height:800px;"></iframe>
+<pre id="out">running…</pre>
+<script>
+function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+function ymd(off) { var d = new Date(); d.setDate(d.getDate() + off); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+var HAN = /[가-힣]/;
+var MAIL = { subject: '[Test] panel sample', from: 'a@b.com', to: 'c@d.com', date: ymd(-1), body: 'hello body', fileName: 'test_mail_1' };
+// [함수 이름, 인자] — 인자는 함수로 줄 수도 있다(W 를 받아 배열을 돌려준다)
+var OPENERS = [
+  ['openGanttOrganizeWizard', []], ['openWbsGroupSuggestions', []], ['openAiProjectSummaryModal', []],
+  ['openAlarmModal', [0]], ['openAlarmScheduleModal', [0]], ['calShowDayPopup', [ymd(0)]],
+  ['dailyOpenModal', []], ['dailyOpenRoster', []], ['_showAiTaskMailModal', [3]],
+  ['showMailRawModal', [{ uid: 'u1', mailRaw: MAIL, _mailRaw: MAIL, title: 'T', fileName: 'test_mail_1' }]],
+  ['_ibOpenAiChatModal', ['u1']], ['_issueOpenReport', []], ['openQaImproveCommentModal', ['u1']],
+  ['_msShowAddressSuggestModal', []], ['_msShowKeywordSuggestModal', []], ['_msRenderQueueModal', ['unmatched']],
+  ['_msOpenReanalyzeHintModal', ['test_mail_1']], ['panelCompareOpenAddModal', []], ['showPanelSpecModal', ['TEST-PANEL']],
+  ['elecCompareOpenAddModal', ['adbd']], ['showElecPartSpecModal', ['adbd', 'TEST']], ['showElecPinMapModal', ['adbd', 'TEST']],
+  ['_openImageLightbox', [['data:image/gif;base64,R0lGODlhAQABAAAAACw='], 0, 'test']], ['editPrompt', []], ['_showTopicProfileViewer', []],
+  ['_wrShowAiPreviewModal', [{ summary: 's', items: [] }, []]], ['resOpenPicker', [{}]], ['_docRevVsOpen', ['label-spec']],
+  ['_docLabelArtModalOpen', ['label-spec', 0]], ['_jiraOpenIssueModal', ['ABC-1']], ['_mcOpenImportPicker', [[{ file: 'test.xlsx', sheet: 'R1', title: 'TEST', rows: [{ type: 'LCM', item: 'Panel', spec: '', qty: 1 }] }]]],
+  ['plOpenDetail', ['x']], ['openMyTeamModal', []], ['_jiraOpenSearchModal', []], ['_jiraOpenCreateModal', []],
+];
+f.onload = async function () {
+  await sleep(2500);
+  var W = f.contentWindow, D = f.contentDocument, out = [], total = 0, notOpened = [];
+  if (W.currentDriveFileId) { document.getElementById('out').textContent = 'SKIP 프로젝트가 열려 있다'; return; }
+  // 저장 막기 + 막는 창 끄기
+  ['saveToGoogleDrive', '_saveToGoogleDriveOptimistic', '_autoSaveTick'].forEach(function (k) { if (W[k]) W[k] = function () {}; });
+  W.alert = function () {}; W.confirm = function () { return false; }; W.prompt = function () { return null; };
+  // 합성 프로젝트 — 엑셀 불러오기(js/04f)가 만드는 모양
+  var head = ['NO', 'LEVEL(WBS)', '개발단계', '업무1', '업무2', '시작일', '완료일', '업무상태', '상세내용'];
+  W.colIdx = { no:0, bogo:1, start:5, plan:6, period:-1, dur1:-1, dur2:-1, dur3:-1, dur4:-1, assignee:-1, taskType1:3, taskType2:4, taskType3:-1, taskType4:-1, status:7, customer:-1, model:-1, inch:-1, devStage:2, content:8, answer:-1, chart:-1, wbs:-1 };
+  function R(lv, d0, t1, t2, s, e, st, c) { var r = ['', String(lv), d0, t1, t2, s, e, st, c]; r._level = lv; r._origDev = lv === 0 ? d0 : ''; r._origT1 = lv === 1 ? t1 : ''; r._origT2 = lv === 2 ? t2 : ''; r._origT3 = ''; r._origT4 = ''; return r; }
+  var gd = [head, R(0, 'PROTO', '', '', ymd(-30), ymd(30), '진행', ''), R(1, 'PROTO', 'Design', '', ymd(-30), ymd(30), '진행', ''),
+    R(2, 'PROTO', 'Design', 'MailTask', ymd(-1), ymd(2), '진행', '[출처] test\n[핵심내용] body'), R(2, 'PROTO', 'Design', 'Other', ymd(0), ymd(0), '진행', 'x')];
+  gd[3]._mailRaw = MAIL;
+  gd[3]._알림 = true;   // 📌 핀셋 — 알람 탭에 항목이 생겨야 알람 상세가 열린다
+  W.globalData = gd;
+  W.projectMeta = Object.assign(W.projectMeta || {}, { 프로젝트명: 'TEST', 고객사: 'TEST' });
+  try { W.recalculateSchedules(); } catch (e) { out.push('setup recalc ' + e.message); }
+  W._msResults = [{ fileName: 'test_mail_1', subject: MAIL.subject, from: MAIL.from, date: MAIL.date, body: MAIL.body }];   // 재분석 요청 모달용
+  try { W.renderAlarmTab && W.renderAlarmTab(); } catch (e) { out.push('renderAlarmTab ' + e.message); }   // 알람 상세는 알람 탭이 그려진 뒤에만 열린다(dDayLabel)
+  await sleep(600);
+  function visibleModals() {
+    return [].slice.call(D.querySelectorAll('[id$="-modal"],[id$="-overlay"],[id$="-popup"]')).filter(function (el) {
+      if (el.closest('#app-sidebar,#app-topbar')) return false;
+      var cs = W.getComputedStyle(el); return cs.position === 'fixed' && cs.display !== 'none' && cs.visibility !== 'hidden' && el.getBoundingClientRect().width > 0;
+    });
+  }
+  function hangul(root) {
+    var seen = {}, res = [], tw = D.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    while (tw.nextNode()) {
+      var n = tw.currentNode, t = n.nodeValue.replace(/\s+/g, ' ').trim(), p = n.parentElement;
+      if (!t || !HAN.test(t) || !p) continue;
+      if (p.closest('script,style,textarea,option,[contenteditable="true"]')) continue;
+      var cs = W.getComputedStyle(p); if (cs.display === 'none' || cs.visibility === 'hidden') continue;
+      if (seen[t]) continue; seen[t] = 1; res.push(t.slice(0, 60));
+    }
+    [].slice.call(root.querySelectorAll('[placeholder],[title]')).forEach(function (el) {
+      ['placeholder', 'title'].forEach(function (a) { var v = el.getAttribute(a); if (v && HAN.test(v) && !seen['@' + v]) { seen['@' + v] = 1; res.push('@' + a + ': ' + v.slice(0, 50)); } });
+    });
+    return res;
+  }
+  async function openOne(o) { try { var r = W[o[0]] && W[o[0]].apply(W, o[1]); if (r && r.catch) r.catch(function () {}); } catch (e) { return e.message; } return ''; }
+  if (location.hash === '#kofirst') {
+    for (var k = 0; k < OPENERS.length; k++) { await openOne(OPENERS[k]); await sleep(300); visibleModals().forEach(function (m) { m.style.display = 'none'; }); }
+  }
+  D.getElementById('lang-toggle-btn').click(); await sleep(400);
+  var done = {};
+  for (var i = 0; i < OPENERS.length; i++) {
+    visibleModals().forEach(function (m) { m.style.display = 'none'; });
+    var err = await openOne(OPENERS[i]);
+    await sleep(800);
+    var vis = visibleModals().filter(function (m) { return !done[m.id]; });
+    if (!vis.length) notOpened.push(OPENERS[i][0] + (err ? '(' + err.slice(0, 40) + ')' : ''));
+    vis.forEach(function (m) {
+      done[m.id] = 1;
+      var h = hangul(m); total += h.length;
+      out.push('### ' + m.id + ' (' + OPENERS[i][0] + ') — ' + h.length);
+      h.forEach(function (t) { out.push('    ' + t); });
+    });
+  }
+  out.push('안 열림: ' + notOpened.join(', '));
+  out.push('합계 ' + total);
+  document.getElementById('out').textContent = out.join('\n');
+};
+</script></body></html>

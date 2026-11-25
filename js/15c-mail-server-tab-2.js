@@ -213,7 +213,7 @@ window._msShowKeywordSuggestModal = async function() {
             </div>
             <div id="ms-kwsuggest-body" style="overflow-y:auto; flex:1; background:#fafafa;"></div>
             <div style="padding:10px 16px; border-top:1px solid #eee;">
-                <button id="ms-kwsuggest-all-btn" onclick="window._msApplyAllKeywordSuggestions()" onmouseover="this.style.background='#c9ecd3'; this.style.borderColor='#7cc494';" onmouseout="this.style.background='#e6f6ea'; this.style.borderColor='#a8dab8';" style="width:100%; padding:7px 14px; background:#e6f6ea; color:#1f7a3d; border:1px solid #a8dab8; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">✅ 전체 추가</button>
+                <button id="ms-kwsuggest-all-btn" onclick="window._msApplyAllKeywordSuggestions()" onmouseover="this.style.background='#c9ecd3'; this.style.borderColor='#7cc494';" onmouseout="this.style.background='#e6f6ea'; this.style.borderColor='#a8dab8';" style="width:100%; padding:7px 14px; background:#e6f6ea; color:#1f7a3d; border:1px solid #a8dab8; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">${window._bi('✅ 전체 추가', '✅ Add all')}</button>
             </div>
         </div>`;
         document.body.appendChild(modal);
@@ -388,7 +388,7 @@ window._msShowAddressSuggestModal = function() {
             </div>
             <div id="ms-addrsuggest-body" style="overflow-y:auto; flex:1; background:#fafafa;"></div>
             <div style="padding:10px 16px; border-top:1px solid #eee;">
-                <button id="ms-addrsuggest-all-btn" onclick="window._msApplyAllAddressSuggestions()" onmouseover="this.style.background='#c9ecd3'; this.style.borderColor='#7cc494';" onmouseout="this.style.background='#e6f6ea'; this.style.borderColor='#a8dab8';" style="width:100%; padding:7px 14px; background:#e6f6ea; color:#1f7a3d; border:1px solid #a8dab8; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">✅ 전체 주소록에 추가</button>
+                <button id="ms-addrsuggest-all-btn" onclick="window._msApplyAllAddressSuggestions()" onmouseover="this.style.background='#c9ecd3'; this.style.borderColor='#7cc494';" onmouseout="this.style.background='#e6f6ea'; this.style.borderColor='#a8dab8';" style="width:100%; padding:7px 14px; background:#e6f6ea; color:#1f7a3d; border:1px solid #a8dab8; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">${window._bi('✅ 전체 주소록에 추가', '✅ Add all to address book')}</button>
             </div>
         </div>`;
         document.body.appendChild(modal);

@@ -965,7 +965,7 @@ window.sendSingleAlarm = async function(sendAll) {
         if (window.bmAlertModal) window.bmAlertModal(_failMsg);
         else alert(_failMsg);
     } finally {
-        if (btn) { btn.disabled = false; btn.textContent = '📧 즉시 발송'; }
+        if (btn) { btn.disabled = false; btn.textContent = window._t('📧 즉시 발송', '📧 Send Now'); }
     }
 };
 

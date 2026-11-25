@@ -605,11 +605,11 @@
   </div>
   <div id="alarm-modal-body" style="font-size:13px; color:#333; line-height:1.7;"></div>
   <div style="margin-top:20px; display:flex; gap:10px; justify-content:flex-end;">
-    <button id="alarm-modal-send-btn"
+    <button id="alarm-modal-send-btn" data-i18n="alarm-modal-send-btn"
       onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';"
       style="padding:6px 14px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;"
       onclick="window.sendSingleAlarm(false)">📧 즉시 발송</button>
-    <button id="alarm-modal-close-btn" onclick="window.closeAlarmModal()"
+    <button id="alarm-modal-close-btn" data-i18n="alarm-modal-close-btn" onclick="window.closeAlarmModal()"
       onmouseover="this.style.background='#e9ecef';" onmouseout="this.style.background='#f8f9fa';"
       style="padding:6px 14px; border:1px solid #ccc; color:#555; background:#f8f9fa; border-radius:6px; font-size:13px; cursor:pointer; transition:background .15s;">닫기</button>
   </div>
@@ -2084,10 +2084,10 @@
 <script src="js/04d-core-app-gantt-core.js?v=2026112582"></script>
 <script src="js/04e-core-app-undo-redo.js?v=2026112672"></script>
 <script src="js/04f-core-app-upload-utils-1.js?v=2026112582"></script>
-<script src="js/04g-core-app-upload-utils-2.js?v=2026112582"></script>
-<script src="js/04h-core-app-upload-utils-3.js?v=2026112582"></script>
+<script src="js/04g-core-app-upload-utils-2.js?v=2026112585"></script>
+<script src="js/04h-core-app-upload-utils-3.js?v=2026112585"></script>
 <script src="js/04i-core-app-upload-utils-4.js?v=2026112582"></script>
-<script src="js/04j-core-app-upload-utils-5.js?v=2026112584"></script>
+<script src="js/04j-core-app-upload-utils-5.js?v=2026112586"></script>
 <script src="js/04k-core-app-filter-export.js?v=2026112501k"></script>
 
 <script src="js/05-drive-sync-optimize.js?v=20261124a4"></script>
@@ -2110,9 +2110,9 @@
 <script src="js/13-mobile-touch-timer.js?v=20261124a4"></script>
 
 <!-- 14-ai-mail-analysis.js 분리 (토큰 절약 · 협업용): 로딩 순서는 기존과 동일하게 유지 -->
-<script src="js/14a-ai-mail-analysis-1.js?v=2026112582"></script>
+<script src="js/14a-ai-mail-analysis-1.js?v=2026112585"></script>
 <script src="js/14b-ai-mail-analysis-2.js?v=2026112582"></script>
-<script src="js/14c-task-inbox.js?v=20261125ln"></script>
+<script src="js/14c-task-inbox.js?v=2026112588"></script>
 <script src="js/14d-distribution-ledger.js?v=2026112601"></script>
 
 
@@ -2673,8 +2673,8 @@
 
 <!-- 15-mail-attachment-tab.js 분리 (토큰 절약 · 협업용): 로딩 순서는 기존과 동일하게 유지 -->
 <script src="js/15a-mail-attachment-tab.js?v=2026112631"></script>
-<script src="js/15b-mail-server-tab-1.js?v=2026112534"></script>
-<script src="js/15c-mail-server-tab-2.js?v=2026112583"></script>
+<script src="js/15b-mail-server-tab-1.js?v=2026112587"></script>
+<script src="js/15c-mail-server-tab-2.js?v=2026112585"></script>
 
 
 
@@ -2733,7 +2733,7 @@
 <!-- 22-tabs-summary-mctable.js 분리 (토큰 절약 · 협업용): 로딩 순서는 기존과 동일하게 유지 -->
 <script src="js/22a-summary-mctable-parse.js?v=2026112582"></script>
 <script src="js/22b-summary-mctable-core1.js?v=20261125ar"></script>
-<script src="js/22c-summary-mctable-core2.js?v=20261125ar"></script>
+<script src="js/22c-summary-mctable-core2.js?v=2026112588"></script>
 <script src="js/22d-summary-mctable-core3.js?v=2026112735"></script>
 <script src="js/22e-summary-mctable-core4.js?v=2026112735"></script>
 <script src="js/22f-address-book.js?v=2026112631"></script>
@@ -2792,7 +2792,7 @@
     <!-- 🔀 저장소 어댑터(Drive ↔ 사내 NAS). 플래그 OFF 기본 — 아무것도 감싸지 않는다 -->
     <script src="js/57-storage-adapter.js?v=2026112594"></script>
     <!-- 📦 Drive → NAS 일괄 이사. 미러는 "쓸 때만" 옮기므로 이게 한 번은 돌아야 한다 -->
-    <script src="js/59-daily-report.js?v=20261125ln"></script>
+    <script src="js/59-daily-report.js?v=2026112589"></script>
     <script src="js/60-telegram-qa-bridge.js?v=20261124a4"></script>
     <script src="js/61-mail-evidence.js?v=20261125a1"></script>
     <script src="js/62-period-summary.js?v=20261125ln"></script>
@@ -2803,7 +2803,7 @@
     <script src="js/66-index-selfheal.js?v=2026112551"></script>
     <script src="js/66-doc-generate.js?v=20261124a4"></script>
     <script src="js/68-doc-checksheets.js?v=20261124a4"></script>
-    <script src="js/69-resolution-spec.js?v=2026112505a"></script>
+    <script src="js/69-resolution-spec.js?v=2026112585"></script>
     <script src="js/70-jira-tab.js?v=2026112571"></script>
     <script src="js/67-document-page.js?v=2026112701a"></script>
     <script src="js/72-labelspec-import.js?v=20261124a4"></script>

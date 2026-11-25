@@ -1806,12 +1806,12 @@ window._msClearQueueFilter = function() {
 /** 사유 칩 값 계산 — 요약 집계와 필터 적용 양쪽에서 동일 규칙을 써야 하므로 공용 함수로 뺌 */
 window._msQueueReasonBucket = function(r) {
     const s = (r.matchReason || '').trim();
-    return s ? s.slice(0, 34) + (s.length > 34 ? '…' : '') : '(근거없음/구버전분석 — 🔄 재분석하면 근거 표시됨)';
+    return s ? s.slice(0, 34) + (s.length > 34 ? '…' : '') : window._t('(근거없음/구버전분석 — 🔄 재분석하면 근거 표시됨)', '(no evidence / old analysis — 🔄 re-analyze to show it)');
 };
 /** 도메인 칩 값 계산 — 위와 동일한 이유로 공용 함수 */
 window._msQueueDomain = function(r) {
     const m = (r.sender || '').match(/@([\w.-]+)/);
-    return m ? m[1] : '(파싱안됨)';
+    return m ? m[1] : window._t('(파싱안됨)', '(unparsed)');
 };
 /** 현재 필터를 rows에 적용해서 아래 목록에 실제로 보여줄 부분집합을 반환 */
 window._msApplyQueueFilter = function(rows) {
@@ -1832,7 +1832,7 @@ window._msBuildQueueSummaryHtml = function(type, rows) {
     function chip(label, count, kind) {
         const active = filter && filter.kind === kind && filter.value === label;
         return `<span class="ms-queue-chip" data-kind="${_msQEsc(kind)}" data-value="${_msQEsc(label)}" ` +
-            `title="클릭하면 아래 목록을 이 항목만 보여줍니다" ` +
+            `title="${window._t('클릭하면 아래 목록을 이 항목만 보여줍니다', 'Click to show only this item in the list below')}" ` +
             `style="display:inline-block;background:#eef3ff;color:#1a4f7a;border-radius:10px;padding:2px 8px;margin:2px 4px 2px 0;` +
             `font-size:11px;white-space:nowrap;cursor:pointer;${active ? 'outline:2px solid #1a4f7a;' : ''}">${_msQEsc(label)} <b>${count}</b></span>`;
     }
@@ -1847,7 +1847,7 @@ window._msBuildQueueSummaryHtml = function(type, rows) {
         //    카드를 일일이 열어보지 않고도 짐작할 수 있게 해줌.
         const reasonTop = topCount(rows, r => window._msQueueReasonBucket(r), 6);
         reasonHtml = reasonTop.length
-            ? `<div style="margin-top:6px;"><b>사유 상위:</b><br>${reasonTop.map(e => chip(e[0], e[1], 'reason')).join('')}</div>`
+            ? `<div style="margin-top:6px;"><b>${window._t('사유 상위:', 'Top reasons:')}</b><br>${reasonTop.map(e => chip(e[0], e[1], 'reason')).join('')}</div>`
             : '';
         // 📥 [2026-11-25] 후보 0개 메일은 이제 업무 보관함 대기 카드로 간다 — 여기 남는 건 AI 분석에 실패한 건뿐
         reasonHtml += `<div style="margin-top:6px;color:#1971c2;">📥 ${window._currentLang === 'en'
@@ -1862,16 +1862,24 @@ window._msBuildQueueSummaryHtml = function(type, rows) {
 
     // 💡 [2026-10-26 신규] "여긴 뭐고 언제 지워지나"를 매번 물어보지 않도록 안내 — 호버로만 보임(ℹ️).
     //    docs/doc-store.md "staging 정리(GC)는 기간이 아니라 큐 연동" 절 요약.
-    const _gcInfo = 'ℹ️ 📁 저장 위치 안내\n\n' +
+    const _gcInfoKo = 'ℹ️ 📁 저장 위치 안내\n\n' +
         '이 목록의 메일 원본(.eml)은 Google Drive가 아니라 사내 NAS 공유의 MAIL/_staging 폴더에 보관됩니다.\n\n' +
         '· 프로젝트에 배치되면 그 프로젝트 폴더로 옮겨져 영구 보관됩니다.\n' +
         '· 여기(또는 업무 보관함 등 다른 대기 큐)에 남아있는 한 기간과 상관없이 계속 보관됩니다.\n' +
         '· 60일이 지나고 모든 대기 큐에서도 사라진 것만 정리 대상이 됩니다 — 60일은 "최후 방어선"일 뿐,\n' +
         '  자동으로 매일 돌지는 않고 필요 시 수동으로 실행합니다.';
+    const _gcInfo = window._currentLang === 'en'
+        ? 'ℹ️ 📁 Where the originals are kept\n\n' +
+          'The original mails (.eml) in this list are kept in the MAIL/_staging folder on the company NAS share, not Google Drive.\n\n' +
+          '· Once placed in a project they move to that project folder and are kept for good.\n' +
+          '· While they stay here (or in another waiting queue such as the task inbox) they are kept regardless of age.\n' +
+          '· Only those older than 60 days and gone from every waiting queue are cleaned up — 60 days is just a last line of defense;\n' +
+          '  it does not run daily but manually when needed.'
+        : _gcInfoKo;
     return `<div id="ms-queue-summary-inner" style="padding:10px 14px;background:#f8faff;border-bottom:1px solid #e3ecfa;font-size:11.5px;color:#333;">` +
-        `<div><span class="ms-queue-clear-filter" title="클릭하면 전체보기(필터 해제)" style="cursor:pointer;text-decoration:underline dotted;"><b>총 ${rows.length}건</b></span>${dateRange ? ' · ' + _msQEsc(dateRange) : ''}` +
-        ` <span title="${_msQEsc(_gcInfo)}" style="cursor:help;color:#888;font-size:11px;">ℹ️ 원본 보관 안내</span></div>` +
-        (domainTop.length ? `<div style="margin-top:6px;"><b>발신 도메인:</b> ${domainTop.map(e => chip(e[0], e[1], 'domain')).join('')}</div>` : '') +
+        `<div><span class="ms-queue-clear-filter" title="${window._t('클릭하면 전체보기(필터 해제)', 'Click to show all (clear filter)')}" style="cursor:pointer;text-decoration:underline dotted;"><b>${window._t('총 ' + rows.length + '건', 'Total ' + rows.length)}</b></span>${dateRange ? ' · ' + _msQEsc(dateRange) : ''}` +
+        ` <span title="${_msQEsc(_gcInfo)}" style="cursor:help;color:#888;font-size:11px;">ℹ️ ${window._t('원본 보관 안내', 'Where originals are kept')}</span></div>` +
+        (domainTop.length ? `<div style="margin-top:6px;"><b>${window._t('발신 도메인:', 'Sender domains:')}</b> ${domainTop.map(e => chip(e[0], e[1], 'domain')).join('')}</div>` : '') +
         reasonHtml +
         filterHtml +
         `</div>`;
@@ -1921,7 +1929,7 @@ window._msQueueRowHint = function(type, r) {
     if (reason.startsWith('unknown_domain:')) return `주소록에 없는 발신자 도메인(${reason.slice(15)}) — 정상 거래처면 주소록에 추가 필요`;
     if (reason === 'whitelist_empty') return '주소록이 비어있어 전부 신규발신자로 분류됨';
     if (type === 'unmatched') {
-        var base = r.matchReason || '등록된 프로젝트 후보 중 AI가 확신 있게 고르지 못함(신뢰도 낮음/해당없음) — 이 메일은 옛날 버전 분석이라 상세 근거가 없습니다. 🔄 재분석 요청으로 다시 분석하면 근거가 표시됩니다.';
+        var base = r.matchReason || window._t('등록된 프로젝트 후보 중 AI가 확신 있게 고르지 못함(신뢰도 낮음/해당없음) — 이 메일은 옛날 버전 분석이라 상세 근거가 없습니다. 🔄 재분석 요청으로 다시 분석하면 근거가 표시됩니다.', 'The AI could not confidently pick one of the registered projects (low confidence / none) — this mail was analyzed by an old version, so there is no detailed evidence. Request a 🔄 re-analysis to see it.');
         // 💡 [2026-10-22] AI가 못 고른 진짜 이유가 "그 프로젝트가 앱에 아직 없어서"인 경우가 많다.
         //    사내 프로젝트 사전(js/49, 사용자가 엑셀로 관리하던 목록)에서 결정론으로만 찾아 덧붙인다.
         //    ⚠️ 제안일 뿐 자동 배정이 아니다 — 등록 안 된 곳에 꽂을 수는 없다.
@@ -1988,7 +1996,7 @@ window._msRenderQueueModal = function(type) {
             const reanalyzeBtn = (type === 'unmatched')
                 ? `<button class="ms-queue-reanalyze-btn" data-filename="${_msQEsc(r.fileName)}"
                         onmouseover="this.style.background='#c9ecd3'; this.style.borderColor='#7cc494';" onmouseout="this.style.background='#e6f6ea'; this.style.borderColor='#a8dab8';"
-                        title="사용자 의견을 참고해서 프로젝트 매칭 재분석 요청" style="display:inline-flex; align-items:center; justify-content:center; background:#e6f6ea; border:1px solid #a8dab8; color:#1f7a3d; border-radius:6px; width:26px; height:26px; padding:0; cursor:pointer; font-size:12px; transition:background .15s, border-color .15s;">🔄</button>`
+                        title="${window._t('사용자 의견을 참고해서 프로젝트 매칭 재분석 요청', 'Request project re-matching using your note')}" style="display:inline-flex; align-items:center; justify-content:center; background:#e6f6ea; border:1px solid #a8dab8; color:#1f7a3d; border-radius:6px; width:26px; height:26px; padding:0; cursor:pointer; font-size:12px; transition:background .15s, border-color .15s;">🔄</button>`
                 : '';
             // 🐛 [2026-10-21 버그수정, 실측 진단] 신규발신자·폐기 큐는 편도(one-way)였다 — 행 버튼이
             //    📧보기/🚫차단/🗑️삭제뿐이라, 잘못 걸러진 메일을 AI로 보낼 방법이 아예 없었다
@@ -2012,14 +2020,14 @@ window._msRenderQueueModal = function(type) {
                 <div style="flex-shrink:0; display:flex; gap:4px;">
                     <button class="ms-queue-view-btn" data-idx="${i}"
                         onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';"
-                        title="원문 보기" style="display:inline-flex; align-items:center; justify-content:center; background:#e8f4fd; border:1px solid #a5c8f0; color:#1a4f7a; border-radius:6px; width:26px; height:26px; padding:0; cursor:pointer; font-size:12px; transition:background .15s, border-color .15s;">📧</button>
+                        title="${window._t('원문 보기', 'View original')}" style="display:inline-flex; align-items:center; justify-content:center; background:#e8f4fd; border:1px solid #a5c8f0; color:#1a4f7a; border-radius:6px; width:26px; height:26px; padding:0; cursor:pointer; font-size:12px; transition:background .15s, border-color .15s;">📧</button>
                     ${analyzeBtn}
                     ${ruleBtn}
                     ${newProjBtn}
                     ${reanalyzeBtn}
                     <button class="ms-queue-del-btn" data-filename="${_msQEsc(r.fileName)}"
                         onmouseover="this.style.background='#f5c2bd'; this.style.borderColor='#e08f87';" onmouseout="this.style.background='#fbe4e2'; this.style.borderColor='#eeb0ac';"
-                        title="삭제" style="display:inline-flex; align-items:center; justify-content:center; background:#fbe4e2; border:1px solid #eeb0ac; color:#b1432f; border-radius:6px; width:26px; height:26px; padding:0; cursor:pointer; font-size:12px; transition:background .15s, border-color .15s;">🗑️</button>
+                        title="${window._t('삭제', 'Delete')}" style="display:inline-flex; align-items:center; justify-content:center; background:#fbe4e2; border:1px solid #eeb0ac; color:#b1432f; border-radius:6px; width:26px; height:26px; padding:0; cursor:pointer; font-size:12px; transition:background .15s, border-color .15s;">🗑️</button>
                 </div>
             </div>`;
         }).join('')
@@ -2046,7 +2054,7 @@ window._msRenderQueueModal = function(type) {
                 <button id="ms-queue-reanalyze-all-btn" onclick="window._msQueueBulkClick()" onmouseover="this.style.background='#c9ecd3'; this.style.borderColor='#7cc494';" onmouseout="this.style.background='#e6f6ea'; this.style.borderColor='#a8dab8';" style="display:none; flex:1; padding:7px 10px; background:#e6f6ea; color:#1f7a3d; border:1px solid #a8dab8; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">🔄 전체 재분석</button>
                 <button id="ms-queue-clear-all-btn" onclick="window._msQueueClearAll()" onmouseover="this.style.background='#f5c2bd'; this.style.borderColor='#e08f87';" onmouseout="this.style.background='#fbe4e2'; this.style.borderColor='#eeb0ac';" style="flex:1; padding:7px 14px; background:#fbe4e2; color:#b1432f; border:1px solid #eeb0ac; border-radius:6px; font-size:12px; cursor:pointer; transition:background .15s, border-color .15s;"></button>
                 <!-- 🚫 [2026-11-23 사용자 요청] "자동폐기 필터 열어줘" — 큐 모달에서 바로 그 설정 섹션으로 간다 -->
-                <button id="ms-queue-filter-btn" onclick="window.openMailAutoConfigModal({openFilter:true})" title="자동폐기 필터 설정 열기" onmouseover="this.style.background='#e9ecef';" onmouseout="this.style.background='#f8f9fa';" style="flex:0 0 auto; padding:7px 10px; background:#f8f9fa; color:#555; border:1px solid #ccc; border-radius:6px; font-size:12px; cursor:pointer; transition:background .15s;">🚫 자동폐기 필터</button>
+                <button id="ms-queue-filter-btn" onclick="window.openMailAutoConfigModal({openFilter:true})" title="자동폐기 필터 설정 열기" data-en-title="Open auto-discard filter settings" onmouseover="this.style.background='#e9ecef';" onmouseout="this.style.background='#f8f9fa';" style="flex:0 0 auto; padding:7px 10px; background:#f8f9fa; color:#555; border:1px solid #ccc; border-radius:6px; font-size:12px; cursor:pointer; transition:background .15s;">🚫 자동폐기 필터</button>
             </div>
         </div>`;
         document.body.appendChild(modal);
@@ -2422,18 +2430,18 @@ window._msOpenReanalyzeHintModal = function(fileName) {
             <div style="padding:18px;">
                 <div id="ms-reanalyze-subject" style="font-size:12px; color:#555; margin-bottom:6px; overflow-wrap:break-word;"></div>
                 <div id="ms-reanalyze-prev-reason" style="font-size:11.5px; color:#a85d0a; background:#fff8e6; border:1px solid #ffe08a; border-radius:6px; padding:8px 10px; margin-bottom:10px; display:none;"></div>
-                <label style="font-size:11.5px; color:#888; display:block; margin-bottom:6px;">위 근거를 참고해서, 실제로 어느 프로젝트 건인지(또는 왜 미분류가 맞는지) 의견을 남겨주세요 — 선택 입력, 비워두면 힌트 없이 그냥 다시 판단합니다.</label>
+                <label style="font-size:11.5px; color:#888; display:block; margin-bottom:6px;">${window._bi('위 근거를 참고해서, 실제로 어느 프로젝트 건인지(또는 왜 미분류가 맞는지) 의견을 남겨주세요 — 선택 입력, 비워두면 힌트 없이 그냥 다시 판단합니다.', 'Using the evidence above, say which project this mail really belongs to (or why unclassified is right) — optional; leave it blank to just re-judge without a hint.')}</label>
                 <div style="margin-bottom:6px;">
-                    <button id="ms-proj-picker-btn" onclick="window._msToggleProjPicker()" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="font-size:12px; padding:4px 12px; height:28px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:5px; cursor:pointer; font-weight:bold; transition:background .15s, border-color .15s;">📋 프로젝트 선택 ▾</button>
+                    <button id="ms-proj-picker-btn" onclick="window._msToggleProjPicker()" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="font-size:12px; padding:4px 12px; height:28px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:5px; cursor:pointer; font-weight:bold; transition:background .15s, border-color .15s;">${window._bi('📋 프로젝트 선택 ▾', '📋 Pick projects ▾')}</button>
                     <span id="ms-proj-picker-selected-summary" style="display:inline-block; margin-left:6px; font-size:11px; color:#1971c2; vertical-align:middle;"></span>
                     <div id="ms-proj-picker-list" style="display:none; margin-top:4px; border:1px solid #ced4da; border-radius:6px; max-height:160px; overflow-y:auto; background:#fff; font-size:12px; box-shadow:0 2px 8px rgba(0,0,0,0.08);"></div>
-                    <div id="ms-proj-picker-hint" style="display:none; font-size:10.5px; color:#888; margin-top:2px;">💡 2개 이상 선택하면 AI 단일 매칭 없이 선택한 프로젝트 전부로 곧바로 배분됩니다.</div>
+                    <div id="ms-proj-picker-hint" style="display:none; font-size:10.5px; color:#888; margin-top:2px;">${window._bi('💡 2개 이상 선택하면 AI 단일 매칭 없이 선택한 프로젝트 전부로 곧바로 배분됩니다.', '💡 Pick two or more and it goes straight to all of them without a single AI match.')}</div>
                 </div>
-                <textarea id="ms-reanalyze-hint" placeholder="${window._currentLang === 'en' ? 'e.g. Ref. number differs but it is actually STELLAR32 / e.g. It is a meeting note mixing multiple projects, so unclassified is correct' : '예: 관리번호는 다르지만 실제로는 STELLAR32 건 맞음 / 예: 회의록이라 여러 프로젝트가 섞여있어서 미분류가 맞음'}"
+                <textarea id="ms-reanalyze-hint" ${window._biPh('예: 관리번호는 다르지만 실제로는 STELLAR32 건 맞음 / 예: 회의록이라 여러 프로젝트가 섞여있어서 미분류가 맞음', 'e.g. Ref. number differs but it is actually STELLAR32 / e.g. It is a meeting note mixing multiple projects, so unclassified is correct')}
                     style="width:100%; min-height:70px; font-size:13px; border:1px solid #ced4da; border-radius:6px; padding:8px; box-sizing:border-box; resize:vertical;"></textarea>
                 <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:12px;">
-                    <button onclick="window._msSubmitReanalyze()" onmouseover="this.style.background='#c9ecd3'; this.style.borderColor='#7cc494';" onmouseout="this.style.background='#e6f6ea'; this.style.borderColor='#a8dab8';" style="padding:6px 18px; background:#e6f6ea; color:#1f7a3d; border:1px solid #a8dab8; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">재분석 요청</button>
-                    <button onclick="document.getElementById('ms-reanalyze-modal').style.display='none'" onmouseover="this.style.background='#e9ecef';" onmouseout="this.style.background='#f8f9fa';" style="padding:6px 14px; background:#f8f9fa; color:#555; border:1px solid #ccc; border-radius:6px; font-size:13px; cursor:pointer; transition:background .15s;">취소</button>
+                    <button onclick="window._msSubmitReanalyze()" onmouseover="this.style.background='#c9ecd3'; this.style.borderColor='#7cc494';" onmouseout="this.style.background='#e6f6ea'; this.style.borderColor='#a8dab8';" style="padding:6px 18px; background:#e6f6ea; color:#1f7a3d; border:1px solid #a8dab8; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">${window._bi('재분석 요청', 'Request re-analysis')}</button>
+                    <button onclick="document.getElementById('ms-reanalyze-modal').style.display='none'" onmouseover="this.style.background='#e9ecef';" onmouseout="this.style.background='#f8f9fa';" style="padding:6px 14px; background:#f8f9fa; color:#555; border:1px solid #ccc; border-radius:6px; font-size:13px; cursor:pointer; transition:background .15s;">${window._bi('취소', 'Cancel')}</button>
                 </div>
             </div>
         </div>`;
