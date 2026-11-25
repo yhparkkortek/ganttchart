@@ -416,10 +416,12 @@ window.bringModalToFront = function(overlayId) {
         if (!el._langLightAt || _now - el._langLightAt > 1000) {
             el._langLightAt = _now;
             window._langLightQueued = true;
-            requestAnimationFrame(function () {
+            // ⚠️ requestAnimationFrame 이 아니라 setTimeout — rAF 는 창이 안 보이거나 그리기가 쉬면 안 돌아서
+            //    깃발이 true 로 굳고 그 뒤 모든 모달 번역이 멈췄다(실측: 점검을 돌릴 때마다 결과가 3 / 9 / 39 로 흔들렸다).
+            setTimeout(function () {
                 window._langLightQueued = false;
                 try { window._applyLangLight(); } catch (e) { console.warn('[lang] 모달 글자 번역 실패', e); }
-            });
+            }, 0);
         }
     }
 };

@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>모달 위치 기억·초기화·넓은 모달 기본 위치 시험</title></head><body style="margin:0">
+<!-- 📐 [2026-11-25] 진짜 kortek_pm.html, 진짜 여는 함수·진짜 ⚙️ 메뉴 버튼. 가짜는 showToast 하나(글을 받아 본다).
+     ① 기억된 자리로 열린다 ② 메뉴 [🪟 모달 위치 초기화] → 열린 넓은 모달이 기본 자리로, 저장 비움, 토스트
+     ③ 다시 열어도 기본 자리(다시 만드는 모달 — JIRA 검색) ④ 다른 넓은 모달(자재 보관함)도 같은 자리 ⑤ 목록 밖 모달(알람 설정)은 원래 크기
+     실행: chrome --headless=new --allow-file-access-from-files --window-size=2000,1100 --virtual-time-budget=30000
+           --dump-dom file:///.../tests/modal-pos-reset.html → <pre id="out"> (마지막 줄 N/M) -->
+<iframe id="f" src="../kortek_pm.html?mpr=1" style="border:0;width:2000px;height:1100px;"></iframe>
+<pre id="out">running…</pre>
+<script>
+var out = [], pass = 0, fail = 0;
+function chk(c, l) { c ? pass++ : fail++; out.push((c ? 'ok   ' : 'FAIL ') + l); }
+function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+f.onload = async function () {
+  await sleep(2500);
+  var W = f.contentWindow, D = f.contentDocument, toasts = [];
+  try {
+    W.showToast = function (m) { toasts.push(m); };
+    var KEY = W.MODAL_POS_POLICY.key, saved = W.localStorage.getItem(KEY);
+    function R(id) { var b = D.getElementById(id); if (!b) return null; var r = b.getBoundingClientRect(); return [r.left, r.top, r.width, r.height].map(Math.round); }
+    function same(a, b) { return a && b && a.every(function (v, i) { return Math.abs(v - b[i]) <= 1; }); }
+    function hide(id) { var m = D.getElementById(id); if (m) m.style.display = 'none'; }
+    var fr = W._modalFitRect(), FIT = [fr.l, fr.t, fr.w, fr.h];
+    W.localStorage.setItem(KEY, JSON.stringify({ 'jira-search-box': { l: 300, t: 200, w: 700, h: 500 } }));
+    W._jiraOpenSearchModal(); await sleep(700);
+    chk(same(R('jira-search-box'), [300, 200, 700, 500]), '① 기억된 자리로 열린다 — ' + R('jira-search-box'));
+    D.getElementById('settings-menu-btn').click(); await sleep(200);
+    D.getElementById('modal-pos-reset-btn').click(); await sleep(400);
+    chk(same(R('jira-search-box'), FIT), '② 열린 채 초기화 → 기본 자리 ' + FIT + ' — ' + R('jira-search-box'));
+    chk(W.localStorage.getItem(KEY) === null, '② 저장 비움');
+    chk(toasts.some(function (t) { return /1개/.test(t); }), '② 토스트 — ' + toasts.join(' | '));
+    hide('jira-search-modal'); await sleep(300); W._jiraOpenSearchModal(); await sleep(700);
+    chk(same(R('jira-search-box'), FIT), '③ 다시 열어도 기본 자리 — ' + R('jira-search-box'));
+    hide('jira-search-modal'); await sleep(300); W._mcOpen(); await sleep(700);
+    chk(same(R('matcart-box'), FIT), '④ 자재 보관함도 같은 자리 — ' + R('matcart-box'));
+    hide('matcart-modal'); await sleep(300); W.openAlarmSettings(); await sleep(700);
+    var al = R('alarm-settings-modal');
+    chk(al && al[2] < 700, '⑤ 목록 밖 모달은 원래 크기 — ' + al);
+    if (saved === null) W.localStorage.removeItem(KEY); else W.localStorage.setItem(KEY, saved);
+  } catch (e) { out.push('SETUP ' + e.message); }
+  out.push(pass + '/' + (pass + fail));
+  document.getElementById('out').textContent = out.join('\n');
+};
+</script></body></html>

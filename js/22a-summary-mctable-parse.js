@@ -928,7 +928,7 @@ window.renderAlarmDomainList = function() {
     const cfg = window.loadAlarmSettings();
     const allowed = new Set(cfg.allowedExternalDomains || []);
     if (!domains.length) {
-        wrap.innerHTML = '<span style="font-size:11.5px; color:#aaa;" data-en="No domains other than @kortek.co.kr in the address book.">주소록에 @kortek.co.kr 이외 도메인이 없습니다.</span>';
+        wrap.innerHTML = '<span style="font-size:11.5px; color:#aaa;">' + window._t('주소록에 @kortek.co.kr 이외 도메인이 없습니다.', 'No domains other than @kortek.co.kr in the address book.') + '</span>';
         return;
     }
     wrap.innerHTML = domains.map(function(d) {

@@ -268,6 +268,23 @@ window._modalPosRead = function() {
 // 📐 [2026-11-23 2차, 사용자 요청 "모달 크기도 같이 기억"] 크기는 **사람이 크기조절을 놓았을 때만**
 //    적는다(withSize) — 드래그만 했을 때 그 순간 크기까지 적으면, 내용 따라 자라는 모달(높이 auto)이
 //    그때 높이에 굳어 버린다. 드래그는 위치만 바꾸고 전에 적어 둔 크기는 그대로 둔다.
+// 🧹 [2026-11-25 사용자 요청] 기억된 모달 위치·크기를 전부 지운다 — ⚙️ 설정 ▸ 진단·도움말.
+//    지금 열려 있는 **넓은 모달**(MODAL_FIT_WIDE)은 그 자리에서 기본 위치로 다시 붙이고, 나머지는 다음에 열 때 기본값.
+//    이 PC 브라우저의 표시 설정일 뿐이라 되돌릴 것이 없다(확인창 없이 바로, 결과는 토스트).
+window._modalPosReset = function() {
+    let n = 0;
+    try { n = Object.keys(window._modalPosRead()).length; localStorage.removeItem(window.MODAL_POS_POLICY.key); } catch (e) { /* 저장소를 못 쓰면 지울 것도 없다 */ }
+    let refit = 0;
+    (window.MODAL_FIT_WIDE || []).forEach(function (id) {
+        const box = document.getElementById(id);
+        if (box && window._mreszIsShown(box) && window._modalFitWide(id)) refit++;
+    });
+    if (window.showToast) window.showToast(window._t
+        ? window._t('🪟 기억된 모달 위치 ' + n + '개를 지웠습니다 — 다음에 열 때 기본 위치로 엽니다.', '🪟 Cleared ' + n + ' remembered modal position(s) — they open at the default position next time.')
+        : '🪟 ' + n, 'success');
+    return { cleared: n, refit: refit };
+};
+
 window._modalPosSave = function(boxId, withSize) {
     const box = document.getElementById(boxId);
     if (!box || !window._mreszIsShown(box)) return;
@@ -605,14 +622,17 @@ window._makeResizable = function(boxId, _retry, handleId) {
         const justOpened = shown && !_wasShown;
         _wasShown = shown;
         if (!shown) return;
+        if (justOpened && !(window._modalPosRestore && window._modalPosRestore(boxId)) && window._modalFitWide) window._modalFitWide(boxId);
         // 🌐 [2026-11-25] 영어일 때 모달이 열리면 그 글자도 영어로 — 번역 맵(04j)은 언어 버튼을 누를 때만
         //    돌아서, 영어로 바꾼 **뒤에** 처음 만든 모달은 한국어 소스 그대로였다. 한 프레임에 한 번만.
         if (justOpened && window._currentLang === 'en' && window._applyLangLight && !window._langLightQueued) {
             window._langLightQueued = true;
-            requestAnimationFrame(function () {
+            // ⚠️ requestAnimationFrame 이 아니라 setTimeout — rAF 는 창이 안 보이거나 그리기가 쉬면 안 돌아서
+            //    깃발이 true 로 굳고 그 뒤 모든 모달 번역이 멈췄다(실측: 점검을 돌릴 때마다 결과가 3 / 9 / 39 로 흔들렸다).
+            setTimeout(function () {
                 window._langLightQueued = false;
                 try { window._applyLangLight(); } catch (e) { console.warn('[lang] 모달 글자 번역 실패', e); }
-            });
+            }, 0);
         }
         requestAnimationFrame(function() {
             // 모달 코드가 열면서 가운데로 되돌려도(observer 는 그 코드가 끝난 뒤 돈다) 기억한 자리가 이긴다
@@ -630,8 +650,11 @@ window._makeResizable = function(boxId, _retry, handleId) {
     } catch (e) { /* 구형 브라우저 — 창 크기 변경 시 보정은 아래에서 계속 동작 */ }
     // 📍 열 때마다 박스를 새로 만드는 모달(JIRA 상세 등)은 지금 이 설정 순간이 곧 "열리는 순간"이다 —
     //    관찰자는 이미 보이는 상태에서 붙어 숨김→보임 전환을 못 보므로 여기서 한 번 복원한다.
-    if (_wasShown) requestAnimationFrame(function() { if (!(window._modalPosRestore && window._modalPosRestore(boxId)) && window._modalFitWide) window._modalFitWide(boxId); });
-    if (_wasShown && window._currentLang === 'en' && window._applyLangLight) requestAnimationFrame(function() { try { window._applyLangLight(); } catch (e) { /* 번역 실패가 모달을 막지 않게 */ } });
+    //    🐛 [2026-11-25] 다음 프레임에만 하면 다시 연 상자에 안 먹는 경우가 있었다(실측: 기억된 자리로 한 번 연 JIRA 검색을
+    //    기억을 지운 뒤 다시 열면 가운데 기본 위치) — 지금 바로 한 번, 다음 프레임에 한 번 더(둘 다 같은 결과라 두 번 해도 같다).
+    const _placeNow = function() { if (!(window._modalPosRestore && window._modalPosRestore(boxId)) && window._modalFitWide) window._modalFitWide(boxId); };
+    if (_wasShown) { _placeNow(); requestAnimationFrame(_placeNow); }
+    if (_wasShown && window._currentLang === 'en' && window._applyLangLight) setTimeout(function() { try { window._applyLangLight(); } catch (e) { /* 번역 실패가 모달을 막지 않게 */ } }, 0);
 };
 
 // ══════════════════════════════════════════════════════════════════════
