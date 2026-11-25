@@ -559,6 +559,15 @@ window._makeResizable = function(boxId, _retry, handleId) {
         const justOpened = shown && !_wasShown;
         _wasShown = shown;
         if (!shown) return;
+        // 🌐 [2026-11-25] 영어일 때 모달이 열리면 그 글자도 영어로 — 번역 맵(04j)은 언어 버튼을 누를 때만
+        //    돌아서, 영어로 바꾼 **뒤에** 처음 만든 모달은 한국어 소스 그대로였다. 한 프레임에 한 번만.
+        if (justOpened && window._currentLang === 'en' && window._applyLangLight && !window._langLightQueued) {
+            window._langLightQueued = true;
+            requestAnimationFrame(function () {
+                window._langLightQueued = false;
+                try { window._applyLangLight(); } catch (e) { console.warn('[lang] 모달 글자 번역 실패', e); }
+            });
+        }
         requestAnimationFrame(function() {
             // 모달 코드가 열면서 가운데로 되돌려도(observer 는 그 코드가 끝난 뒤 돈다) 기억한 자리가 이긴다
             if (justOpened && window._modalPosRestore) window._modalPosRestore(boxId);
@@ -576,6 +585,7 @@ window._makeResizable = function(boxId, _retry, handleId) {
     // 📍 열 때마다 박스를 새로 만드는 모달(JIRA 상세 등)은 지금 이 설정 순간이 곧 "열리는 순간"이다 —
     //    관찰자는 이미 보이는 상태에서 붙어 숨김→보임 전환을 못 보므로 여기서 한 번 복원한다.
     if (_wasShown) requestAnimationFrame(function() { if (window._modalPosRestore) window._modalPosRestore(boxId); });
+    if (_wasShown && window._currentLang === 'en' && window._applyLangLight) requestAnimationFrame(function() { try { window._applyLangLight(); } catch (e) { /* 번역 실패가 모달을 막지 않게 */ } });
 };
 
 // ══════════════════════════════════════════════════════════════════════
@@ -1188,6 +1198,8 @@ window._minimizeModal = function(modalId, handleId, closeBtn, handle) {
 // 칩이 영문 모드에서도 한글로 보인다는 제보). toggleLang()이 다른 모든 제목 갱신을 끝낸 뒤 이 함수를
 // 호출하면, 현재 최소화된 모든 칩의 라벨을 그 시점의(이미 갱신된) handle 텍스트로 다시 뽑아온다.
 window._refreshMinimizedChipLabels = function() {
+    // 🌐 [2026-11-25] ▼ 최소화 버튼 말풍선 — 모달 등록 때의 언어로 굳어 있었다(언어를 바꿔도 '최소화')
+    document.querySelectorAll('.modal-min-btn').forEach(function (b) { b.title = (window._currentLang === 'en') ? 'Minimize' : '최소화'; });
     Object.keys(window._modalMinimized || {}).forEach(function(modalId) {
         const info = window._modalMinimized[modalId];
         if (!info || !info.chip || !info.handle) return;

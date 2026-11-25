@@ -166,7 +166,7 @@
                 + ' style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); border-radius:6px; color:var(--modal-icon-text); font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;"'
                 + ' onmouseover="this.style.background=\'var(--modal-icon-hover-bg)\'; this.style.borderColor=\'#adb5bd\';"'
                 + ' onmouseout="this.style.background=\'var(--modal-icon-bg)\'; this.style.borderColor=\'var(--modal-icon-border)\';"'
-                + ' title="닫기">✕</button>'
+                + ' title="닫기" data-en-title="Close">✕</button>'
                 + '</div>'
                 + '<div id="holiday-sync-notice" style="padding:12px 18px; font-size:11px; color:#888; line-height:1.5; border-bottom:1px solid #f1f3f5;">'
                 + (_hEn ? 'Public holidays through 2035 are already built in. Register additional days off here — company founding day, temporary holidays, etc.' : '기본 공휴일은 2035년까지 이미 반영되어 있습니다. 여기서는 회사 창립일, 임시공휴일처럼 추가로 쉬는 날을 등록합니다.')

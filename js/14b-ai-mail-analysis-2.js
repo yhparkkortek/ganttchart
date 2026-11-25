@@ -385,7 +385,7 @@ window.showPromptLogs = function() {
                                display:flex; align-items:center; justify-content:center; transition:0.15s;"
                         onmouseover="this.style.background='var(--modal-icon-hover-bg)'; this.style.borderColor='#adb5bd';"
                         onmouseout="this.style.background='var(--modal-icon-bg)'; this.style.borderColor='var(--modal-icon-border)';"
-                        title="닫기">✕</button>
+                        title="닫기" data-en-title="Close">✕</button>
                 </div>
                 <div id="prompt-log-content" style="padding:15px;overflow-y:auto;flex:1;"></div>
                 <div style="padding:15px;border-top:1px solid #dee2e6;display:flex;gap:6px;">

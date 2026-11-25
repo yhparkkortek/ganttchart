@@ -33,13 +33,13 @@ window._cpHslToHex = function(h, s, l) {
 //    진한글씨 #00707d, 호버배경 #a3d9e0, 호버테두리 #52a5af)을 역산해서 얻은 채도/명도 공식.
 //    hue만 입력색에서 뽑아 쓰고 s/l은 고정값이라, 어떤 색을 골라도 "청록과 같은 파스텔 규칙"이 유지됨.
 window.CP_ROLES = [
-    { key: 'bg',          label: '배경(bg)',        s: 58, l: 94 },
-    { key: 'headerTint',  label: '헤더 / 테이블 틴트', s: 41, l: 95 },
-    { key: 'border',      label: '테두리',           s: 26, l: 87 },
-    { key: 'zebraB',      label: '제브라 B행',        s: 30, l: 93 },
-    { key: 'darkText',    label: '진한 텍스트',       s: 100, l: 25 },
-    { key: 'hoverBg',     label: '호버 배경(강조)',    s: 48, l: 75 },
-    { key: 'hoverBorder', label: '호버 테두리',       s: 36, l: 51 }
+    { key: 'bg',          label: '배경(bg)', en: 'Background (bg)',        s: 58, l: 94 },
+    { key: 'headerTint',  label: '헤더 / 테이블 틴트', en: 'Header / table tint', s: 41, l: 95 },
+    { key: 'border',      label: '테두리', en: 'Border',           s: 26, l: 87 },
+    { key: 'zebraB',      label: '제브라 B행', en: 'Zebra row B',        s: 30, l: 93 },
+    { key: 'darkText',    label: '진한 텍스트', en: 'Dark text',       s: 100, l: 25 },
+    { key: 'hoverBg',     label: '호버 배경(강조)', en: 'Hover background (accent)',    s: 48, l: 75 },
+    { key: 'hoverBorder', label: '호버 테두리', en: 'Hover border',       s: 36, l: 51 }
 ];
 // 🦓 [2026-11-24] Calendar 월 보기의 짝수 번째 주(8~14·22~28·36~42번째 칸) — 날짜 칸이 한 grid 에
 //    평평하게 놓여 있어 줄(tr)이 없다. 다른 달·오늘 칸은 제 색을 지킨다. styles.css 에 같은 선택자.
@@ -69,24 +69,24 @@ window._cpSwatch = function(hex, label) {
 
 window._cpRenderPreview = function(hex) {
     document.getElementById('cp-custom-color').value = hex;
-    document.getElementById('cp-custom-color').title = '직접 선택 (' + hex + ') — 클릭하면 색상 선택기가 열립니다'; // 💡 별도 텍스트(cp-custom-hex) 대신 툴팁으로 통합
+    document.getElementById('cp-custom-color').title = window._t('직접 선택 (' + hex + ') — 클릭하면 색상 선택기가 열립니다', 'Custom (' + hex + ') — click to open the color picker'); // 💡 별도 텍스트(cp-custom-hex) 대신 툴팁으로 통합
     const hue = window._cpHexToHsl(hex).h;
     const gen = {};
     window.CP_ROLES.forEach(r => { gen[r.key] = window._cpHslToHex(hue, r.s, r.l); });
     const genNav = window._cpComputeGenNav(hue);
-    document.getElementById('cp-preview-swatches').innerHTML = window.CP_ROLES.map(r => window._cpSwatch(gen[r.key], r.label)).join('')
-        + window._cpSwatch(genNav.base, '사이드바/상단바 배경') + window._cpSwatch(genNav.hover, '메뉴 호버')
-        + window._cpSwatch(genNav.active, '메뉴 active') + window._cpSwatch(genNav.text, '메뉴 글자색');
+    document.getElementById('cp-preview-swatches').innerHTML = window.CP_ROLES.map(r => window._cpSwatch(gen[r.key], window._t ? window._t(r.label, r.en || r.label) : r.label)).join('')
+        + window._cpSwatch(genNav.base, window._t('사이드바/상단바 배경', 'Sidebar / top bar background')) + window._cpSwatch(genNav.hover, window._t('메뉴 호버', 'Menu hover'))
+        + window._cpSwatch(genNav.active, window._t('메뉴 active', 'Menu active')) + window._cpSwatch(genNav.text, window._t('메뉴 글자색', 'Menu text'));
 
     // 미니 미리보기 표 — 실제 청록 표(헤더/제브라/테두리/버튼 호버)와 동일한 구조
     document.getElementById('cp-preview-demo').innerHTML =
         '<div style="background:' + gen.bg + '; border:1px solid ' + gen.hoverBg + '; border-radius:8px; padding:12px;">'
         + '<div style="background:#fff; border:1px solid ' + gen.border + '; border-radius:8px; overflow:hidden;">'
         + '<table style="width:100%; border-collapse:collapse; font-size:12.5px;"><thead><tr style="background:' + gen.headerTint + '; border-bottom:2px solid ' + gen.border + ';">'
-        + '<th style="padding:8px 10px; text-align:left; color:' + gen.darkText + ';">항목</th><th style="padding:8px 10px; text-align:center; color:' + gen.darkText + ';">상태</th><th style="padding:8px 10px; text-align:center; color:' + gen.darkText + ';">액션</th>'
+        + '<th style="padding:8px 10px; text-align:left; color:' + gen.darkText + ';">' + window._t('항목', 'Item') + '</th><th style="padding:8px 10px; text-align:center; color:' + gen.darkText + ';">' + window._t('상태', 'Status') + '</th><th style="padding:8px 10px; text-align:center; color:' + gen.darkText + ';">' + window._t('액션', 'Action') + '</th>'
         + '</tr></thead><tbody>'
-        + '<tr style="background:#fff; border-bottom:1px solid ' + gen.border + ';"><td style="padding:8px 10px;">샘플 행 A</td><td style="padding:8px 10px; text-align:center;">🟢</td><td style="padding:8px 10px; text-align:center;"><button style="padding:4px 10px; background:' + gen.bg + '; color:' + gen.darkText + '; border:1px solid ' + gen.border + '; border-radius:6px; cursor:default; font-size:11px;">버튼</button></td></tr>'
-        + '<tr style="background:' + gen.zebraB + '; border-bottom:1px solid ' + gen.border + ';"><td style="padding:8px 10px;">샘플 행 B</td><td style="padding:8px 10px; text-align:center;">🔴</td><td style="padding:8px 10px; text-align:center;"><button style="padding:4px 10px; background:' + gen.hoverBg + '; color:#fff; border:1px solid ' + gen.hoverBorder + '; border-radius:6px; cursor:default; font-size:11px;">호버 예시</button></td></tr>'
+        + '<tr style="background:#fff; border-bottom:1px solid ' + gen.border + ';"><td style="padding:8px 10px;">' + window._t('샘플 행 A', 'Sample row A') + '</td><td style="padding:8px 10px; text-align:center;">🟢</td><td style="padding:8px 10px; text-align:center;"><button style="padding:4px 10px; background:' + gen.bg + '; color:' + gen.darkText + '; border:1px solid ' + gen.border + '; border-radius:6px; cursor:default; font-size:11px;">' + window._t('버튼', 'Button') + '</button></td></tr>'
+        + '<tr style="background:' + gen.zebraB + '; border-bottom:1px solid ' + gen.border + ';"><td style="padding:8px 10px;">' + window._t('샘플 행 B', 'Sample row B') + '</td><td style="padding:8px 10px; text-align:center;">🔴</td><td style="padding:8px 10px; text-align:center;"><button style="padding:4px 10px; background:' + gen.hoverBg + '; color:#fff; border:1px solid ' + gen.hoverBorder + '; border-radius:6px; cursor:default; font-size:11px;">' + window._t('호버 예시', 'Hover example') + '</button></td></tr>'
         + '</tbody></table></div></div>';
 
     // 💡 이미 "실제 페이지에 적용" 중이면(라이브 모드), 프리셋/커스텀 색을 바꿀 때마다 실제 화면도
@@ -709,7 +709,7 @@ window.openColorPaletteModal = function() {
     document.getElementById('cp-preset-swatches-list').innerHTML = window.CP_PRESETS.map(function(hex) {
         const isDefault = hex === '#00707d';
         const action = isDefault ? "window._cpRevertLive();" : "window._cpApplyLive('" + hex + "');";
-        const title = isDefault ? hex + ' (기본 청록 — 클릭하면 원래대로 되돌아갑니다)' : hex;
+        const title = isDefault ? hex + window._t(' (기본 청록 — 클릭하면 원래대로 되돌아갑니다)', ' (default teal — click to go back to the original)') : hex;
         return '<div onclick="window._cpRenderPreview(\'' + hex + '\'); ' + action + '" title="' + title + '" style="width:32px; height:32px; border-radius:50%; background:' + hex + '; cursor:pointer; border:2px solid #fff; box-shadow:0 0 0 1px #ddd;"></div>';
     }).join('');
     // 🐛 [버그 수정] "직접 선택" 칸이 항상 하드코딩 기본값(#2c5f8a)에서 시작해서, 이미 다른 색(예:

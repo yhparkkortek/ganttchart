@@ -19,7 +19,8 @@ f.onload = async function () {
     chk(!!T, 'PAGE_TITLES 표가 있다');
     function sb() { var o = {}; D.querySelectorAll('#sb-nav .sb-item[data-tab]').forEach(function (el) { o[el.dataset.tab] = el.querySelector('.sb-label').textContent; }); return o; }
     function hd() { var o = {}; D.querySelectorAll('[data-page-title]').forEach(function (el) { o[el.getAttribute('data-page-title')] = el.textContent; }); return o; }
-    var tabs = Object.keys(T);
+    // 'weekly' 는 js/78 이 '보고/리뷰' 로 다시 붙인다(주간 보고 + 프로젝트 리뷰 한 메뉴) — 표와 달라도 정상
+    var tabs = Object.keys(T).filter(function (k) { return k !== 'weekly'; });
     // 모달 — 한국어일 때 한 번 만들어 두고(다시 쓰는 모달) 언어를 바꾼다
     ['_mcOpen', '_mnbOpen', 'openOverdueCleanup', '_jiraOpenLinkSettings', '_bcOpenModal', 'openHolidayManager', '_dsOpenSettings', 'openSapLoginSettings']
       .forEach(function (fn) { try { var r = W[fn] && W[fn](); if (r && r.catch) r.catch(function () {}); } catch (e) {} });

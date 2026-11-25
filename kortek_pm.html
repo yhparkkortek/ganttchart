@@ -460,7 +460,7 @@
         <label id="as-lbl-port">포트</label><input id="as-smtp-port" class="u-input" style="padding:5px 8px; border:1px solid #ddd; border-radius:4px;" placeholder="25">
         <label id="as-lbl-user">계정</label><input id="as-smtp-user" class="u-input" style="padding:5px 8px; border:1px solid #ddd; border-radius:4px;" placeholder="user@kortek.co.kr">
         <label id="as-lbl-pass">비밀번호</label><input id="as-smtp-pass" type="password" class="u-input" style="padding:5px 8px; border:1px solid #ddd; border-radius:4px;">
-        <label id="as-lbl-recvhost">받는 서버</label><input id="as-smtp-recvhost" class="u-input" style="padding:5px 8px; border:1px solid #ddd; border-radius:4px;" placeholder="(비우면 기본 수신 서버)">
+        <label id="as-lbl-recvhost">받는 서버</label><input id="as-smtp-recvhost" class="u-input" style="padding:5px 8px; border:1px solid #ddd; border-radius:4px;" placeholder="(비우면 기본 수신 서버)" data-en-ph="(blank = default receive host)">
       </div>
       <p id="as-smtp-recvhost-note" style="margin:-4px 0 8px; font-size:11px; color:#999;">받는(IMAP/POP3) 서버가 보내는(SMTP) 서버와 다를 때만 입력 — 비우면 기본 수신 서버를 씁니다.</p>
       <label style="display:flex; align-items:center; gap:6px; font-size:11.5px; color:#555; margin:0 0 8px; cursor:pointer;">
@@ -1090,10 +1090,10 @@
            명단, 기존 동작) — 신규 등록은 항상 개별수신으로 시작(기존과 동일한 자동입력 유지). -->
       <div style="display:flex; gap:14px; align-items:center; margin-bottom:8px;">
         <label style="font-size:12px; display:flex; align-items:center; gap:4px; cursor:pointer;">
-          <input type="radio" name="nm-recip-mode" id="nm-recip-mode-default" value="default" onchange="window._nmToggleRecipMode()"> 기본수신
+          <input type="radio" name="nm-recip-mode" id="nm-recip-mode-default" value="default" onchange="window._nmToggleRecipMode()"> <span data-en="Default">기본수신</span>
         </label>
         <label style="font-size:12px; display:flex; align-items:center; gap:4px; cursor:pointer;">
-          <input type="radio" name="nm-recip-mode" id="nm-recip-mode-custom" value="custom" checked onchange="window._nmToggleRecipMode()"> 개별수신
+          <input type="radio" name="nm-recip-mode" id="nm-recip-mode-custom" value="custom" checked onchange="window._nmToggleRecipMode()"> <span data-en="Custom">개별수신</span>
         </label>
       </div>
 
@@ -2078,16 +2078,16 @@
 <script src="js/03-drive-modal-drag.js?v=20261124a4"></script>
 
 <!-- 04-core-app.js 분리 (토큰 절약 · 협업용): 로딩 순서는 기존과 동일하게 유지 -->
-<script src="js/04a-core-app-globals.js?v=2026112505"></script>
+<script src="js/04a-core-app-globals.js?v=2026112582"></script>
 <script src="js/04b-core-app-drive-sync.js?v=2026112531"></script>
 <script src="js/04c-core-app-mail-pipeline.js?v=20261125np"></script>
-<script src="js/04d-core-app-gantt-core.js?v=2026112571"></script>
+<script src="js/04d-core-app-gantt-core.js?v=2026112582"></script>
 <script src="js/04e-core-app-undo-redo.js?v=2026112672"></script>
-<script src="js/04f-core-app-upload-utils-1.js?v=20261124a4"></script>
-<script src="js/04g-core-app-upload-utils-2.js?v=2026112631"></script>
-<script src="js/04h-core-app-upload-utils-3.js?v=2026112701"></script>
-<script src="js/04i-core-app-upload-utils-4.js?v=2026112641"></script>
-<script src="js/04j-core-app-upload-utils-5.js?v=2026112581"></script>
+<script src="js/04f-core-app-upload-utils-1.js?v=2026112582"></script>
+<script src="js/04g-core-app-upload-utils-2.js?v=2026112582"></script>
+<script src="js/04h-core-app-upload-utils-3.js?v=2026112582"></script>
+<script src="js/04i-core-app-upload-utils-4.js?v=2026112582"></script>
+<script src="js/04j-core-app-upload-utils-5.js?v=2026112584"></script>
 <script src="js/04k-core-app-filter-export.js?v=2026112501k"></script>
 
 <script src="js/05-drive-sync-optimize.js?v=20261124a4"></script>
@@ -2110,8 +2110,8 @@
 <script src="js/13-mobile-touch-timer.js?v=20261124a4"></script>
 
 <!-- 14-ai-mail-analysis.js 분리 (토큰 절약 · 협업용): 로딩 순서는 기존과 동일하게 유지 -->
-<script src="js/14a-ai-mail-analysis-1.js?v=2026112631"></script>
-<script src="js/14b-ai-mail-analysis-2.js?v=2026112636"></script>
+<script src="js/14a-ai-mail-analysis-1.js?v=2026112582"></script>
+<script src="js/14b-ai-mail-analysis-2.js?v=2026112582"></script>
 <script src="js/14c-task-inbox.js?v=2026112622"></script>
 <script src="js/14d-distribution-ledger.js?v=2026112601"></script>
 
@@ -2202,7 +2202,7 @@
                      같은 관리 영역이다. 예전엔 왼쪽 분석 패널에 두어 "분석 기능"처럼 보였다. -->
                 <button id="bc-open-btn" onclick="window._bcOpenModal()" data-i18n="bc-open-btn"
                   onmouseover="this.style.background='#d8f0d8'; this.style.borderColor='#7cc494';" onmouseout="this.style.background='#eaf7ea'; this.style.borderColor='#a8dab8';"
-                  title="쌓여 있는 미분류 군집을 규칙+AI로 한번에 취합해서, 실제 프로젝트단위로 일괄 생성하고 큐를 비움니다"
+                  title="쌓여 있는 미분류 군집을 규칙+AI로 한번에 취합해서, 실제 프로젝트단위로 일괄 생성하고 큐를 비움니다" data-en-title="Gather the piled-up unclassified clusters with rules + AI, create real projects in one go and empty the queue"
                   data-i18n-title="bc-open-hint"
                   style="display:none; width:100%; box-sizing:border-box; margin-top:6px; height:26px; padding:0 4px; background:#eaf7ea; color:#1f6a3a; border:1px solid #a8dab8; border-radius:6px; font-size:11px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">📦 백로그 일괄 정리</button>
             </div>
@@ -2674,7 +2674,7 @@
 <!-- 15-mail-attachment-tab.js 분리 (토큰 절약 · 협업용): 로딩 순서는 기존과 동일하게 유지 -->
 <script src="js/15a-mail-attachment-tab.js?v=2026112631"></script>
 <script src="js/15b-mail-server-tab-1.js?v=2026112534"></script>
-<script src="js/15c-mail-server-tab-2.js?v=2026112631"></script>
+<script src="js/15c-mail-server-tab-2.js?v=2026112583"></script>
 
 
 
@@ -2685,7 +2685,7 @@
 
 <script src="js/18-mail-analyzer-modal-drag.js?v=20261124a4"></script>
 
-<script src="js/19-shared-modal-drag.js?v=2026112581"></script>
+<script src="js/19-shared-modal-drag.js?v=2026112582"></script>
 
 <script src="js/20-weekly-report.js?v=2026112733g"></script>
 
@@ -2706,8 +2706,8 @@
             onmouseover="this.style.background='var(--modal-icon-hover-bg)'; this.style.borderColor='#adb5bd';" onmouseout="this.style.background='var(--modal-icon-bg)'; this.style.borderColor='var(--modal-icon-border)';">✕</button>
     </div>
     <div style="padding:20px 22px;">
-        <div style="font-size:13px; font-weight:bold; color:#333; margin-bottom:4px;">🎨 테마 색상 선택</div>
-        <div style="font-size:11.5px; color:#888; margin-bottom:10px;">아래 원(⭕) 중 하나를 클릭하면 <b>바로 실제 화면에 미리 적용</b>돼서 여러 색을 자유롭게 눌러보며 비교할 수 있습니다 — <b>✕로 닫을 때 열었을 때와 색이 달라져 있으면 유지할지 물어보고</b>, "아니오"를 고르면 창을 열기 전 색상으로 자동 복원됩니다. <b>이 프로젝트를 저장하면 지금 적용 중인 색이 같이 저장</b>되어, 다음에 이 프로젝트를 다시 열 때 자동으로 복원됩니다(저장 전 새로고침하면 원래 색으로 돌아감). 맨 끝의 무지개 원은 원하는 색을 직접 고를 수 있는 "직접 선택"입니다.</div>
+        <div style="font-size:13px; font-weight:bold; color:#333; margin-bottom:4px;" data-en="🎨 Pick a theme color">🎨 테마 색상 선택</div>
+        <div style="font-size:11.5px; color:#888; margin-bottom:10px;" data-en-html="Click any circle (⭕) below and it is <b>previewed on the real screen right away</b>, so you can try several colors — <b>when you close with ✕ and the color has changed, you are asked whether to keep it</b>; choosing 'No' restores the color from before you opened this window. <b>Saving the project saves the current color with it</b>, and it comes back the next time you open the project (refreshing before saving reverts it). The rainbow circle at the end is a custom color picker.">아래 원(⭕) 중 하나를 클릭하면 <b>바로 실제 화면에 미리 적용</b>돼서 여러 색을 자유롭게 눌러보며 비교할 수 있습니다 — <b>✕로 닫을 때 열었을 때와 색이 달라져 있으면 유지할지 물어보고</b>, "아니오"를 고르면 창을 열기 전 색상으로 자동 복원됩니다. <b>이 프로젝트를 저장하면 지금 적용 중인 색이 같이 저장</b>되어, 다음에 이 프로젝트를 다시 열 때 자동으로 복원됩니다(저장 전 새로고침하면 원래 색으로 돌아감). 맨 끝의 무지개 원은 원하는 색을 직접 고를 수 있는 "직접 선택"입니다.</div>
         <!-- 💡 [2026-08-30 정리] "✅ 확인(실제 페이지에 적용)" 버튼은 프리셋/직접 선택 모두 클릭·선택
              즉시 이미 라이브 적용되고 있어서 실제로 하는 일이 없었고(눌러도 똑같은 값을 한 번 더
              적용할 뿐), "↩️ 청록으로 되돌리기"도 프리셋 중 청록 원(#00707d)을 누르는 것과 결과가
@@ -2723,17 +2723,17 @@
         </div>
         <div id="cp-preview-swatches" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(128px,1fr)); gap:10px; margin-bottom:18px;"></div>
 
-        <div style="font-size:11.5px; color:#888; margin-bottom:6px;">미니 미리보기 표</div>
+        <div style="font-size:11.5px; color:#888; margin-bottom:6px;" data-en="Mini preview table">미니 미리보기 표</div>
         <div id="cp-preview-demo"></div>
     </div>
 </div>
 
-<script src="js/21-color-palette.js?v=2026112715h"></script>
+<script src="js/21-color-palette.js?v=2026112583"></script>
 
 <!-- 22-tabs-summary-mctable.js 분리 (토큰 절약 · 협업용): 로딩 순서는 기존과 동일하게 유지 -->
-<script src="js/22a-summary-mctable-parse.js?v=2026112631"></script>
+<script src="js/22a-summary-mctable-parse.js?v=2026112582"></script>
 <script src="js/22b-summary-mctable-core1.js?v=2026112506"></script>
-<script src="js/22c-summary-mctable-core2.js?v=2026112542"></script>
+<script src="js/22c-summary-mctable-core2.js?v=2026112583"></script>
 <script src="js/22d-summary-mctable-core3.js?v=2026112735"></script>
 <script src="js/22e-summary-mctable-core4.js?v=2026112735"></script>
 <script src="js/22f-address-book.js?v=2026112631"></script>
@@ -2741,7 +2741,7 @@
 <script src="js/22h-brief-mc-common-1.js?v=2026112641"></script>
 <script src="js/22i-brief-mc-common-2.js?v=2026112735"></script>
 
-<script src="js/23-sidebar-tabs.js?v=2026112571"></script>
+<script src="js/23-sidebar-tabs.js?v=2026112582"></script>
 
 <script src="js/24-calendar-tab.js?v=2026112733f"></script>
 
@@ -2753,7 +2753,7 @@
 
 <script src="js/26-gantt-search.js?v=2026112508"></script>
 
-<script src="js/28-new-project-wizard.js?v=2026112571"></script>
+<script src="js/28-new-project-wizard.js?v=2026112582"></script>
 
 <script src="js/29-new-project-cluster-detect.js?v=20261124a4"></script>
 
@@ -2767,7 +2767,7 @@
 
 <script src="js/34-storage-doctor.js?v=20261124a4"></script>
     <script src="js/35-material-cart.js?v=2026112571"></script>
-    <script src="js/36-sap-login.js?v=2026112571"></script>
+    <script src="js/36-sap-login.js?v=2026112582"></script>
     <script src="js/37-project-cache.js?v=2026112595"></script>
     <script src="js/38-bom-tab.js?v=2026112899"></script>
     <script src="js/39-groupware-calendar.js?v=20261124a4"></script>
@@ -2777,9 +2777,9 @@
     <script src="js/45-mc-import.js?v=20261124a4"></script>
     <script src="js/47-approval-compose.js?v=2026112531"></script>
     <script src="js/43-briefspec-units.js?v=20261124a4"></script>
-    <script src="js/44-backlog-consolidate.js?v=20261124a4"></script>
-    <script src="js/46-model-name-builder.js?v=20261124a4"></script>
-    <script src="js/48-doc-store.js?v=2026112571"></script>
+    <script src="js/44-backlog-consolidate.js?v=2026112582"></script>
+    <script src="js/46-model-name-builder.js?v=2026112582"></script>
+    <script src="js/48-doc-store.js?v=2026112582"></script>
     <script src="js/49-panel-project-dict.js?v=2026112571"></script>
     <script src="js/50-parts-category-pages.js?v=2026112731"></script>
     <script src="js/51-panel-lib-import.js?v=20261124a4"></script>

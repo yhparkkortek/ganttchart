@@ -741,6 +741,41 @@
 
     window.toggleLang = function() {
         window._currentLang = window._currentLang === 'ko' ? 'en' : 'ko';
+        window._dropLangBakedModals();
+        window._applyLang();
+    };
+
+    // 🌐 [2026-11-25] **한 번 만들어 두고 다시 쓰는 모달**은 만들 때의 언어로 글자가 굳는다(`_t()` 를 만들 때 한 번만
+    //    부른다 — 실측: 한국어로 연 뒤 영어로 바꾸면 SAP 로그인 설정 하나에만 49줄이 한국어). 그 글자를 하나하나 맵에
+    //    올리는 대신, 언어를 바꿀 때 **닫혀 있는** 것을 치워 다음에 열 때 새 언어로 다시 만들게 한다.
+    //    조건: 여는 함수가 `getElementById(id)` 가 없으면 새로 만드는 모양이어야 한다(아래는 전부 확인함).
+    //    열려 있거나 ▼ 최소화된 것은 건드리지 않는다(쓰던 내용이 사라진다) — 그런 건 다음 언어 전환 때 치운다.
+    window.LANG_REBUILD_MODALS = [
+        'holiday-manager-modal', 'ai-summary-prompt-modal', 'ps-improve-comment-modal', 'gantt-qa-prompt-modal',
+        'gantt-qa-improve-comment-modal', 'improve-comment-modal', 'npw-devplan-overlay', 'matcart-modal', 'saplogin-modal',
+        'bc-modal', 'ds-cfg-modal', 'ds-pick-modal', 'overdue-cleanup-modal', 'jira-link-modal', 'mail-auto-config-modal',
+        'mnb-modal', 'pp-pick-modal',
+    ];
+    window._dropLangBakedModals = function() {
+        window.LANG_REBUILD_MODALS.forEach(function (id) {
+            var el = document.getElementById(id);
+            if (!el) return;
+            if (window._modalMinimized && window._modalMinimized[id]) return;
+            var box = el.firstElementChild;
+            var shown = window.getComputedStyle(el).display !== 'none' && (!box || window.getComputedStyle(box).display !== 'none');
+            if (shown) return;
+            el.remove();
+        });
+    };
+
+    // 🌐 [2026-11-25] 언어 적용을 둘로 — 버튼(toggleLang)은 전부, **모달이 열릴 때**는 글자만(light).
+    //    모달 본문 글자 번역이 여기(아래 id 맵들)에만 있어서, **영어로 바꾼 뒤 처음 연 모달**은
+    //    한국어 소스 그대로 그려지고 아무도 번역해 주지 않았다(실측: 모달 30개 중 한글 140줄).
+    //    js/19 가 모달이 열리는 순간 `_applyLangLight()` 를 부른다. light 는 페이지 재그리기
+    //    (간트 표·캘린더·주간보고·Summary 모델 카드 등)를 건너뛴다 — 모달마다 그걸 돌리면 느리다.
+    window._applyLangLight = function() { window._applyLang({ light: true }); };
+    window._applyLang = function(opts) {
+        const _light = !!(opts && opts.light);
         const btn = document.getElementById('lang-toggle-btn');
         btn.textContent = LANG[window._currentLang].btnText;
         // 🐛 [2026-08-30 버그 수정 → 같은 날 재작성] "영문 선택됨" 표시가 옛 고정 파랑(#0056b3)이라
@@ -947,7 +982,7 @@
         // 📔 일일 업무보고 — 표·일 종류·집계 문구는 js/59 가 그리므로 다시 그려야 바뀐다.
         //    (전엔 언어를 바꿔도 탭 안이 한글로 남아 있다가, 날짜를 옮기면 그제서야 영문이 됐다)
         const _dailyPanel = document.getElementById('tab-daily');
-        if (window.dailyRenderTab && _dailyPanel && _dailyPanel.classList.contains('active')) {
+        if (!_light && window.dailyRenderTab && _dailyPanel && _dailyPanel.classList.contains('active')) {
             window.dailyRenderTab();
         }
 
@@ -1203,7 +1238,7 @@
             const el = document.getElementById(id);
             if (el) el.textContent = _en ? t.en : t.ko;
         });
-        if (window._scheduleRules !== undefined && window.renderScheduleRuleTable) window.renderScheduleRuleTable();
+        if (!_light && window._scheduleRules !== undefined && window.renderScheduleRuleTable) window.renderScheduleRuleTable();
 
         // [Summary 탭] 고정 라벨/헤더 번역
         const _sumTexts = {
@@ -1258,10 +1293,12 @@
         // 💡 주요 자재 표의 칸 placeholder/버튼 title도 언어에 맞춰 다시 그림(값은 collectMaterialRows(true)로
         //    빈 자유추가 행까지 그대로 보존한 채 다시 렌더링해서, 언어만 바뀌고 입력 중이던 내용은 안 날아감)
         //    (모델별 자재 카드 전체를 다시 그리므로, 먼저 화면 입력값을 모델에 거둬들인다)
+        if (!_light) {
         if (window._syncMaterialsFromDom) window._syncMaterialsFromDom();
         if (window.renderProjectModels) window.renderProjectModels(); // 내부에서 renderMaterialModelsContainer()도 호출
         // 🧱 BOM 탭 — 정적 HTML 문구(라벨/셀렉트/버튼)는 전용 갱신 함수가 맞춘다(docs/ui-conventions.md)
         if (window.bomRefreshLang) window.bomRefreshLang();
+        }
 
         // [변경이력 박스] 시작일/종료일/삭제비밀번호/구간삭제 번역 (6개 탭 공통)
         document.querySelectorAll('label').forEach(lbl => {
@@ -1319,7 +1356,7 @@
         }
 
         // [캘린더] 재렌더 (년/월/요일 반영)
-        if (window.calRender && document.getElementById('cal-page')) window.calRender();
+        if (!_light && window.calRender && document.getElementById('cal-page')) window.calRender();
 
         // [AI 업무분석 팝업] 탭 버튼 텍스트
         const _mailTabTexts = {
@@ -1605,13 +1642,13 @@
                🌐 모델명을 클릭하면 panelook.com 검색결과로 이동합니다(정확한 상세페이지 ID는 알 수 없어 검색결과로 연결됩니다).`;
         // 지금 Elec Parts 탭의 PANEL 서브뷰가 열려있으면 표/토글버튼 문구도 바로 다시 그림
         const _pcTab = document.getElementById('tab-elecparts');
-        if (_pcTab && _pcTab.classList.contains('active') && window._elecView === 'panel' && window.renderPanelCompareTab) window.renderPanelCompareTab();
+        if (!_light && _pcTab && _pcTab.classList.contains('active') && window._elecView === 'panel' && window.renderPanelCompareTab) window.renderPanelCompareTab();
         // 🐛 [2026-08-30 버그 수정] 위 PANEL 서브뷰만 다시 그려주고 있어서, CONVERTER/AD BOARD 서브뷰를
         // 보고 있는 중에 언어를 전환하면 "🔌 보기"/"핀맵 보기" 등 버튼 문구가 예전 언어 그대로 남아있는
         // 문제가 있었음 — 같은 방식으로 두 서브뷰도 다시 그려서 즉시 반영되게 한다.
         //    [2026-10-22] 종류를 코드에 박지 않는다 — TOUCH CTRL이 추가될 때 이미 빠뜨렸고,
         //    이제 주요자재 구분마다 종류가 생긴다(js/50). 등록된 종류면 다시 그린다.
-        if (_pcTab && _pcTab.classList.contains('active') && window.renderElecCompareTab
+        if (!_light && _pcTab && _pcTab.classList.contains('active') && window.renderElecCompareTab
             && (window.ELEC_PART_TYPES || {})[window._elecView]) {
             window.renderElecCompareTab(window._elecView);
         }
@@ -1625,6 +1662,7 @@
             window._calSyncHelpRender();
         }
 
+        if (!_light) {   // ↓ 페이지 재그리기 — 모달 열림(light)에선 건너뛴다
         // [Weekly Report] 탭이 열려 있으면 재렌더 (섹션 제목 즉시 반영)
         if (window.showWeeklyReport) {
             const _wrTab = document.getElementById('tab-weekly');
@@ -1688,6 +1726,8 @@
         if (_mrSection && _mrSection.style.display !== 'none' && window._mailAnalyzedResult && window.renderMailResult) {
             window.renderMailResult(window._mailAnalyzedResult);
         }
+
+        }   // ↑ if (!_light)
 
         // [최소화된 모달 타스크바 칩] 위에서 각 모달 제목을 전부 갱신한 뒤 마지막에 호출 — 페이지
         // 로드 시 자동 최소화되는 모달(AI 문답/AI 요약 등)의 칩 라벨이 최소화 당시 언어로 고정되는

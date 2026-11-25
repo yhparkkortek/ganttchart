@@ -94,8 +94,8 @@
                 + T('SAP 이 꺼져 있을 때 이 계정으로 자동 로그인합니다. 비밀번호는 이 PC 에만 암호화 저장됩니다.',
                     'Auto-logs in to SAP with this account when it is closed. Password is stored encrypted on this PC only.')
                 + '</div>'
-                + fieldRow(T('접속 항목', 'Connection'), '<input id="saplogin-sysname" list="saplogin-entries" style="' + inputSt + '" placeholder="SAP Logon 목록의 이름"><datalist id="saplogin-entries"></datalist>')
-                + fieldRow(T('클라이언트', 'Client'), '<input id="saplogin-client" maxlength="3" style="' + inputSt + '" placeholder="예: 100 (비워도 됨)">')
+                + fieldRow(T('접속 항목', 'Connection'), '<input id="saplogin-sysname" list="saplogin-entries" style="' + inputSt + '" placeholder="SAP Logon 목록의 이름" data-en-ph="Name in the SAP Logon list"><datalist id="saplogin-entries"></datalist>')
+                + fieldRow(T('클라이언트', 'Client'), '<input id="saplogin-client" maxlength="3" style="' + inputSt + '" placeholder="예: 100 (비워도 됨)" data-en-ph="e.g. 100 (optional)">')
                 + fieldRow(T('사용자 ID', 'User ID'), '<input id="saplogin-user" autocomplete="off" style="' + inputSt + '">')
                 + fieldRow(T('비밀번호', 'Password'), '<input id="saplogin-pw" type="password" autocomplete="new-password" style="' + inputSt + '">')
                 + fieldRow(T('언어', 'Language'), '<input id="saplogin-lang" maxlength="2" style="' + inputSt + '" value="KO">')
@@ -116,7 +116,7 @@
                 + T('실패 시 보안문자(CAPTCHA)가 뜨는 구조라 <b>한 번만</b> 시도합니다. 비밀번호 보관은 SAP과 동일.',
                     'Tried only <b>once</b> — a failed login triggers a CAPTCHA. Password storage is the same as SAP.')
                 + '</div>'
-                + fieldRow(T('아이디', 'ID'), '<input id="gwlogin-user" autocomplete="off" style="' + inputSt + '" placeholder="예: yhpark">')
+                + fieldRow(T('아이디', 'ID'), '<input id="gwlogin-user" autocomplete="off" style="' + inputSt + '" placeholder="예: yhpark" data-en-ph="e.g. yhpark">')
                 + fieldRow(T('비밀번호', 'Password'), '<input id="gwlogin-pw" type="password" autocomplete="new-password" style="' + inputSt + '">')
                 + '<div id="gwlogin-status" style="display:none; font-size:11.5px; margin:4px 0 10px; line-height:1.5; white-space:pre-wrap;"></div>'
                 + '<div style="display:flex; gap:8px;">'
@@ -252,7 +252,7 @@
                 + fieldRow(T('아이디', 'ID'), '<input id="naslogin-user" autocomplete="off" style="' + inputSt + '">')
                 + fieldRow(T('비밀번호', 'Password'), '<input id="naslogin-pw" type="password" autocomplete="new-password" style="' + inputSt + '">')
                 + fieldRow(T('앱 폴더', 'App folder'),
-                    '<input id="naslogin-root" autocomplete="off" style="' + inputSt + '" placeholder="/공유폴더/KORTEK_PM">'
+                    '<input id="naslogin-root" autocomplete="off" style="' + inputSt + '" data-en-ph="/shared-folder/KORTEK_PM" placeholder="/공유폴더/KORTEK_PM">'
                     + '<button onclick="window._nasPickRoot()" style="' + btnSt + ' padding:6px 10px;">📂 ' + T('찾기', 'Browse') + '</button>')
                 + '<div id="naslogin-cands" style="display:none; max-height:132px; overflow:auto; border:1px solid #e0e0e0; border-radius:6px; margin:-4px 0 10px; font-size:11.5px;"></div>'
                 + '<div style="display:flex; gap:8px;">'

@@ -280,7 +280,7 @@ window._bcAnalyze = async function() {
     var token = (tokenObj ? tokenObj.access_token : null) || window.googleAccessToken;
     if (!token) throw new Error(_t('구글 드라이브 연동이 필요합니다.', 'Google Drive must be connected.'));
     var indexFileId = await window.findProjectIndexFile(token);
-    if (!indexFileId) throw new Error('project_index.json을 찾지 못했습니다.');
+    if (!indexFileId) throw new Error(_t('project_index.json을 찾지 못했습니다.', 'project_index.json was not found.'));
     var res = await fetch('https://www.googleapis.com/drive/v3/files/' + indexFileId + '?alt=media&supportsAllDrives=true',
         { headers: { Authorization: 'Bearer ' + token } });
     var indexData = await res.json();

@@ -12,14 +12,16 @@ window.collectAlarmItems = function() {
 
     // 💡 담당자명 → 이메일 매핑은 주소록(Address Book) 기준으로 통일 — 한글 이름 없으면 영문 이름으로 폴백
     //    (Summary 탭 담당자 이메일 텍스트필드는 더 이상 참조하지 않음 — 이름은 여전히 Summary/업무 내용에서 옴)
-    const lookupEmail = function(name) {
-        if (!name) return '';
-        const trimmed = name.trim();
-        // 이름 자리에 이미 이메일 주소가 들어있으면 주소록 조회 없이 그대로 사용
-        if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) return trimmed;
-        const found = window._addrFindByName(trimmed);
-        return found ? (found.email || '') : '';
+    // 🔔 [2026-11-25] 주소록에 **정확히 한 사람**으로 맞을 때만 주소를 준다(js/22b _addrResolveRecipient).
+    //    예전엔 동명이인이면 첫 번째 사람, 이름 자리에 주소가 오면 주소록 대조 없이 그대로 썼다.
+    const _resolveCache = {};
+    const resolve = function(name) {
+        const k = String(name || '').trim();
+        if (!(k in _resolveCache)) _resolveCache[k] = window._addrResolveRecipient(k);
+        return _resolveCache[k];
     };
+    const lookupEmail = function(name) { return resolve(name).email || ''; };
+    const isExcluded = function(name) { const r = resolve(name).reason; return r === 'ambiguous' || r === 'email-not-in-book'; };
 
     // 💡 [2026-08-31] 수신 대상(CC)은 업무마다 다를 수 있음 — 기본수신(전역 공용 명단, 대부분의
     //    업무가 여기 해당)이거나 개별수신(그 업무의 row._알림수신자)이거나. 행마다 아래서 계산.
@@ -102,20 +104,27 @@ window.collectAlarmItems = function() {
         // 발신인 + 수신인 전원
         const allPeople  = [...new Set([...senderNames, ...receiverNames].filter(Boolean))];
         const toEmails   = [...new Set(allPeople.map(n => lookupEmail(n)).filter(Boolean))];
-        const missingPeople = allPeople.filter(n => !lookupEmail(n));
+        // 발송 제외(동명이인·주소록에 없는 주소)는 "미등록"과 따로 — 사유를 화면에 보여준다
+        const excludedPeople = allPeople.filter(isExcluded).map(n => Object.assign({ name: n }, resolve(n)));
+        const missingPeople = allPeople.filter(n => !lookupEmail(n) && !isExcluded(n));
 
         const assignee       = senderNames.join(', ') || '-';
-        const assigneeEmail  = [...new Set(senderNames.map(n => lookupEmail(n)).filter(Boolean))].join(',');
+        const senderEmails   = [...new Set(senderNames.map(n => lookupEmail(n)).filter(Boolean))];
+        const assigneeEmail  = senderEmails.join(',');
         const receiverStr    = receiverNames.join(', ') || '-';
         // 수신인 이메일만 (표시용) — 화면 표시는 도메인 차단과 무관하게 실제 등록된 이메일을 그대로 보여줌
         const receiverEmails = [...new Set(receiverNames.map(n => lookupEmail(n)).filter(Boolean))];
         const receiverEmail  = receiverEmails.join(',');
         // 🌐 외부 도메인 발송 게이트 — @kortek.co.kr 이외 도메인은 알람 설정에서 허용 체크한 도메인만 실제 발송 대상
-        const blockedByDomain = [...new Set([assigneeEmail, ...receiverEmails].filter(e => e && !window._isAlarmDomainAllowed(e)))];
+        //    ⚠️ [2026-11-25] 주소 하나씩 검사한다 — 예전엔 발신인 주소를 쉼표로 합친 글자를 통째로 넣어
+        //    마지막 주소의 도메인만 보였다("a@외부.com,b@kortek.co.kr" 가 허용으로 통과).
+        const blockedByDomain = [...new Set([...senderEmails, ...receiverEmails].filter(e => e && !window._isAlarmDomainAllowed(e)))];
         // 실제 발송 = 발신인 + 수신인 전원 중 발송 허용된 이메일만
-        const toEmail        = [...new Set([assigneeEmail, ...receiverEmails].filter(e => e && window._isAlarmDomainAllowed(e)))].join(',');
+        const toEmail        = [...new Set([...senderEmails, ...receiverEmails].filter(e => e && window._isAlarmDomainAllowed(e)))].join(',');
         // 텔레그램 발송 대상 — 이메일이 등록돼 있는데 도메인이 차단 상태면 제외, 이메일 미등록이면 판단 불가로 허용
+        //    단 발송 제외(동명이인 등)는 텔레그램도 뺀다 — 받는 쪽이 _addrFindByName 으로 첫 번째 사람을 집는다
         const allowedPeople  = allPeople.filter(function(n) {
+            if (isExcluded(n)) return false;
             const em = lookupEmail(n);
             return !em || window._isAlarmDomainAllowed(em);
         });
@@ -552,7 +561,7 @@ window._asRenderRecipList = function() {
     let rows;
     if (isDefault) {
         rows = window._computeDefaultCcList();
-        if (descEl) descEl.textContent = '기본수신: 모든 업무가 함께 쓰는 공통 명단 — 여기서 고치면 다른 업무에도 함께 적용됩니다.';
+        if (descEl) descEl.textContent = window._t('기본수신: 모든 업무가 함께 쓰는 공통 명단 — 여기서 고치면 다른 업무에도 함께 적용됩니다.', 'Default: the shared list used by every task — changes here apply to other tasks too.');
     } else {
         const item = window._alarmScheduleItem;
         const row  = item ? (window.globalData || [])[item.rowIdx] : null;
@@ -570,7 +579,7 @@ window._asRenderRecipList = function() {
                     return { name: m.name, email: m.email, telegramId: p ? (p.telegramId || '') : '', emailOn: false, tgOn: false, auto: true };
                 });
         }
-        if (descEl) descEl.textContent = '개별수신: 이 업무에만 적용되는 명단입니다.';
+        if (descEl) descEl.textContent = window._t('개별수신: 이 업무에만 적용되는 명단입니다.', 'Custom: a list that applies to this task only.');
     }
     rows.forEach(r => window._asRecipAddRow('as-recip-list', r));
     window._asSyncRecipHeaderPad('as-recip-list');

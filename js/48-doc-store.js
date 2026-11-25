@@ -526,7 +526,7 @@ window._dsOpenSettings = async function () {
         + '  </div>'
         + '  <div style="padding:16px 18px;">'
         + '    <div style="font-size:12px; font-weight:bold; color:#333; margin-bottom:5px;">' + _t('NAS 경로', 'NAS path') + '</div>'
-        + '    <input id="ds-cfg-root" type="text" placeholder="\\\\서버\\공유\\...\\SPEC" style="width:100%; box-sizing:border-box; padding:8px 11px; border:1.5px solid #a5c8f0; border-radius:7px; font-size:12.5px; font-family:monospace;">'
+        + '    <input id="ds-cfg-root" type="text" data-en-ph="\\\\server\\share\\...\\SPEC" placeholder="\\\\서버\\공유\\...\\SPEC" style="width:100%; box-sizing:border-box; padding:8px 11px; border:1.5px solid #a5c8f0; border-radius:7px; font-size:12.5px; font-family:monospace;">'
         + '    <div style="font-size:11px; color:#888; margin-top:4px; line-height:1.6;">'
         + _t('이 PC에서 탐색기로 열리는 경로여야 합니다. 브라우저가 아니라 <b>로컬 백엔드</b>가 읽습니다.',
              'Must be reachable from this PC. The <b>local backend</b> reads it, not the browser.') + '</div>'

@@ -267,7 +267,7 @@ function _mnbRender() {
                          'Same first letter, so no code was assigned — the customer slot is one character. Assign a letter in ')
             + '<code>CUSTOMER_CATALOG</code>' + _t('에 넣어주세요.', '.') + '<br>'
             + _mnbCust.clash.map(function(c) {
-                return _mnbEsc(c.name) + ' <span style="color:#b9975b;">(' + _mnbEsc(c.code) + ' → ' + _mnbEsc(c.taken) + ' 사용 중)</span>';
+                return _mnbEsc(c.name) + ' <span style="color:#b9975b;">(' + _mnbEsc(c.code) + ' → ' + _mnbEsc(c.taken) + _t(' 사용 중)', ' in use)') + '</span>';
               }).join(' · ')
             + '</div>'
           : '')

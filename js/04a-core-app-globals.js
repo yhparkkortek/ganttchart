@@ -715,3 +715,14 @@ window._ganttIsOverdue = function (row, ci, nowTs) {
     if (P.skipMailRows && window._ganttRowIsMail(row, ci)) return false;
     return true;
 };
+
+// 🌐 [2026-11-25] 두 언어를 같이 싣는 글자 — **한 번 만들어 두고 다시 쓰는 모달**용. 만들 때의 언어로 보이고,
+//    언어를 바꾸거나(04j toggleLang) 모달이 다시 열리면(js/19 → `_applyLangLight` → js/23 `_applyInlineI18n`) 따라 바뀐다.
+//    `_bi('한글','English')` → <span data-ko data-en>…</span> · `_biT(...)` → title 속성 셋 · `_biPh(...)` → placeholder 셋.
+(function () {
+    var esc = function (s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); };
+    var cur = function (ko, en) { return window._currentLang === 'en' ? en : ko; };
+    window._bi = function (ko, en) { return '<span data-ko="' + esc(ko) + '" data-en="' + esc(en) + '">' + esc(cur(ko, en)) + '</span>'; };
+    window._biT = function (ko, en) { return 'title="' + esc(cur(ko, en)) + '" data-ko-title="' + esc(ko) + '" data-en-title="' + esc(en) + '"'; };
+    window._biPh = function (ko, en) { return 'placeholder="' + esc(cur(ko, en)) + '" data-ko-ph="' + esc(ko) + '" data-en-ph="' + esc(en) + '"'; };
+})();

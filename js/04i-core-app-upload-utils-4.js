@@ -253,7 +253,7 @@
                                 <div style="display:flex; gap:4px;">
                                     <button id="mail-cache-clear-btn" onclick="window.clearGeminiCache()"
                                             onmouseover="this.style.background='#f4d9b3'; this.style.borderColor='#dba354';" onmouseout="this.style.background='#fbead9'; this.style.borderColor='#edbf85';"
-                                            title="같은 메일을 다시 분석해도 캐시된 예전 결과가 아니라 새로 계산하게 함"
+                                            title="같은 메일을 다시 분석해도 캐시된 예전 결과가 아니라 새로 계산하게 함" data-en-title="Re-analyzing the same mail computes fresh results instead of using the cached ones"
                                             style="height:26px; padding:0 8px; font-size:11px; font-weight:bold; background:#fbead9; color:#a85d0a; border:1px solid #edbf85; border-radius:4px; cursor:pointer; white-space:nowrap; box-sizing:border-box; transition:background .15s, border-color .15s;">
                                         🗑️ 캐시 초기화
                                     </button>
@@ -271,13 +271,13 @@
                                     style="flex:1; min-width:0; box-sizing:border-box; height:26px; padding:0 8px; border:1px solid #ddd; border-radius:4px; font-size:12px;">
                                 <button id="mail-key-save-btn" onclick="window.saveGeminiKey()"
                                         onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';"
-                                        title="API 키 저장"
+                                        title="API 키 저장" data-en-title="Save API key" data-en="💾 Save"
                                         style="height:26px; padding:0 10px; font-size:11px; font-weight:bold; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:4px; cursor:pointer; white-space:nowrap; box-sizing:border-box; transition:background .15s, border-color .15s;">
                                     💾 저장
                                 </button>
                                 <button onclick="window.clearGeminiKey()"
                                         onmouseover="this.style.background='#f5c2bd'; this.style.borderColor='#e08f87';" onmouseout="this.style.background='#fbe4e2'; this.style.borderColor='#eeb0ac';"
-                                        title="API 키 삭제" data-i18n-title="clear-api-key"
+                                        title="API 키 삭제" data-en-title="Delete API key" data-i18n-title="clear-api-key"
                                         style="height:26px; padding:0 8px; font-size:11px; background:#fbe4e2; color:#b1432f; border:1px solid #eeb0ac; border-radius:4px; cursor:pointer; box-sizing:border-box; transition:background .15s, border-color .15s;">
                                     🗑️
                                 </button>
@@ -304,23 +304,23 @@
                                 <span>🔑 Tavily API</span>
                                 <button id="tavily-key-link-btn" onclick="window.open('https://app.tavily.com/home', '_blank')"
                                         onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';"
-                                        title="① app.tavily.com 접속 → 계정 가입/로그인 → ② API Keys 메뉴에서 키 복사 → ③ 아래 입력란에 붙여넣고 저장"
+                                        title="① app.tavily.com 접속 → 계정 가입/로그인 → ② API Keys 메뉴에서 키 복사 → ③ 아래 입력란에 붙여넣고 저장" data-en-title="① Go to app.tavily.com → sign up/log in → ② copy a key from API Keys → ③ paste it below and save" data-en="🔗 Get Key"
                                         style="height:26px; padding:0 8px; font-size:11px; font-weight:bold; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:4px; cursor:pointer; white-space:nowrap; box-sizing:border-box; transition:background .15s, border-color .15s;">
                                     🔗 발급받기
                                 </button>
                             </div>
                             <div style="display:flex; gap:4px;">
-                                <input id="tavily-api-key" type="password" placeholder="tvly-로 시작하는 Tavily API 키"
+                                <input id="tavily-api-key" type="password" placeholder="tvly-로 시작하는 Tavily API 키" data-en-ph="Tavily API key starting with tvly-"
                                     style="flex:1; min-width:0; box-sizing:border-box; height:26px; padding:0 8px; border:1px solid #ddd; border-radius:4px; font-size:12px;">
                                 <button onclick="window.saveTavilyKey()"
                                         onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';"
-                                        title="API 키 저장"
+                                        title="API 키 저장" data-en-title="Save API key" data-en="💾 Save"
                                         style="height:26px; padding:0 10px; font-size:11px; font-weight:bold; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:4px; cursor:pointer; white-space:nowrap; box-sizing:border-box; transition:background .15s, border-color .15s;">
                                     💾 저장
                                 </button>
                                 <button onclick="window.clearTavilyKey()"
                                         onmouseover="this.style.background='#f5c2bd'; this.style.borderColor='#e08f87';" onmouseout="this.style.background='#fbe4e2'; this.style.borderColor='#eeb0ac';"
-                                        title="API 키 삭제"
+                                        title="API 키 삭제" data-en-title="Delete API key"
                                         style="height:26px; padding:0 8px; font-size:11px; background:#fbe4e2; color:#b1432f; border:1px solid #eeb0ac; border-radius:4px; cursor:pointer; box-sizing:border-box; transition:background .15s, border-color .15s;">
                                     🗑️
                                 </button>

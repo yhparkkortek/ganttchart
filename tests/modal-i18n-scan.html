@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>모달 본문 한/영 점검(스캐너)</title></head><body style="margin:0">
+<!-- 🌐 [2026-11-25] 영어 모드에서 모달을 하나씩 열어 **한글로 남은 글자**를 모달별로 센다.
+     진짜 kortek_pm.html, 진짜 여는 함수. 네트워크(백엔드)가 없으면 일부 모달은 빈 채/안내만 뜬다 — 그건 그대로 센다.
+     프로젝트가 열린 탭에서 돌리지 말 것(새 프로젝트 마법사 등이 화면 상태를 바꾼다).
+     #kofirst 를 붙이면 한국어로 먼저 만들어 둔 모달을 영어로 바꿔 본다.
+     실행: chrome --headless=new --allow-file-access-from-files --window-size=1500,900 --virtual-time-budget=40000
+           --dump-dom file:///.../tests/modal-i18n-scan.html → <pre id="out"> 맨 끝 줄 "합계 N" (0 이 목표) -->
+<iframe id="f" src="../kortek_pm.html?mis=1" style="border:0;width:1400px;height:800px;"></iframe>
+<pre id="out">running…</pre>
+<script>
+var OPENERS = ['openHolidayManager', 'openGanttOrganizeWizard', 'openWbsGroupSuggestions', 'openAiProjectSummaryModal', 'openProjectSummaryPromptModal',
+  'openPsImproveCommentModal', 'openGanttQaModal', 'openGanttQaPromptModal', 'openAiToolsSettingsModal', 'openMyTeamModal', 'openImproveCommentModal',
+  'openTaskInbox', 'openColorPaletteModal', 'openAlarmSettings', 'openCalSyncHelp', '_npwDevPlanOpen', 'openIssueReportModal', '_mcOpen',
+  'openSapLoginSettings', '_bcOpenModal', '_dsOpenSettings', 'openOverdueCleanup', '_jiraOpenSearchModal', '_jiraOpenLinkSettings',
+  '_jiraOpenCreateModal', 'openMailAutoConfigModal', 'openNoticeModal', '_npwOpen', '_mnbOpen', 'showPromptLogs', 'showPsPromptLogs', '_ppOpenPicker', '_dsOpenPicker'];
+function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+var HAN = /[가-힣]/;
+f.onload = async function () {
+  await sleep(2500);
+  var W = f.contentWindow, D = f.contentDocument, out = [], total = 0;
+  if (W.currentDriveFileId) { document.getElementById('out').textContent = 'SKIP 프로젝트가 열려 있다'; return; }
+  W.alert = function () {}; W.confirm = function () { return false; }; W.prompt = function () { return null; };
+  // #kofirst — 한국어일 때 모달을 전부 한 번 열어 만들어 둔 뒤 영어로 바꾼다(한 번 만들어 두고 다시 쓰는 모달 점검)
+  if (location.hash === '#kofirst') {
+    for (var k = 0; k < OPENERS.length; k++) {
+      try { var r0 = W[OPENERS[k]] && W[OPENERS[k]](); if (r0 && r0.catch) r0.catch(function () {}); } catch (e) {}
+      await sleep(300);
+      visibleModals().forEach(function (m) { m.style.display = 'none'; });
+    }
+  }
+  D.getElementById('lang-toggle-btn').click(); await sleep(300);
+  var _ll = W._applyLangLight, lightCalls = 0, lightErr = [];
+  W._applyLangLight = function () { lightCalls++; try { _ll(); } catch (e) { lightErr.push(e.message + ' @' + String(e.stack || '').split(String.fromCharCode(10))[1]); } };
+  function visibleModals() {
+    return [].slice.call(D.querySelectorAll('[id$="-modal"],[id$="-overlay"],#color-palette-modal')).filter(function (el) {
+      var cs = W.getComputedStyle(el); return cs.display !== 'none' && cs.visibility !== 'hidden' && el.getBoundingClientRect().width > 0;
+    });
+  }
+  function hangul(root) {
+    var seen = {}, res = [], tw = D.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    while (tw.nextNode()) {
+      var n = tw.currentNode, t = n.nodeValue.replace(/\s+/g, ' ').trim(), p = n.parentElement;
+      if (!t || !HAN.test(t) || !p) continue;
+      if (p.closest('script,style,textarea,option,[contenteditable="true"]')) continue;
+      var cs = W.getComputedStyle(p); if (cs.display === 'none' || cs.visibility === 'hidden') continue;
+      if (seen[t]) continue; seen[t] = 1; res.push(t.slice(0, 60));
+    }
+    [].slice.call(root.querySelectorAll('[placeholder],[title]')).forEach(function (el) {
+      ['placeholder', 'title'].forEach(function (a) { var v = el.getAttribute(a); if (v && HAN.test(v) && !seen['@' + v]) { seen['@' + v] = 1; res.push('@' + a + ': ' + v.slice(0, 50)); } });
+    });
+    return res;
+  }
+  var done = {};
+  for (var i = 0; i < OPENERS.length; i++) {
+    var fn = OPENERS[i];
+    visibleModals().forEach(function (m) { m.style.display = 'none'; });
+    try { var r = W[fn] && W[fn](); if (r && r.catch) r.catch(function () {}); } catch (e) { out.push('!! ' + fn + ' ' + e.message); }
+    await sleep(700);
+    visibleModals().forEach(function (m) {
+      if (done[m.id]) return; done[m.id] = 1;
+      var h = hangul(m); total += h.length;
+      out.push('### ' + m.id + ' (' + fn + ') — ' + h.length);
+      h.forEach(function (t) { out.push('    ' + t); });
+    });
+  }
+  out.push('번역 호출 ' + lightCalls + (lightErr.length ? ' · 오류 ' + lightErr.slice(0, 3).join(' | ') : ''));
+  out.push('합계 ' + total);
+  document.getElementById('out').textContent = out.join('\n');
+};
+</script></body></html>

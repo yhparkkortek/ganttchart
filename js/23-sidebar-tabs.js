@@ -165,7 +165,31 @@
         'bc-title':            ['미분류 백로그 일괄 정리', 'Consolidate unclassified backlog'],
         'mnb-title':           ['KORTEK 모델명 만들기', 'Build a KORTEK model name'],
     };
+    // 🌐 [2026-11-25] 글자 옆에 영어를 같이 적는 방식 — 맵에 id 를 따로 등록하지 않아도 된다.
+    //    `data-en="영어"`(글자) · `data-en-html="영어 HTML"`(<b> 등 섞인 글) · `data-en-title` · `data-en-ph`(placeholder).
+    //    한국어 원문은 처음 바꿀 때 `data-ko*` 에 보관해 되돌린다. ⚠️ data-en 은 **자식 요소 없는 칸**에만 —
+    //    textContent 로 덮어서 안의 요소가 사라진다. 모달이 열릴 때(js/19 → 04j `_applyLangLight`)와 언어 버튼에서 돈다.
+    window._applyInlineI18n = function(root) {
+        var en = window._currentLang === 'en', r = root || document;
+        r.querySelectorAll('[data-en]').forEach(function (el) {
+            if (!el.hasAttribute('data-ko')) el.setAttribute('data-ko', el.textContent);
+            var t = en ? el.getAttribute('data-en') : el.getAttribute('data-ko');
+            if (el.textContent !== t) el.textContent = t;
+        });
+        r.querySelectorAll('[data-en-html]').forEach(function (el) {
+            if (!el.hasAttribute('data-ko-html')) el.setAttribute('data-ko-html', el.innerHTML);
+            var t = en ? el.getAttribute('data-en-html') : el.getAttribute('data-ko-html');
+            if (el.innerHTML !== t) el.innerHTML = t;
+        });
+        [['data-en-title', 'data-ko-title', 'title'], ['data-en-ph', 'data-ko-ph', 'placeholder']].forEach(function (a) {
+            r.querySelectorAll('[' + a[0] + ']').forEach(function (el) {
+                if (!el.hasAttribute(a[1])) el.setAttribute(a[1], el.getAttribute(a[2]) || '');
+                el.setAttribute(a[2], en ? el.getAttribute(a[0]) : el.getAttribute(a[1]));
+            });
+        });
+    };
     window._applyPageTitles = function() {
+        try { window._applyInlineI18n(); } catch (e) { /* 번역 실패가 화면을 막지 않게 */ }
         var _mEn = window._currentLang === 'en';
         Object.keys(window.MODAL_TITLES).forEach(function (id) {
             var el = document.getElementById(id);

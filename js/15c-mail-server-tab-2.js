@@ -621,28 +621,28 @@ window.openMailAutoConfigModal = async function(opts) {
                 <div style="border:1px solid #e0e0e0; border-radius:6px; overflow:hidden; flex-shrink:0;">
                     <div onclick="window._toggleAlarmSection('mac-sec-routing')"
                          style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:#f0f4f8; cursor:pointer; user-select:none; transition:background .15s;" onmouseover="this.style.background='#e4eaf1'" onmouseout="this.style.background='#f0f4f8'">
-                        <span id="mac-sec-routing-label" style="font-size:12.5px; font-weight:bold; color:#2c5f8a;">🧭 배분 판정 · 자동 동작</span>
+                        <span id="mac-sec-routing-label" data-en="🧭 Placement rules · automation" style="font-size:12.5px; font-weight:bold; color:#2c5f8a;">🧭 배분 판정 · 자동 동작</span>
                         <span id="mac-sec-routing-arrow" style="font-size:11px; color:#888;">▼ 접기</span>
                     </div>
                     <div id="mac-sec-routing" style="display:block; padding:12px 14px; border-top:1px solid #e8e8e8;">
-                        <div id="mac-routing-desc" style="font-size:11px; color:#666; margin-bottom:8px; line-height:1.5;">배치는 <b>고객·프로젝트(가족) → 모델</b> 두 단계로 정합니다. 가족은 식별자로 확정하고, 가족 안의 모델은 <b>식별자 → 가족 대표 → AI 판단</b> 순. 가족조차 못 가를 때만 대기합니다.</div>
+                        <div id="mac-routing-desc" style="font-size:11px; color:#666; margin-bottom:8px; line-height:1.5;" data-en-html="Placement is decided in <b>two steps: customer/project (family) → model</b>. The family is fixed by identifiers; inside a family the model is chosen by <b>identifier → family representative → AI judgement</b>. It waits only when even the family cannot be told apart.">배치는 <b>고객·프로젝트(가족) → 모델</b> 두 단계로 정합니다. 가족은 식별자로 확정하고, 가족 안의 모델은 <b>식별자 → 가족 대표 → AI 판단</b> 순. 가족조차 못 가를 때만 대기합니다.</div>
                         <div style="display:flex; flex-wrap:wrap; gap:6px 14px; font-size:12px;">
-                            <label style="display:flex; align-items:center; gap:6px; cursor:pointer;"><input id="mac-sw-routing" type="checkbox" style="width:15px; height:15px;"><span id="mac-sw-routing-label">🧭 두 단계 판정 사용 (끄면 AI 상=자동배치 옛 규칙)</span></label>
-                            <label style="display:flex; align-items:center; gap:6px; cursor:pointer;"><input id="mac-sw-sweep" type="checkbox" style="width:15px; height:15px;"><span id="mac-sw-sweep-label">🔁 유휴 시간 자동배치 스윕</span></label>
-                            <label style="display:flex; align-items:center; gap:6px; cursor:pointer;"><input id="mac-sw-evidence" type="checkbox" style="width:15px; height:15px;"><span id="mac-sw-evidence-label">📎 근거층(스레드·발신자·관리번호) 보정</span></label>
-                            <label style="display:flex; align-items:center; gap:6px; cursor:pointer;"><input id="mac-sw-ncd" type="checkbox" style="width:15px; height:15px;"><span id="mac-sw-ncd-label">🆕 미분류 군집 감지(AI 판정, 기본 꺼짐)</span></label>
-                            <label style="display:flex; align-items:center; gap:6px; cursor:pointer;"><input id="mac-sw-tc" type="checkbox" style="width:15px; height:15px;"><span id="mac-sw-tc-label">🔬 토픽 오염 진단(기본 꺼짐)</span></label>
-                            <label style="display:flex; align-items:center; gap:6px; cursor:pointer;"><input id="mac-sw-issue" type="checkbox" style="width:15px; height:15px;"><span id="mac-sw-issue-label">🧾 이슈 수집(진단 로그 업로드)</span></label>
-                            <label style="display:flex; align-items:center; gap:6px; cursor:pointer;"><input id="mac-sw-tgqa" type="checkbox" style="width:15px; height:15px;"><span id="mac-sw-tgqa-label">📱 텔레그램 ↔ AI 문답 다리</span></label>
+                            <label style="display:flex; align-items:center; gap:6px; cursor:pointer;"><input id="mac-sw-routing" type="checkbox" style="width:15px; height:15px;"><span id="mac-sw-routing-label" data-en="🧭 Two-step placement (off = old rule: AI high = auto-place)">🧭 두 단계 판정 사용 (끄면 AI 상=자동배치 옛 규칙)</span></label>
+                            <label style="display:flex; align-items:center; gap:6px; cursor:pointer;"><input id="mac-sw-sweep" type="checkbox" style="width:15px; height:15px;"><span id="mac-sw-sweep-label" data-en="🔁 Auto-place sweep when idle">🔁 유휴 시간 자동배치 스윕</span></label>
+                            <label style="display:flex; align-items:center; gap:6px; cursor:pointer;"><input id="mac-sw-evidence" type="checkbox" style="width:15px; height:15px;"><span id="mac-sw-evidence-label" data-en="📎 Evidence layer (thread · sender · control no.)">📎 근거층(스레드·발신자·관리번호) 보정</span></label>
+                            <label style="display:flex; align-items:center; gap:6px; cursor:pointer;"><input id="mac-sw-ncd" type="checkbox" style="width:15px; height:15px;"><span id="mac-sw-ncd-label" data-en="🆕 Unclassified cluster detection (AI, off by default)">🆕 미분류 군집 감지(AI 판정, 기본 꺼짐)</span></label>
+                            <label style="display:flex; align-items:center; gap:6px; cursor:pointer;"><input id="mac-sw-tc" type="checkbox" style="width:15px; height:15px;"><span id="mac-sw-tc-label" data-en="🔬 Topic contamination check (off by default)">🔬 토픽 오염 진단(기본 꺼짐)</span></label>
+                            <label style="display:flex; align-items:center; gap:6px; cursor:pointer;"><input id="mac-sw-issue" type="checkbox" style="width:15px; height:15px;"><span id="mac-sw-issue-label" data-en="🧾 Issue collection (upload diagnostic logs)">🧾 이슈 수집(진단 로그 업로드)</span></label>
+                            <label style="display:flex; align-items:center; gap:6px; cursor:pointer;"><input id="mac-sw-tgqa" type="checkbox" style="width:15px; height:15px;"><span id="mac-sw-tgqa-label" data-en="📱 Telegram ↔ AI Q&A bridge">📱 텔레그램 ↔ AI 문답 다리</span></label>
                         </div>
                         <div style="margin-top:10px; display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
-                            <button id="mac-rejudge-btn" onclick="window._macRejudgeNow()" style="padding:5px 12px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:5px; font-size:12px; font-weight:bold; cursor:pointer;">🧭 대기 중인 보관함 항목 지금 재판정</button>
-                            <button id="mac-compact-btn" onclick="window._macCompactIndex()" style="padding:5px 12px; background:#f8f9fa; color:#555; border:1px solid #ced4da; border-radius:5px; font-size:12px; cursor:pointer;" title="색인(project_index.json)에서 군집 백로그를 떼어 보관 파일로 옮깁니다 — 메일 분석마다 내려받는 크기가 줄어듭니다">🧹 색인 다이어트(군집 백로그 분리)</button>
+                            <button id="mac-rejudge-btn" onclick="window._macRejudgeNow()" style="padding:5px 12px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:5px; font-size:12px; font-weight:bold; cursor:pointer;">${window._bi('🧭 대기 중인 보관함 항목 지금 재판정', '🧭 Re-judge waiting inbox items now')}</button>
+                            <button id="mac-compact-btn" onclick="window._macCompactIndex()" style="padding:5px 12px; background:#f8f9fa; color:#555; border:1px solid #ced4da; border-radius:5px; font-size:12px; cursor:pointer;" title="색인(project_index.json)에서 군집 백로그를 떼어 보관 파일로 옮깁니다 — 메일 분석마다 내려받는 크기가 줄어듭니다" data-en-title="Moves the cluster backlog out of the index (project_index.json) into an archive file — less to download on every mail analysis"><span data-en="🧹 Slim the index (split cluster backlog)">🧹 색인 다이어트(군집 백로그 분리)</span></button>
                             <span id="mac-routing-stats" style="font-size:11px; color:#888;"></span>
                         </div>
                         <div id="mac-family-wrap" style="margin-top:10px;">
-                            <div id="mac-family-title" style="font-size:12px; font-weight:bold; color:#2c5f8a; margin-bottom:4px;">👨‍👩‍👧 프로젝트 가족과 대표 <span style="font-weight:normal; color:#888; font-size:11px;">(같은 제품군 메일인데 <b>모델 단서가 하나도 없을 때만</b> 쓰입니다 — 4.3\" 처럼 인치·모델명이 적혀 있으면 대표와 상관없이 그 모델로 갑니다)</span></div>
-                            <div id="mac-family-list" style="font-size:11.5px; color:#444;">불러오는 중…</div>
+                            <div id="mac-family-title" style="font-size:12px; font-weight:bold; color:#2c5f8a; margin-bottom:4px;"><span data-en="👨‍👩‍👧 Project families and representatives">👨‍👩‍👧 프로젝트 가족과 대표</span> <span style="font-weight:normal; color:#888; font-size:11px;" data-en-html="(used only when a mail of the same product family has <b>no model clue at all</b> — if an inch size or model name like 4.3\&quot; is written, it goes to that model regardless of the representative)">(같은 제품군 메일인데 <b>모델 단서가 하나도 없을 때만</b> 쓰입니다 — 4.3\" 처럼 인치·모델명이 적혀 있으면 대표와 상관없이 그 모델로 갑니다)</span></div>
+                            <div id="mac-family-list" style="font-size:11.5px; color:#444;">${window._t('불러오는 중…', 'Loading…')}</div>
                         </div>
                     </div>
                 </div>
@@ -789,11 +789,17 @@ window.openMailAutoConfigModal = async function(opts) {
     window.bringModalToFront('mail-auto-config-modal');
 };
 
+// 🌐 [2026-11-25] 직급 점수 이름의 영어 — 저장 열쇠는 한국어 그대로 두고 보이는 글자만 바꾼다(열쇠를 바꾸면 저장된 점수가 끊긴다)
+window.MAC_TITLE_EN = {
+    '경영진 (회장·이사·본부장·연구소장)': 'Executives (chairman · director · division head · lab head)',
+    '관리직 (팀장·파트장·섹션리더·감사)': 'Managers (team lead · part lead · section lead · auditor)',
+    '실무직 (매니저·조장·사원)': 'Staff (manager · group lead · employee)',
+};
 window._macRenderTitleRows = function(titleScores) {
     document.getElementById('mac-title-rows').innerHTML =
         Object.keys(titleScores).map(t => `
         <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px; font-size:12px;">
-            <span style="flex:1;">${t}</span>
+            <span style="flex:1;">${(window._currentLang === 'en' && window.MAC_TITLE_EN && window.MAC_TITLE_EN[t]) || t}</span>
             <input class="mac-title-score" data-title="${t}" type="number" value="${titleScores[t]}"
                 style="width:64px; min-width:0; box-sizing:border-box; padding:3px 5px; border:1px solid #ccc; border-radius:4px; font-size:12px; text-align:center;">
         </div>`).join('');
@@ -826,8 +832,8 @@ window._macRenderFilterRules = function() {
         box.innerHTML = list.length ? list.map((v, i) => `
             <span style="display:inline-flex; align-items:center; gap:2px; background:#f1f3f5; border:1px solid #dee2e6; border-radius:12px; padding:2px 4px 2px 8px; font-size:11px;">
                 ${_msQEsc(v)}
-                <button onclick="window._macRemoveFilterRule('${type}', ${i})" title="삭제" style="background:none; border:none; color:#e03131; cursor:pointer; font-size:13px; line-height:1; padding:0 4px;">×</button>
-            </span>`).join('') : '<span style="font-size:10.5px; color:#bbb;">등록된 규칙 없음(기본값 사용 안 함)</span>';
+                <button onclick="window._macRemoveFilterRule('${type}', ${i})" title="${window._t('삭제', 'Delete')}" style="background:none; border:none; color:#e03131; cursor:pointer; font-size:13px; line-height:1; padding:0 4px;">×</button>
+            </span>`).join('') : '<span style="font-size:10.5px; color:#bbb;">' + window._t('등록된 규칙 없음(기본값 사용 안 함)', 'No rules (defaults not used)') + '</span>';
     };
     renderChips('mac-filter-subject-rows', 'subjectKeywords', rules.subjectKeywords);
     renderChips('mac-filter-noreply-rows', 'noreplyPatterns', rules.noreplyPatterns);
@@ -923,7 +929,7 @@ window._macRejudgeNow = async function() {
         // [2026-11-23] 📭 미분류(후보 0개라 보관함에 없던 메일)도 AI 없이 결정론으로 다시 본다
         if (window.mailRouteRejudgeUnmatched) await window.mailRouteRejudgeUnmatched({ force: true, max: 50 });
     }
-    finally { if (btn) { btn.disabled = false; btn.textContent = '🧭 대기 중인 보관함 항목 지금 재판정'; } }
+    finally { if (btn) { btn.disabled = false; btn.textContent = window._t('🧭 대기 중인 보관함 항목 지금 재판정', '🧭 Re-judge waiting inbox items now'); } }
 };
 window._macCompactIndex = async function() {
     if (!window.mailRoutingCompactIndex) { alert('배분 판정 모듈(js/74)이 로드되지 않았습니다.'); return; }

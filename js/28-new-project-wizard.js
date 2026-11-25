@@ -66,7 +66,7 @@ function _ensureModal() {
   <div style="display:flex; justify-content:space-between; align-items:center; padding:12px 18px; border-top:1px solid #e9ecef; background:#f8fbff;">
     <button id="npw-prev" onclick="window._npwPrev()"
       style="padding:7px 18px; background:#f8f9fa; color:#555; border:1px solid #ccc; border-radius:7px; font-size:13px; cursor:pointer; transition:background .15s;"
-      onmouseover="this.style.background='#e9ecef'" onmouseout="this.style.background='#f8f9fa'">← 이전</button>
+      onmouseover="this.style.background='#e9ecef'" onmouseout="this.style.background='#f8f9fa'"><span data-en="← Back">← 이전</span></button>
     <button id="npw-next" onclick="window._npwNext()"
       style="padding:7px 22px; background:#1971c2; color:#fff; border:none; border-radius:7px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s;"
       onmouseover="this.style.background='#1558a0'" onmouseout="this.style.background='#1971c2'">다음 →</button>
@@ -99,7 +99,7 @@ function _renderStep() {
     if (!body) return;
     _renderProg();
     prev.style.visibility = _step === 1 ? 'hidden' : '';
-    next.textContent = _step === _TOTAL ? '✅ 완료' : '다음 →';
+    next.textContent = _step === _TOTAL ? _t('✅ 완료', '✅ Done') : _t('다음 →', 'Next →');
 
     if (_step === 1) _renderStep1(body);
     else if (_step === 2) _renderStep2(body);
