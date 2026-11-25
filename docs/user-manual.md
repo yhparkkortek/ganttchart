@@ -73,7 +73,7 @@
 | 📝 **프로젝트 개요** (Summary) | 프로젝트 개요 · 담당자 · 모델 카드 · 개발 단계 일정 |
 | 📐 **고객 사양** (Customer SPEC) | 고객 사양. **모델(제품구분자)별로 따로** 보관 + 지원 해상도 |
 | 🧱 **BOM** | SAP BOM 다단계 전개 |
-| ⚡ **부품** (PARTS) | 주요자재 구분별 비교표(PANEL · AD BD · CONV · TOUCH CTRL · TSP/GLASS …) |
+| ⚡ **주요부품** (PARTS) | 주요자재 구분별 비교표(PANEL · AD BD · CONV · TOUCH CTRL · TSP/GLASS …) |
 | 💰 **재료비(M.C)** (M.C Table) | 원가 · 견적표 (R1 / R2 … 리비전별) |
 | 📄 **문서** (Document) | Sample Report · DR/DVR 발표자료 · 라벨사양서 · 모델명세서 작성 |
 | 🪐 **JIRA** | 이슈 트래커 연결 · 조회 · 댓글 · 새 이슈 |

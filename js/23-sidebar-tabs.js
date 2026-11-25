@@ -129,7 +129,7 @@
         summary:     { icon: '📝', ko: '프로젝트 개요', en: 'Summary' },
         briefspec:   { icon: '📐', ko: '고객 사양',     en: 'Customer SPEC' },
         bom:         { icon: '🧱', ko: 'BOM',           en: 'BOM' },
-        elecparts:   { icon: '⚡', ko: '부품',          en: 'PARTS' },
+        elecparts:   { icon: '⚡', ko: '주요부품',      en: 'PARTS' },
         mctable:     { icon: '💰', ko: '재료비(M.C)',   en: 'M.C Table' },
         document:    { icon: '📄', ko: '문서',          en: 'Document' },
         jira:        { icon: '🪐', ko: 'JIRA',          en: 'JIRA' },
