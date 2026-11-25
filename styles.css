@@ -2657,6 +2657,9 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
 #weekly-report-page tr.wr-zebra-b > td { background: #e8f2f3; }
 /* 🦓 Project Review 표 — tr 에 칠한다(td 에 칠하면 근거→표 돌아올 때의 노란 깜빡임이 가려진다) */
 #psummary-page tr.ps-zebra-b { background: #e8f2f3; }
+#psummary-page .ps-date-wk { color: #555 !important; }
+#psummary-page .ps-date-hol { color: #d32f2f !important; font-weight: bold; }
+#psummary-page .ps-date-sat { color: #1e6fe8 !important; font-weight: bold; }
 /* 🦓 JIRA 연결 이슈·전체 검색 표 — tr 에(마우스 올림 inline 색이 이기게) */
 tr.jira-zebra-b { background: #e8f2f3; }
 /* ⭕ [2026-11-24 "도표 모서리 R 전부"] .concept-table 과 같은 6px.

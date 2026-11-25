@@ -70,6 +70,13 @@
     function esc(s) { return window.escapeHtml ? window.escapeHtml(s) : String(s == null ? '' : s); }
     function pad(n) { return String(n).padStart(2, '0'); }
     function ymd(d) { return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
+    /** 🎨 [2026-11-25] 날짜 글자색 클래스 — 일요일·공휴일=빨강, 토요일=파랑, 평일=회색(Daily Report·Calendar 와 같은 규칙, 색은 styles.css/js/21). */
+    function dateCls(s) {
+        var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s || ''); if (!m) return '';
+        var wd = new Date(+m[1], +m[2] - 1, +m[3]).getDay();
+        var hol = (wd === 0) || !!(window.isHoliday && window.isHoliday(s));
+        return hol ? 'ps-date-hol' : (wd === 6 ? 'ps-date-sat' : 'ps-date-wk');
+    }
     function mode() {
         var m = null;
         try { m = localStorage.getItem(P.modeKey); } catch (e) { /* 아래 */ }
@@ -1015,7 +1022,7 @@
             if (_psTbl.pinned && !factsShown.length) h.push('<div style="padding:24px 10px; text-align:center; color:#999; font-size:12.5px;">' + esc(T('📌 핀셋을 켠 업무가 없습니다 — 열린 프로젝트의 업무만 셉니다', 'No pinned tasks (open project only)')) + '</div>');
             factsShown.forEach(function (f) { (byDate[f.date] = byDate[f.date] || []).push(f); });
             Object.keys(byDate).sort().reverse().forEach(function (d) {
-                h.push('<div style="font-size:12px; font-weight:bold; color:#555; margin:10px 0 4px; border-bottom:1px solid #eee; padding-bottom:2px;">' + esc(d) + ' <span style="font-weight:normal; color:#999;">(' + byDate[d].length + ')</span></div>');
+                h.push('<div class="' + dateCls(d) + '" style="font-size:12px; font-weight:bold; color:#555; margin:10px 0 4px; border-bottom:1px solid #eee; padding-bottom:2px;">' + esc(d) + ' <span style="font-weight:normal; color:#999;">(' + byDate[d].length + ')</span></div>');
                 byDate[d].forEach(function (f) {
                     // 🎯 [2026-11-23] 표의 근거를 누르면 이 카드로 온다(id = 프로젝트#행) — 카드를 누르면 표의 그 행으로 돌아간다.
                     h.push('<div id="ps-fact-' + factKey(f) + '" onclick="window._psFactBack(event)" style="font-size:12px; padding:6px 8px; margin-bottom:4px; background:#fff; border:1px solid #eef1f4; border-radius:6px; transition:box-shadow .3s, background .3s;">' +
@@ -1288,7 +1295,7 @@
                 '<td style="' + td + ' white-space:nowrap;"><span style="padding:1px 7px; border-radius:9px; font-size:11px; font-weight:bold; color:' + c.color + '; background:' + c.bg + ';">' + esc(catName(r.cat)) + '</span></td>' +
                 '<td style="' + td + '" title="' + esc(r.projects.join('\n')) + '">' + (r.common ? '<span style="padding:1px 6px; border-radius:8px; background:#fff3bf; color:#8f5a00; font-size:11px; font-weight:bold;">🔗 ' + esc(rowProj(r)) + '</span>' : esc(r.projects[0] || '')) + '</td>' +
                 '<td style="' + td + '">' + whoCellHtml(r, ai) + '</td>' +
-                '<td style="' + td + ' white-space:nowrap; color:#555;">' + esc(r.date || '') + '</td>' +
+                '<td class="' + dateCls(r.date) + '" style="' + td + ' white-space:nowrap; color:#555;">' + esc(r.date || '') + '</td>' +
                 '<td style="' + td + ' color:#222;">' + esc(r.text) + '</td>' +
                 '<td style="' + td + ' font-size:11px;">' + uniqRefs(r.refs).map(function (x) { return refHtml(x, r.common, ai); }).join(r.common ? '<br>' : ' ') + '</td></tr>';
         }).join('');
