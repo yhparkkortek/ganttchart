@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>간트 날짜 찾기 · 📅 오늘 버튼 시험</title></head><body style="margin:0">
+<!-- 📅 [2026-11-25] 간트 찾기의 날짜 검색 + 헤더 📅 오늘 버튼 — 진짜 kortek_pm.html 을 iframe 으로 띄워
+     합성 간트(접힌 WBS 포함)를 진짜 recalculateSchedules()/renderTable 로 그리고, 진짜 버튼을 누른다.
+     가짜는 없다(저장은 프로젝트가 안 열려 있어 돌지 않는다 — 프로젝트가 열린 탭에서 돌리지 말 것).
+     실행: chrome --headless=new --allow-file-access-from-files --window-size=1500,900 --virtual-time-budget=30000
+           --dump-dom file:///.../tests/gantt-today-search.html   → <pre id="out"> (마지막 줄 N/M) -->
+<iframe id="f" src="../kortek_pm.html?gtoday=1" style="border:0;width:1400px;height:800px;"></iframe>
+<pre id="out">running…</pre>
+<script>
+var out = [], pass = 0, fail = 0;
+function chk(c, l) { c ? pass++ : fail++; out.push((c ? 'ok   ' : 'FAIL ') + l); }
+function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+function ymd(off) { var d = new Date(); d.setDate(d.getDate() + off); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+var f = document.getElementById('f');
+f.onload = async function () {
+  await sleep(2500);
+  var W = f.contentWindow, D = f.contentDocument;
+  try {
+    if (W.currentDriveFileId) { out.push('SKIP 프로젝트가 열려 있다'); throw new Error('skip'); }
+    D.querySelectorAll('[id$="-overlay"],[id$="-modal"]').forEach(function (x) { if (x.style) x.style.display = 'none'; });
+    W.switchTab('gantt'); await sleep(300);
+    // 헤더 / 열 — 엑셀 불러오기(js/04f)가 만드는 모양 그대로
+    var head = ['NO', 'LEVEL(WBS)', '개발단계', '업무1', '업무2', '시작일', '완료일', '업무상태', '상세내용'];
+    W.colIdx = { no:0, bogo:1, start:5, plan:6, period:-1, dur1:-1, dur2:-1, dur3:-1, dur4:-1, assignee:-1, taskType1:3, taskType2:4, taskType3:-1, taskType4:-1, status:7, customer:-1, model:-1, inch:-1, devStage:2, content:8, answer:-1, chart:-1, wbs:-1 };
+    function R(lv, d0, t1, t2, s, e, st, c) {
+      var r = ['', String(lv), d0, t1, t2, s, e, st, c]; r._level = lv; r._origDev = lv === 0 ? d0 : ''; r._origT1 = lv === 1 ? t1 : ''; r._origT2 = lv === 2 ? t2 : ''; r._origT3 = ''; r._origT4 = ''; return r;
+    }
+    var gd = [head,
+      R(0, 'PROTO', '', '', ymd(-30), ymd(30), '진행', ''),
+      R(1, 'PROTO', '설계', '', ymd(-30), ymd(30), '진행', ''),
+      R(2, 'PROTO', '설계', '지난업무', ymd(-20), ymd(-10), '완료', '지난 일'),
+      R(2, 'PROTO', '설계', '오늘걸친업무', ymd(-2), ymd(2), '진행', '진행 중'),
+      R(2, 'PROTO', '설계', '오늘하루업무', ymd(0), ymd(0), '진행', '회의'),
+      R(2, 'PROTO', '설계', '다음업무', ymd(5), ymd(9), '대기', '오늘 이야기한 것'),   // "오늘" 이 글자로 든 다른 날 업무
+      R(2, 'PROTO', '설계', '일월업무', '2026-01-10', '2026-01-12', '완료', '1월 건')];
+    W.globalData = gd;
+    gd[2]._wbsCollapsed = true;   // '설계' 접힘 — 오늘 업무가 그 안에 숨어 있다
+    W.recalculateSchedules(); await sleep(600);
+    function shown() {
+      return [].slice.call(D.querySelectorAll('#table-body tr[data-row-index]')).filter(function (tr) { return tr.style.display !== 'none' && tr.getBoundingClientRect().height > 0; })
+        .map(function (tr) { var r = W.globalData[+tr.getAttribute('data-row-index')]; return r._origT2 || r._origT1 || r._origDev; });
+    }
+    var s0 = shown();
+    chk(s0.indexOf('오늘하루업무') === -1 && s0.indexOf('오늘걸친업무') === -1, '처음엔 접혀서 오늘 업무가 안 보인다 — ' + s0.join(','));
+    var btn = D.getElementById('gantt-today-btn');
+    chk(!!btn && /오늘/.test(btn.textContent), '헤더에 📅 오늘 버튼');
+    btn.click(); await sleep(500);
+    var s1 = shown();
+    chk(D.getElementById('gantt-ai-search-input').value === ymd(0), '검색칸에 오늘 날짜 — ' + D.getElementById('gantt-ai-search-input').value);
+    chk(s1.indexOf('오늘하루업무') !== -1 && s1.indexOf('오늘걸친업무') !== -1, '접힌 가지 안의 오늘 업무가 펼쳐져 보인다 — ' + s1.join(','));
+    chk(s1.indexOf('지난업무') === -1 && s1.indexOf('다음업무') === -1 && s1.indexOf('일월업무') === -1, '다른 날 업무는 숨김(상세내용에 "오늘" 글자가 든 행도)');
+    chk(D.getElementById('gantt-ai-search-filtermode').checked, '비매칭 숨기기 체크된 채');
+    btn.click(); await sleep(500);
+    var s2 = shown();
+    chk(D.getElementById('gantt-ai-search-input').value === '' && s2.indexOf('오늘하루업무') === -1, '한 번 더 누르면 해제되고 접힌 상태로 돌아간다 — ' + s2.join(','));
+    var inp = D.getElementById('gantt-ai-search-input');
+    var qs = [['2026-01-11', '일월업무'], ["01/11'26", '일월업무'], ['2026.01.10', '일월업무']];
+    for (var i = 0; i < qs.length; i++) {
+      W.ganttAiSearchToggle && D.getElementById('gantt-ai-searchbar').style.display !== 'flex' && W.ganttAiSearchToggle();
+      inp.value = qs[i][0]; inp.dispatchEvent(new W.Event('input'));
+      D.getElementById('gantt-search-now').click(); await sleep(400);
+      var s3 = shown();
+      chk(s3.indexOf(qs[i][1]) !== -1 && s3.indexOf('오늘하루업무') === -1, '날짜를 쳐서 찾는다 "' + qs[i][0] + '" — ' + s3.join(','));
+    }
+    D.getElementById('gantt-ai-search-clear').click(); await sleep(300);
+  } catch (e) { if (e.message !== 'skip') out.push('SETUP ' + e.message); }
+  out.push(pass + '/' + (pass + fail));
+  document.getElementById('out').textContent = out.join('\n');
+};
+</script></body></html>

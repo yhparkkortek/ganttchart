@@ -467,5 +467,26 @@ const reset = window._driveModalSearchState.q === '';
    ['HARNESS', '0', '한 낱말은 예전과 같다']
   ].forEach(([q, want, label]) => { const got = hit(q); const ok = got === want; ok ? pass++ : fail++; console.log((ok ? 'ok  ' : 'FAIL') + ' [Gantt] ' + label + ' → ' + got + (ok ? '' : ' (기대 ' + want + ')')); });
   chk(hit('lnw stellar32', true) === '1', '[Gantt] @프로젝트명도 같은 규칙');
+  // 📅 [2026-11-25] 날짜 — 행의 기간 [_calcStartTs, _calcPlanTs] 과 겹치면 걸린다(글자로만 맞추던 땐 0건)
+  const Y = new Date().getFullYear();
+  const ts = (y, m, d) => new Date(y, m - 1, d).getTime();
+  const t0 = new Date(); t0.setHours(0, 0, 0, 0);
+  rows[0]._calcStartTs = ts(2026, 10, 20); rows[0]._calcPlanTs = ts(2026, 10, 28);   // 기간
+  rows[1]._calcStartTs = ts(2026, 3, 25);  rows[1]._calcPlanTs = ts(2026, 3, 25);    // 하루짜리 (글자 "32" 가 날짜 안에 안 걸리는지도)
+  rows[2]._calcStartTs = t0.getTime();     rows[2]._calcPlanTs = t0.getTime();       // 오늘
+  [['2026-10-25', '0', '[Gantt 날짜] YYYY-MM-DD 가 기간 안'],
+   ['2026.10.25', '0', '[Gantt 날짜] 점'], ['20261025', '0', '[Gantt 날짜] 8자리'], ['26-10-20', '0', '[Gantt 날짜] 2자리 연도 · 시작일 당일'],
+   ['2026-10-29', '', '[Gantt 날짜] 기간 밖은 안 걸림'],
+   ['2026-03-25', '1', '[Gantt 날짜] 하루짜리'], ['2026-02-30', '', '[Gantt 날짜] 없는 날짜는 날짜로 안 읽음'],
+   ['2026-03', '1', '[Gantt 날짜] 연-월 = 그 달 전체'],
+   ['오늘', '2', '[Gantt 날짜] 오늘'],
+   ['harness 2026-10-25', '0', '[Gantt 날짜] 다른 낱말과 AND'],
+   ['도금 2026-10-25', '', '[Gantt 날짜] AND — 날짜가 안 맞으면 빠짐'],
+   ['32', '', '[Gantt 날짜] 숫자 하나는 날짜로 안 읽는다(2026-03-25 안의 "32" 가 걸리면 안 됨)']
+  ].forEach(([q, want, label]) => { const got = hit(q); const ok = got === want; ok ? pass++ : fail++; console.log((ok ? 'ok  ' : 'FAIL') + ' ' + label + ' "' + q + '" → ' + got + (ok ? '' : ' (기대 ' + want + ')')); });
+  if (Y === 2026) {
+    [['10/25', '0', 'M/D(올해)'], ['10-25', '0', 'M-D'], ["10/25'26", '0', "화면 모양 11/25'26"], ['10월 25일', '0', '11월 25일(띄어 써도)'], ['3월', '1', '3월 = 그 달']]
+      .forEach(([q, want, label]) => { const got = hit(q); const ok = got === want; ok ? pass++ : fail++; console.log((ok ? 'ok  ' : 'FAIL') + ' [Gantt 날짜] ' + label + ' → ' + got + (ok ? '' : ' (기대 ' + want + ')')); });
+  }
 }
 console.log(`\n${pass}/${pass + fail}`); process.exit(fail ? 1 : 0);

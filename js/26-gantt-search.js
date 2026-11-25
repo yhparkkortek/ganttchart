@@ -126,8 +126,8 @@
             '<span style="color:' + c.text + ';font-weight:700;white-space:nowrap;font-size:12px;">🔍 ' + (_en ? 'Search' : '검색') + '</span>' +
             '<input id="gantt-ai-search-input" type="text"' +
             '  placeholder="' + (_en
-                ? 'Name·task·content·mail snippet  /  @project  /  #ai (all AI-registered)'
-                : '이름·업무명·상세내용·메일스니펫  /  @프로젝트  /  #ai (AI 등록 전체)') + '"' +
+                ? 'Name·task·content·date (11/25, 2026-11-25, today)  /  @project  /  #ai'
+                : '이름·업무명·상세내용·날짜(11/25 · 2026-11-25 · 오늘)  /  @프로젝트  /  #ai (AI 등록 전체)') + '"' +
             '  style="flex:1;min-width:200px;' + _GS_BOX + 'padding:0 10px;border:1px solid ' + c.inputBorder + ';' +
             '  outline:none;background:#fff;color:' + c.text + ';">' +
             // 🐢 [2026-11-11] "타이핑할 때마다 바로 필터링되어 글 작성이 느려진다 — 딜레이를
@@ -228,8 +228,8 @@
         if (lbl) lbl.textContent = '🔍 ' + (_en ? 'Search' : '검색');
         var inp = document.getElementById('gantt-ai-search-input');
         if (inp) inp.placeholder = _en
-            ? 'Name·task·content·mail snippet  /  @project  /  #ai (all AI-registered)'
-            : '이름·업무명·상세내용·메일스니펫  /  @프로젝트  /  #ai (AI 등록 전체)';
+            ? 'Name·task·content·date (11/25, 2026-11-25, today)  /  @project  /  #ai'
+            : '이름·업무명·상세내용·날짜(11/25 · 2026-11-25 · 오늘)  /  @프로젝트  /  #ai (AI 등록 전체)';
         var nowBtn = document.getElementById('gantt-search-now');
         if (nowBtn) nowBtn.title = _en ? 'Search now (Enter)' : '지금 검색 (Enter)';
         var prevBtn = document.getElementById('gantt-search-prev');
@@ -352,11 +352,61 @@
     // 알람 동의어 패턴 — 이 키워드로 검색하면 텍스트 매칭 대신 row._알림===true 인 행만 표시
     var _alarmWords = /^(알람|알림|핀셋알람|핀셋알림|핀셋|마감알람|마감알림|alarm|reminder|notification)$/i;
 
+    // 📅 [2026-11-25 사용자 신고 "날짜는 못 찾음"] 날짜 칸(시작·완료)은 검색 대상이 아니었다 — 칸에는
+    //    "11/25'26" 처럼 그려지고 원본은 "2026-11-25" 라 글자로 맞추면 엉뚱하게 걸린다(숫자 "32" 가
+    //    "2026-03-2x" 안에 들어 있다). 그래서 **날짜처럼 생긴 낱말만** 날짜로 읽어 그 행의 기간
+    //    [시작, 완료] 과 겹치는지 본다(글자로 걸리는 것도 그대로 인정 — 넓히기만 한다).
+    //    받는 모양: 오늘·어제·내일 / 2026-11-25 · 2026.11.25 · 26-11-25 · 20261125 / 11/25 · 11-25 · 11/25'26 /
+    //    11월25일 · 11월 25일 / 2026-11 · 11월(그 달 전체). 연도가 없으면 올해.
+    var _DAY = 86400000;
+    function _gsDay(y, m, d) {
+        var dt = new Date(y, m - 1, d);
+        if (dt.getFullYear() !== y || dt.getMonth() !== m - 1 || dt.getDate() !== d) return null;
+        return dt.getTime();
+    }
+    function _gsDateRange(t) {
+        t = String(t || '').trim().toLowerCase();
+        var now = new Date(); now.setHours(0, 0, 0, 0);
+        var Y = now.getFullYear(), m, s, e;
+        var rel = { '오늘': 0, 'today': 0, '어제': -1, 'yesterday': -1, '내일': 1, 'tomorrow': 1 };
+        if (Object.prototype.hasOwnProperty.call(rel, t)) {
+            s = new Date(now.getFullYear(), now.getMonth(), now.getDate() + rel[t]).getTime();
+            return { from: s, to: s };
+        }
+        if ((m = t.match(/^(\d{4}|\d{2})[-/.](\d{1,2})[-/.](\d{1,2})$/)) ||
+            (m = t.match(/^(20\d{2})(\d{2})(\d{2})$/))) {
+            var y = parseInt(m[1], 10); if (y < 100) y += 2000;
+            s = _gsDay(y, parseInt(m[2], 10), parseInt(m[3], 10));
+            return s == null ? null : { from: s, to: s };
+        }
+        if ((m = t.match(/^(\d{1,2})[/-](\d{1,2})(?:'(\d{2}))?$/)) || (m = t.match(/^(\d{1,2})월(\d{1,2})일?$/))) {
+            s = _gsDay(m[3] ? 2000 + parseInt(m[3], 10) : Y, parseInt(m[1], 10), parseInt(m[2], 10));
+            return s == null ? null : { from: s, to: s };
+        }
+        if ((m = t.match(/^(\d{4})[-/.](\d{1,2})$/)) || (m = t.match(/^()(\d{1,2})월$/))) {
+            var yy = m[1] ? parseInt(m[1], 10) : Y, mm = parseInt(m[2], 10);
+            if (mm < 1 || mm > 12) return null;
+            s = new Date(yy, mm - 1, 1).getTime(); e = new Date(yy, mm, 0).getTime();
+            return { from: s, to: e };
+        }
+        return null;
+    }
+    // "11월 25일" 은 띄어 써도 한 날짜다(낱말로 쪼개기 전에 붙인다)
+    function _gsJoinKoDate(kw) { return String(kw || '').replace(/(\d{1,2})월\s+(\d{1,2})일/g, '$1월$2일'); }
+    function _gsRowOnDate(row, r) {
+        var s = row && row._calcStartTs, e = row && (row._calcPlanTs || row._calcStartTs);
+        if (!s) return false;
+        if (e < s) { var x = s; s = e; e = x; }
+        return s <= r.to + _DAY - 1 && e >= r.from;
+    }
+    window._gsDateRange = _gsDateRange;   // 시험용
+
     function _rowMatches(row, kw, isProject, isAiAll, isAlarm) {
         if (!row) return false;
         if (isAiAll)  return !!row._aiRegistered;
         if (isAlarm)  return !!row._알림;
 
+        kw = _gsJoinKoDate(kw);
         var kwL = kw.toLowerCase();
 
         // 🔍 [2026-11-24 사용자 요청] 다른 페이지와 **같은 규칙**(js/04a `_searchMatchAll`) — 띄어 쓴 낱말이
@@ -377,7 +427,13 @@
                 if (colIdx.status   !== -1) hay.push(row[colIdx.status]);
             }
             hay = hay.concat(row._aiMatchKeywords || [], [row._aiSourceSnippet, row._aiMatchBasis]);
-            return window._searchMatchAll(hay.map(function (v) { return v == null ? '' : String(v); }).join(' \u0001 '), toks);
+            hay = hay.map(function (v) { return v == null ? '' : String(v); }).join(' \u0001 ');
+            var low = hay.toLowerCase(), norm = window._searchNorm(low);
+            return toks.every(function (t) {
+                if (window._searchHasToken(low, t, norm)) return true;
+                var r = _gsDateRange(t);
+                return !!r && _gsRowOnDate(row, r);
+            });
         }
 
         // ── 업무명 (WBS 각 레벨) ──
@@ -1486,6 +1542,28 @@
             var inp = document.getElementById('gantt-ai-search-input');
             if (inp) { inp.focus(); inp.select(); }
         }
+    };
+
+    // 📅 [2026-11-25 사용자 요청] "오늘 버튼 — 누르면 오늘 날짜 업무를 펼쳐서 보여줘".
+    //    새 필터를 만들지 않고 **같은 검색**에 오늘 날짜를 넣는다(위 날짜 낱말 규칙 — 기간이 오늘에 걸친 행).
+    //    걸린 행은 접힌 WBS 안에 있어도 보이게 된다(_applySearch 의 "매칭 행은 항상 보이게"). 비매칭 숨기기는
+    //    지금 체크 상태를 따른다(기본 켜짐). 한 번 더 누르면 지운다. 글자 "오늘" 대신 날짜를 넣는 건
+    //    상세내용에 "오늘 회의" 같은 말이 든 행까지 걸리지 않게 하려고.
+    function _gsTodayIso() {
+        var d = new Date();
+        return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    }
+    window.ganttSearchToday = function() {
+        _ensureSearchBar();
+        var inp = document.getElementById('gantt-ai-search-input');
+        if (!inp) return;
+        var iso = _gsTodayIso();
+        if (_query === iso && _lastAppliedQuery === iso) { _clearSearch(); return; }
+        inp.value = iso;
+        _query = iso; _selected.clear(); _navIndex = -1;
+        _showSearchBar();
+        _applySearch();
+        if (!_matchedIndices.length && window.showToast) window.showToast(window._t ? window._t('오늘(' + iso + ')에 걸친 업무가 없습니다', 'No tasks on today (' + iso + ')') : '오늘 업무 없음', 'info');
     };
 
     // MutationObserver: table-body가 재렌더링될 때마다 검색 재적용

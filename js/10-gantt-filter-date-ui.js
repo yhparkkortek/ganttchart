@@ -58,7 +58,7 @@
             return { bg: '#e0f5f7', hoverBg: '#a3d9e0', darkText: '#00707d' }[k];
         };
         const bg = _cpHex('bg'), hoverBg = _cpHex('hoverBg'), darkText = _cpHex('darkText');
-        ['schedule-tools-btn', 'gantt-ai-search-btn', 'print-btn'].forEach(function(id) {
+        ['schedule-tools-btn', 'gantt-ai-search-btn', 'gantt-today-btn', 'print-btn'].forEach(function(id) {
             const btn = document.getElementById(id);
             if (!btn) return;
             btn.style.background = bg;
