@@ -326,6 +326,9 @@ window._modalFitRect = function() {
         if (r.left - a.left >= 0 && r.left - a.left < 60) gap = Math.round(r.left - a.left) || P.gapDefault;
         if (r.top >= a.top && r.top < a.top + 120) top = Math.round(r.top);
     }
+    // 📑 프로젝트를 열면 페이지 위에 프로젝트 탭 줄(#sheet-tabs-bar)이 생긴다 — 그 줄은 덮지 않는다
+    const sheet = document.getElementById('sheet-tabs-bar');
+    if (sheet && sheet.offsetHeight) top = Math.max(top, Math.round(sheet.getBoundingClientRect().bottom + 2));
     const right = a.left + main.clientWidth - gap;          // clientWidth — 세로 스크롤바는 뺀다
     const bar = document.getElementById('modal-taskbar');
     const barTop = (bar && bar.offsetHeight) ? bar.getBoundingClientRect().top : window.innerHeight;
@@ -356,6 +359,30 @@ window._modalFitWide = function(boxId) {
 // 🧲 [2026-11-25 사용자 요청 "겹쳐지지 않도록"] 넓은 모달이 **기본 자리(오른쪽 절반)에 붙어 열려 있는 동안**
 //    메인 페이지를 그만큼 왼쪽으로 비킨다(#app-main 오른쪽 여백) — 모달이 페이지 내용을 덮지 않는다.
 //    사람이 끌거나 크기를 바꾸면(_modalPosSave) 떠 있는 창으로 보고, 닫거나 최소화하면 페이지를 원래 폭으로 되돌린다.
+// 📐 [2026-11-25] 붙어 있는 넓은 모달을 지금 화면에 맞춰 다시 붙인다 — 페이지를 열 때 미리 만들어 둔 모달(업무 보관함·
+//    AI 문답)은 프로젝트를 열기 **전** 화면으로 자리를 잡아, 나중에 생긴 프로젝트 탭 줄을 덮었다(사용자 신고).
+//    부르는 곳: 창 크기 변경 · 탭 전환(js/23) · 프로젝트 탭 줄이 생기거나 사라질 때(아래 관찰자).
+window._modalRefitDocked = function() {
+    (window.MODAL_FIT_WIDE || []).forEach(function (id) {
+        const box = document.getElementById(id);
+        if (box && box.dataset.fitDocked === '1' && window._mreszIsShown(box)) window._modalFitWide(id);
+    });
+};
+(function () {
+    let t = null;
+    const later = function () { clearTimeout(t); t = setTimeout(function () { try { window._modalRefitDocked(); } catch (e) { /* 자리 잡기 실패가 화면을 막지 않게 */ } }, 60); };
+    window.addEventListener('resize', later);
+    const hook = function () {
+        const bar = document.getElementById('sheet-tabs-bar');
+        if (!bar) return;
+        // 프로젝트를 열고 닫는 코드(js/04c)가 이 줄의 style.display 와 안의 탭을 바꾼다 — 그 변화를 직접 본다
+        //    (ResizeObserver 는 그리기에 묶여 있어 그리기가 쉬면 안 온다 — rAF 와 같은 사정, 실측)
+        new MutationObserver(later).observe(bar, { attributes: true, attributeFilter: ['style', 'class'], childList: true });
+        if (window.ResizeObserver) new ResizeObserver(later).observe(bar);
+    };
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', hook); else hook();
+})();
+
 window._modalDockSync = function() {
     const main = document.getElementById('app-main');
     if (!main) return;

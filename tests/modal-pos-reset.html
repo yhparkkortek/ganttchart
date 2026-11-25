@@ -2,7 +2,7 @@
 <html><head><meta charset="utf-8"><title>모달 위치 기억·초기화·넓은 모달 기본 위치 시험</title></head><body style="margin:0">
 <!-- 📐 [2026-11-25] 진짜 kortek_pm.html, 진짜 여는 함수·진짜 ⚙️ 메뉴 버튼. 가짜는 showToast 하나(글을 받아 본다).
      ① 기억된 자리로 열린다 ② 메뉴 [🪟 모달 위치 초기화] → 열린 넓은 모달이 기본 자리로, 저장 비움, 토스트
-     ③ 다시 열어도 기본 자리(다시 만드는 모달 — JIRA 검색) ④ 다른 넓은 모달(자재 보관함)도 같은 자리 ⑤ 목록 밖 모달(알람 설정)은 원래 크기 ⑥~⑧ 붙은 동안 페이지 비킴·닫으면 되돌림·옮긴 창은 안 비킴
+     ③ 다시 열어도 기본 자리(다시 만드는 모달 — JIRA 검색) ④ 다른 넓은 모달(자재 보관함)도 같은 자리 ⑤ 목록 밖 모달(알람 설정)은 원래 크기 ⑥~⑧ 붙은 동안 페이지 비킴·닫으면 되돌림·옮긴 창은 안 비킴 ⑨ 간트·목록·캘린더는 안 비킴 ⑩ 프로젝트 탭 줄이 생기면 그 아래로
      실행: chrome --headless=new --allow-file-access-from-files --window-size=2000,1100 --virtual-time-budget=30000
            --dump-dom file:///.../tests/modal-pos-reset.html → <pre id="out"> (마지막 줄 N/M) -->
 <iframe id="f" src="../kortek_pm.html?mpr=1" style="border:0;width:2000px;height:1100px;"></iframe>
@@ -53,6 +53,16 @@ f.onload = async function () {
     var p1 = M.style.paddingRight; W.switchTab('gantt'); await sleep(300); var p2 = M.style.paddingRight;
     W.switchTab('projectlist'); await sleep(300); var p3 = M.style.paddingRight; W.switchTab('calendar'); await sleep(300); var p3c = M.style.paddingRight; W.switchTab('briefspec'); await sleep(300); var p4 = M.style.paddingRight;
     chk(p1 !== '' && p2 === '' && p3 === '' && p3c === '' && p4 === p1, '⑨ 간트·프로젝트 목록·캘린더에선 안 비킨다 — 고객사양 "' + p1 + '" · 간트 "' + p2 + '" · 목록 "' + p3 + '" · 다시 고객사양 "' + p4 + '"');
+    hide('matcart-modal'); await sleep(300);
+    // ⑩ 붙은 채 프로젝트 탭 줄이 생기면(프로젝트 열기) 그 아래로 다시 붙는다, 사라지면 원래 위로
+    W.localStorage.removeItem(KEY); W._mcOpen(); await sleep(700);
+    var t0 = Math.round(D.getElementById('matcart-box').getBoundingClientRect().top);
+    var bar = D.getElementById('sheet-tabs-bar'), oldDisp = bar.style.display, oldHtml = bar.innerHTML;
+    bar.innerHTML = '<div style="height:30px; padding:4px 10px; border:1px solid #ccc;">TEST_PROJECT</div>'; bar.style.display = 'flex'; await sleep(400);
+    var bb = Math.round(bar.getBoundingClientRect().bottom), t1 = Math.round(D.getElementById('matcart-box').getBoundingClientRect().top);
+    bar.style.display = oldDisp; bar.innerHTML = oldHtml; await sleep(400);
+    var t2 = Math.round(D.getElementById('matcart-box').getBoundingClientRect().top);
+    chk(t1 >= bb && t2 === t0, '⑩ 프로젝트 탭 줄 아래로 다시 붙음 — 처음 ' + t0 + ' · 탭 줄 끝 ' + bb + ' → ' + t1 + ' · 탭 줄 없앰 → ' + t2);
     hide('matcart-modal'); await sleep(300);
     if (saved === null) W.localStorage.removeItem(KEY); else W.localStorage.setItem(KEY, saved);
   } catch (e) { out.push('SETUP ' + e.message); }
