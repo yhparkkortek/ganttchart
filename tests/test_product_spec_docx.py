@@ -65,7 +65,7 @@ FAM_SCHEMA = {'stellar': schema}
 for _fam in kb._ps_families_ready():
     FAM_SCHEMA[_fam] = kb._ps_load_schema(_fam)
 # 계열마다 터치 장에만 있는 칸(터치 판 확인용)
-TOUCH_PROBE = {'stellar': 'V_tperf.r1.c2', 'obsidian': 'V_tgen.r1.c2'}
+TOUCH_PROBE = {'stellar': 'V_tperf.r1.c2', 'obsidian': 'V_tgen.r1.c2', 'obsidian55': None}   # None = 터치 장 없는 계열(한 판)
 
 # ── 1. 합성 값으로 채우기 (원본 없이 도는 부분) — 계열마다 ───────────────────────
 print('1. 합성 값 채우기 (계열: %s)' % ', '.join(FAM_SCHEMA))
@@ -105,8 +105,12 @@ for family, variant in [(f, v) for f in FAM_SCHEMA for v in ('base', 'touch')]:
     if 'hdrKtkPn' in schema['header']:           # OBSIDIAN 머리글엔 KTK PN 이 없다(원본이 그렇다)
         check(any(t.startswith('H:') and 'H_hdrKtkPn' in t for t in texts), '%s: 머리글 KTK PN' % variant)
     check('첫 줄' in joined and '둘째 줄' in joined, '%s: 여러 줄 값' % variant)
-    has_touch = TOUCH_PROBE[family] in joined
-    check(has_touch == (variant_ == 'touch'), '%s: 터치 장 유무' % variant)
+    if TOUCH_PROBE[family]:
+        has_touch = TOUCH_PROBE[family] in joined
+        check(has_touch == (variant_ == 'touch'), '%s: 터치 장 유무' % variant)
+    else:
+        # (부품 표엔 'Touch Sensor'·'Touch Controller' 고정 줄이 있다 — 글로 보지 말고 터치 장 칸이 나오나로)
+        check(not re.search(r'V_t(gen|perf|mech|pwr|com|glass)\.', joined), '%s: 터치 장 없는 계열 — 터치로 골라도 같은 양식' % variant)
     # 그림: img_block 하나만 들어가고 나머지 자리 그림은 지워진다 → 남는 그림 = 공통 정의 그림 + 1
     slots_left = sum(1 for dr in d.element.body.iter(qn('wp:docPr')) if (dr.get('descr') or '').startswith('slot:'))
     slots_left += sum(1 for im in d.element.body.iter('{urn:schemas-microsoft-com:vml}imagedata')
@@ -120,7 +124,8 @@ for family, variant in [(f, v) for f in FAM_SCHEMA for v in ('base', 'touch')]:
     tpl_doc = Document(kb._PS_FAMILIES[family]['templates'][variant_])
     n_tpl = sum(1 for _ in tpl_doc.element.body.iter(WSP))
     n_out = sum(1 for _ in d.element.body.iter(WSP))
-    n_drop = {'stellar': 3, 'obsidian': 3}[family]     # STELLAR: osdkey 2 + block 1 · OBSIDIAN: osdkey 2(제목 문단) + 외형도 흰 사각형 1
+    # STELLAR: osdkey 2 + block 1 · OBSIDIAN: osdkey 2(제목 문단) + 외형도 흰 사각형 1 · OBSIDIAN 55": osdkey 2(같은 문단)
+    n_drop = {'stellar': 3, 'obsidian': 3, 'obsidian55': 2}[family]
     check(n_out == n_tpl - n_drop, '%s: 덧그림 %d개만 지워져야 (양식 %d → %d)' % (variant, n_drop, n_tpl, n_out))
     # 쪽 끝에 장 제목만 남지 않게(2026-11-25 OBSIDIAN27 실측: 5.2·6·6.2·6.3 이 쪽 맨 아래에 홀로) — 제목엔 keepNext, 글머리표엔 없음
     kn = {}
@@ -142,14 +147,9 @@ print('1-d. 덧그림(빨간 점선 상자)')
 
 def _osd_box_count(d):
     """OSD 키 그림 문단 + 바로 앞 문단의 덧그림 수 — 그림 문단은 'Picture img_osdkey' 로 찾고, 없으면 'OSD Key' 제목 다음."""
-    els = list(d.element.body.iterchildren())
-    for i, e in enumerate(els):
-        if 'Picture img_osdkey' in e.xml:
+    for e in d.element.body.iterchildren(qn('w:p')):
+        if any((dp.get('name') or '') == 'Picture img_osdkey' for dp in e.iter(qn('wp:docPr'))):
             return len(kb._ps_overlays_near(e))
-    for i, e in enumerate(els):
-        t = ''.join(x.text or '' for x in e.iter(qn('w:t'))).strip()
-        if t.startswith('OSD Key Description') or (i + 1 < len(els) and 'Picture img_osdkey' in els[i + 1].xml):
-            return len([dr for dr in e.iter(qn('w:drawing')) if dr.find(qn('wp:anchor')) is not None])
     return -1
 
 

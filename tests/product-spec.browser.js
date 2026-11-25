@@ -303,6 +303,19 @@ window.__psTest = async function (opt) {
         fF.psFamily = 'nope';
         check(window._psPayload().family === 'stellar', '모르는 계열 이름이면 stellar');
         delete fF.psFamily;
+        // 📑 계열 칸이 비면 참고 사양서(같은 보드 제품 문서)의 계열 — 불러오기 없이 앱 정보만으로도 그 양식 모양으로 나간다
+        window.tabData.documents['product-spec#LOWER'].revisions.R2 = { fields: { psFamily: 'obsidian55', 'adp1.r1.c1': 'REF-P4' } };
+        window._psRef.set([]);
+        var pRf = window._psPayload();
+        check(pRf.family === 'obsidian55' && !('vcp.r1.c1' in pRf.values) && pRf.values['adp1.r1.c1'] === 'REF-P4',
+              '계열 칸이 비면 📑 참고 사양서의 계열 (' + pRf.family + ')');
+        fF.psFamily = 'stellar';
+        window._psRef.set([]);
+        check(window._psPayload().family === 'stellar', '사람이 정한(불러오기가 정한) 계열이 참고 사양서보다 먼저');
+        delete fF.psFamily;
+        delete window.tabData.documents['product-spec#LOWER'].revisions.R2;
+        window._psRef.set([]);
+        check(window._psPayload().family === 'stellar', '참고 사양서가 없으면 다시 stellar');
 
         // 📥 불러오기 섞임 3가지(2026-11-25, OBSIDIAN 27 사양서를 OBSIDIAN27 DB 에 불러와 Word 로 보고 찾음) — 합성 문서로 늘 돈다
         //   ① A/D 연결표는 원본 줄을 Symbol 로 BOM 줄에 맞춘다(순서로 넣으면 'J2 = DC JACK') · BOM 에 없는 설치지점은 뺀다

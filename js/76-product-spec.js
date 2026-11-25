@@ -257,13 +257,37 @@
     //   이 문서가 어느 계열인지는 칸 'psFamily'(불러오기가 원본에 맞춰 정한다, 비면 STELLAR).
     window.PS_FAMILIES = window.PS_FAMILIES || [
         { id: 'stellar', label: 'STELLAR', schema: 'templates/PRODUCT SPEC_schema.json' },
-        { id: 'obsidian', label: 'OBSIDIAN', schema: 'templates/PRODUCT SPEC_schema_OBSIDIAN.json' }
+        { id: 'obsidian', label: 'OBSIDIAN', schema: 'templates/PRODUCT SPEC_schema_OBSIDIAN.json' },
+        // 55" P4 — AC 전원·터치 장 없음(한 판). 터치 칸을 YES 로 해도 같은 양식이 나간다
+        { id: 'obsidian55', label: 'OBSIDIAN 55"', schema: 'templates/PRODUCT SPEC_schema_OBSIDIAN55.json' }
     ];
     var _schema = null, _schemaErr = '', _schemas = {};
+    // 계열 정하는 차례: ① 사람이 적었거나 불러오기가 정한 값 ② 📑 참고 사양서(같은 A/D 보드·OSD·전원 묶음으로 고른
+    //   다른 문서)의 계열 — 불러오기 없이 앱 정보만으로 새 사양서를 만들 때도 **같은 보드 제품의 양식 모양**으로 나간다
+    //   ③ STELLAR. (2026-11-25 — 앱 기본 정보만 넣으면 문서가 나오는 게 이 서식의 취지라, 계열도 사람이 안 골라도 되게)
+    window.PS_FAMILY_FROM_REF = window.PS_FAMILY_FROM_REF || ['adp', 'osd', 'pwr', 'block'];
+    var _famRefMemo = { at: 0, v: null };
+    var _famFromRef = function () {
+        if (Date.now() - _famRefMemo.at < 1500) return _famRefMemo.v;
+        var v = null;
+        try {
+            var plan = _refPlan(window._dgCollect ? window._dgCollect() : { meta: {} });
+            (window.PS_FAMILY_FROM_REF || []).some(function (gid) {
+                var hit = plan && plan.pick && plan.pick[gid];
+                if (!hit) return false;
+                v = { fam: String((hit.fields || {}).psFamily || 'stellar').trim().toLowerCase(), from: hit.proj + ' · ' + hit.unit + ' ' + hit.rev };
+                return true;
+            });
+        } catch (e) { v = null; }
+        _famRefMemo = { at: Date.now(), v: v };
+        return v;
+    };
     var _famOf = function () {
         var own = window._docFieldOwn ? window._docFieldOwn(FORM_ID, 'psFamily') : undefined;
         var f = String(own || '').trim().toLowerCase();
-        return _schemas[f] ? f : 'stellar';
+        if (_schemas[f]) return f;
+        var r = _famFromRef();
+        return r && _schemas[r.fam] ? r.fam : 'stellar';
     };
     // 지금 문서의 계열 칸 목록으로 바꿔 끼운다 — 칸 목록을 읽는 곳(화면·원본저장·칸 열쇠)마다 먼저 부른다
     var _useFam = function () {
@@ -346,8 +370,14 @@
         out.push({ title: _t('출력 설정', 'Output'), cols: 2, fields: [
             { key: 'psFamily', label: _t('양식 계열 (' + window.PS_FAMILIES.map(function (f) { return f.id; }).join(' / ') + ')',
                                           'Template family'),
-              hint: _t('비우면 stellar. [📂 불러오기]가 원본 사양서에 맞춰 정합니다 — 지금: ', 'blank = stellar. Now: ')
-                    + ((window.PS_FAMILIES.filter(function (f) { return f.id === _famOf(); })[0] || {}).label || _famOf()) },
+              hint: _t('비우면 📑 참고 사양서(같은 A/D 보드 제품)의 계열, 그것도 없으면 stellar. [📂 불러오기]가 원본에 맞춰 정합니다 — 지금: ',
+                       'blank = family of the reference spec (same A/D board), else stellar. Now: ')
+                    + ((window.PS_FAMILIES.filter(function (f) { return f.id === _famOf(); })[0] || {}).label || _famOf())
+                    + (function () {
+                        var own = window._docFieldOwn ? String(window._docFieldOwn(FORM_ID, 'psFamily') || '').trim() : '';
+                        var r = own ? null : _famFromRef();
+                        return r && _schemas[r.fam] ? _t(' (← 참고 사양서 ', ' (← reference ') + r.from + ')' : '';
+                    })() },
             { key: 'hasTouch', label: _t('Touch Controller 장 (YES/NO)', 'Touch Controller chapter (YES/NO)'),
               from: 'ps:hasTouch', hint: 'YES / NO' },
             { key: 'refSummary', label: _t('📑 참고 사양서 (앱에 없는 칸을 가져오는 문서 — 출력엔 안 나감)', '📑 Reference specs (not printed)'),
@@ -819,7 +849,7 @@
             if (_refScan.errs.length && window._issueLog) {
                 try { window._issueLog({ domain: 'product-spec', kind: 'ref_scan_partial', result: { errs: _refScan.errs.slice(0, 10) } }); } catch (e1) { /* 기록 실패는 무시 */ }
             }
-            _refMemo = null;
+            _refMemo = null; _famRefMemo.at = 0;          // 훑기가 끝나면 계열(참고 사양서 따라)도 다시 본다
             if (window._docState && window._docState.formId === FORM_ID && window._docRender) window._docRender();
         })();
     };
@@ -872,9 +902,9 @@
             _refScan.run = (_refScan.run || 0) + 1;
             _refScan.state = 'done'; _refScan.read = 0; _refScan.errs = [];
             _refScan.docs = (docs || []).map(function (o) { return _refCand(o); });
-            _refMemo = null;
+            _refMemo = null; _famRefMemo.at = 0;
         },
-        reset: function () { _refScan.run = (_refScan.run || 0) + 1; _refScan.state = 'idle'; _refScan.docs = []; _refScan.read = 0; _refScan.errs = []; _refMemo = null; },
+        reset: function () { _refScan.run = (_refScan.run || 0) + 1; _refScan.state = 'idle'; _refScan.docs = []; _refScan.read = 0; _refScan.errs = []; _refMemo = null; _famRefMemo.at = 0; },
         plan: function () { _refMemo = null; return _refPlan(window._dgCollect ? window._dgCollect() : { meta: {} }); },
         scan: _refScan
     };
@@ -1458,7 +1488,8 @@
         // 📚 원본에 가장 잘 맞는 양식 계열(백엔드가 계열마다 맞대 보고 고른다) — **먼저** 정한다(아래 ③ 이 그 계열 칸 목록을 본다).
         //   구버전 백엔드는 family 를 안 준다 — 그땐 지금 계열 그대로.
         if (j.family) {
-            if (j.family === 'stellar') delete d.fields.psFamily; else d.fields.psFamily = j.family;
+            // stellar 도 **적어 둔다** — 비워 두면 📑 참고 사양서의 계열이 불러오기가 정한 계열을 이긴다
+            d.fields.psFamily = j.family;
             _useFam(); _built = null;
         }
         // ① 다른 제품의 사양서면 그 문서에만 속한 칸(개정 이력)은 안 가져온다 — 지난번 불러오기가 넣은 같은 값은 걷어 낸다

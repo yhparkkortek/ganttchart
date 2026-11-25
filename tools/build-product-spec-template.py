@@ -439,6 +439,35 @@ FAMILY_CONFIGS = {
                       r'\b12505WR', r'\b12507WR'],
         'sensitiveDocOnly': [r'(?i)obsidian'],
     },
+    # 55" P4(2026-11-25) — AC 전원·LED Driver/VCP/터치 장 없음·커넥터 10개·외형도 둘(아크릴 커버·메탈 프레임)
+    'obsidian55': {
+        'outs': {'base': 'PRODUCT SPEC_양식_OBSIDIAN55.docx', 'touch': 'PRODUCT SPEC_양식_OBSIDIAN55.docx'},
+        'schema': 'PRODUCT SPEC_schema_OBSIDIAN55.json',
+        'touch': None,                      # 터치 장이 없는 계열 — 한 판(터치 칸을 YES 로 해도 같은 양식)
+        'adpEnd': 'User Interface',
+        'paraPrefix': {},
+        'skipParas': ['vcpTitle'],
+        # Scope 가 두 문단(둘째 = '<모델> is a High quality …') — STELLAR 는 한 문단이라 앱 자동값(scope)엔 둘 다 들어 있다.
+        #   그래서 둘째는 비면 지우는 선택 문단: 자동값으론 사라지고, 불러오면 원본 문장 그대로
+        'extraParas': [('re:is a High quality TFT-LCD', '?scope2', 'Scope — 2nd paragraph')],
+        # 기준 글이 're:' 로 시작하면 정규식(원본이 '5.3Block Diagram' 처럼 번호를 손으로 붙였다) · 방향 0 = 기준 문단 자신
+        'images': [
+            ('both', 'img_pwrconn', 'Input Power Connector', 1, False),
+            ('both', 'img_block', 're:Block Diagram$', 1, False),
+            ('both', 'img_adbd', 'A/D Board connector and dimension', 1, False),
+            ('both', 'img_osdkey', 'OSD Key Description', 1, False),
+            ('both', 'img_osdmenu', 'OSD Menu Structure', 1, False),
+            ('both', 'img_outline', 'Mechanical Specification', 0, 'vml'),
+            ('both', 'img_outline2', 'Outline Dimension (Metal frame)', -1, 'vml'),
+        ],
+        'imageLabels': {'img_outline': 'Outline Dimension (Acrylic cover)', 'img_outline2': 'Outline Dimension (Metal frame)'},
+        'groups': [('1. Cover · Revision', 'TFT LCD MONITOR'), ('2~4. Scope · Features · Certification', 'Scope'),
+                   ('5. Electrical Specification', 'Electrical Specification'), ('6. LCD Panel Specifications', 'LCD Panel Specifications'),
+                   ('7. A/D Board', 'A/D Board'), ('8. User Interface', 'User Interface'),
+                   ('Mechanical Specification', '@img_outline')],
+        'sensitive': [r'(?i)obsidian', r'\bKTS\d{3}DGS', r'\b16065\d\d', r'\b16116\d\d', r'Yeon\s*Ho'],
+        'sensitiveDocOnly': [r'(?i)obsidian'],
+    },
 }
 
 
@@ -510,8 +539,9 @@ def build_family(src, fam, outdir):
         return _para_text(body[i]).strip() if body[i].tag == W_P else ''
 
     def find_text(t, start=0):
+        rx = re.compile(t[3:]) if t.startswith('re:') else None
         for i in range(start, len(body)):
-            if text_of(i) == t:
+            if (rx.search(text_of(i)) if rx else text_of(i) == t):
                 return i
         raise SystemExit('기준 글을 못 찾음: %r' % t)
 
@@ -608,6 +638,9 @@ def build_family(src, fam, outdir):
             para_at[key] = (tr['paras'][k], cfg['paraPrefix'].get(k, prefix_re), label)
     for n, j in enumerate(adp_titles):
         para_at['adH%d' % (n + 1)] = (j, None, 'A/D connector %d — title' % (n + 1))
+    # 이 계열에만 있는 문단(STELLAR 짝 없음) — 기준 글로 찾는다. '?' 열쇠는 비면 문단째 지운다
+    for anchor, key, label in cfg.get('extraParas') or []:
+        para_at[key] = (find_text(anchor), None, label)
     # ⚠️ 원본에 없는 선택 줄(Features 4)은 **만들지 않는다** — 하나만 더해도 내용 요소 수가 원본과 달라져
     #    불러온 쪽 맞춤 빈 줄(layout)을 못 쓴다(실측). 그 계열 원본이 가진 줄만 둔다.
     marked = []
@@ -640,6 +673,7 @@ def build_family(src, fam, outdir):
 
     # 4) 그림
     labels = {k: v.get('label') for k, v in st['images'].items()}
+    labels.update(cfg.get('imageLabels') or {})
     img_at = {}
     for when, key, anchor, step, shape_fill in cfg['images']:
         i = find_text(anchor)
@@ -647,6 +681,8 @@ def build_family(src, fam, outdir):
         while 0 <= j < len(body) and abs(j - i) <= 4:
             if body[j].tag == W_P and (_vml_imgs(body[j]) if shape_fill == 'vml' else _blips(body[j])):
                 hit = j
+                break
+            if step == 0:                  # 기준 문단 자신에 걸린 그림(P4 외형도는 장 제목 문단에 떠 있다)
                 break
             j += step
         assert hit is not None, (fam, key, 'no picture near', anchor)
@@ -711,6 +747,9 @@ def build_family(src, fam, outdir):
     for t in schema['tables'].values():
         t['bodyIndex'] = tbody[t['index']]
 
+    if cfg.get('touch') is None:
+        _finish_family(cfg, doc, schema, outs, outdir)   # 터치 장이 없는 계열 — 한 판뿐
+        return
     based = Document(outs['touch'])
     kids = list(based.element.body.iterchildren())
     texts = [(_para_text(el).strip() if el.tag == W_P else '') for el in kids]
@@ -756,7 +795,11 @@ def build_family(src, fam, outdir):
                     or any((im.get('{%s}title' % O_NS) or '') == descr for im in _vml_imgs(el)):
                 schema['images'][key]['bodyIndexByVariant'] = {'touch': schema['images'][key]['bodyIndex'], 'base': i}
                 break
+    _finish_family(cfg, doc, schema, outs, outdir)
 
+
+def _finish_family(cfg, doc, schema, outs, outdir):
+    """화면 묶음 + 칸 목록 쓰기 + 민감어 검사(판이 하나든 둘이든 같다)."""
     # 6) 화면 묶음 — 제목 글로(그림 기준이면 그 그림 자리)
     groups = []
     kt = list(doc.element.body.iterchildren())

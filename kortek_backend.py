@@ -7574,6 +7574,8 @@ _SELF_UPDATE_FILES = [
     'templates/PRODUCT SPEC_양식_OBSIDIAN.docx',
     'templates/PRODUCT SPEC_양식_OBSIDIAN_TOUCH.docx',
     'templates/PRODUCT SPEC_schema_OBSIDIAN.json',
+    'templates/PRODUCT SPEC_양식_OBSIDIAN55.docx',      # 55" P4 — AC 전원·터치 장 없음(한 판)
+    'templates/PRODUCT SPEC_schema_OBSIDIAN55.json',
 ]
 # ⚠️⚠️ [2026-09-16 실사용 버그수정] Windows 배치(.bat)/VBScript(.vbs) 파일은 git이 텍스트
 # 파일을 저장소 안에서는 항상 LF로 정규화해 저장하므로(로컬 작업 사본의 줄바꿈과 무관하게)
@@ -9805,6 +9807,15 @@ _PS_FAMILIES = {
                      'touch': os.path.join(BASE_DIR, 'templates', 'PRODUCT SPEC_양식_OBSIDIAN_TOUCH.docx')},
                  'schema': os.path.join(BASE_DIR, 'templates', 'PRODUCT SPEC_schema_OBSIDIAN.json'),
                  'touchHeading': ['Touch Integrations']},
+    # 55" P4 — AC 전원·LED Driver/VCP/터치 장 없음·커넥터 10개·외형도 둘. 터치 장이 없어 두 판이 같은 파일
+    'obsidian55': {'templates': {
+                       'base': os.path.join(BASE_DIR, 'templates', 'PRODUCT SPEC_양식_OBSIDIAN55.docx'),
+                       'touch': os.path.join(BASE_DIR, 'templates', 'PRODUCT SPEC_양식_OBSIDIAN55.docx')},
+                   'schema': os.path.join(BASE_DIR, 'templates', 'PRODUCT SPEC_schema_OBSIDIAN55.json'),
+                   'touchHeading': [],
+                   # 장이 적은 양식 — 모양 다른 표가 적게 세어져 LANDMARK·K43 같은 문서 54개를 가져갔다(실측).
+                   #   그래서 **모든 기준에서 같거나 나을 때만** 다른 계열을 이긴다(`_ps_parse`).
+                   'narrow': True},
 }
 
 
@@ -10486,20 +10497,38 @@ def _ps_align(tpl_items, src_items):
 
 def _ps_parse(src_bytes, family=None, variant=None, trace=False):
     """기존 사양서(.docx) → 칸 값·그림. 📚 계열을 안 주면 **있는 계열 양식 전부와 맞대 보고** 가장 잘 맞는 계열로 읽는다
-    (모양이 다른 표가 적은 쪽 → 일치율 높은 쪽). 돌려주는 `family` 로 화면이 출력 양식을 고른다.
+    (모양이 다른 표가 적은 쪽 → 일치율 높은 쪽 · 장이 적은 `narrow` 계열은 모든 기준에서 같거나 나을 때만).
+    돌려주는 `family` 로 화면이 출력 양식을 고른다.
     `families` 에 계열마다 일치율·모양 다른 표 수를 같이 싣는다(왜 그 계열인지 드러낸다)."""
     if family:
         return _ps_parse_one(src_bytes, _ps_family(family), variant, trace)
-    tried = {}
-    best = None
+    tried, res = {}, {}
     for fam in _ps_families_ready():
-        r = _ps_parse_one(src_bytes, fam, variant, trace)
-        tried[fam] = {'ratio': (r.get('align') or {}).get('ratio', 0), 'shape': len(r.get('shape') or []),
-                      'skipped': len(r.get('skipped') or [])}
-        key = (-tried[fam]['shape'], tried[fam]['ratio'], -tried[fam]['skipped'])
+        r = res[fam] = _ps_parse_one(src_bytes, fam, variant, trace)
+        al = r.get('align') or {}
+        tried[fam] = {'ratio': al.get('ratio', 0), 'shape': len(r.get('shape') or []),
+                      'skipped': len(r.get('skipped') or []),
+                      'srcLeft': al.get('srcLeft', 0), 'srcTablesLeft': al.get('srcTablesLeft', 0)}
+    # ① 보통 계열끼리: 모양 다른 표가 적은 쪽 → 일치율 높은 쪽 → 못 읽은 칸 적은 쪽
+    best = None
+    for fam, m in tried.items():
+        if _PS_FAMILIES[fam].get('narrow'):
+            continue
+        key = (-m['shape'], m['ratio'], -m['skipped'])
         if best is None or key > best[0]:
-            best = (key, r)
-    out = best[1]
+            best = (key, fam)
+    best = best[1] if best else next(iter(tried))
+    # ② 장이 적은('narrow') 계열은 **모든 기준에서 같거나 나을 때만**(일치율 ≥ · 모양 다른 표+자리 없는 원본 표 ≤ ·
+    #    자리 없는 원본 글 ≤, 하나는 더 나음) — 장이 적으면 어긋날 표도 적어 보여 장 많은 원본까지 가져갔다
+    for fam, a in tried.items():
+        if not _PS_FAMILIES[fam].get('narrow') or fam == best:
+            continue
+        b = tried[best]
+        ta, tb = a['shape'] + a['srcTablesLeft'], b['shape'] + b['srcTablesLeft']
+        if a['ratio'] >= b['ratio'] and ta <= tb and a['srcLeft'] <= b['srcLeft'] \
+                and (a['ratio'] > b['ratio'] or ta < tb or a['srcLeft'] < b['srcLeft']):
+            best = fam
+    out = res[best]
     out['families'] = tried
     return out
 
@@ -10569,7 +10598,8 @@ def _ps_parse_one(src_bytes, family, variant=None, trace=False):
         return ('P', _ps_norm(t)) if t else ('I', None)
 
     t_items = [_tpl_item(el) for el in tc]
-    amap = _ps_align(t_items, [_src_item(el) for el in sb])
+    s_items = [_src_item(el) for el in sb]
+    amap = _ps_align(t_items, s_items)
 
     def _src_at(tpl_index):
         pos = tpl_pos.get(tpl_index)
@@ -10585,6 +10615,13 @@ def _ps_parse_one(src_bytes, family, variant=None, trace=False):
         hit = amap.get(pos)
         if hit and hit[1] >= 8:
             same += 1
+    # 거꾸로 — 원본의 글·표 중 양식에 **자리가 없는** 것. 위 일치율은 양식 쪽에서만 세서, 장이 적은 양식(55" P4 —
+    #   LED Driver·VCP 장 없음)이 장이 많은 원본에도 높게 나왔다(실측 LANDMARK 문서 54개가 P4 로 갔다).
+    used_src = {j for j, _s in amap.values()}
+    src_p = [j for j, it in enumerate(s_items) if it[0] == 'P' and it[1] and len(it[1]) >= 8]
+    src_t = [j for j, it in enumerate(s_items) if it[0] == 'T']
+    src_left = sum(1 for j in src_p if j not in used_src)
+    src_tleft = sum(1 for j in src_t if j not in used_src)
 
     # 문단
     for key, info in (schema.get('paras') or {}).items():
@@ -10774,7 +10811,8 @@ def _ps_parse_one(src_bytes, family, variant=None, trace=False):
     out = {'ok': True, 'family': family, 'variant': variant, 'values': values, 'images': images, 'skipped': skipped,
             'layout': layout, 'shape': shape,
             'align': {'checked': checked, 'same': same,
-                      'ratio': round(same / float(checked), 3) if checked else 0}}
+                      'ratio': round(same / float(checked), 3) if checked else 0,
+                      'srcLeft': src_left, 'srcTablesLeft': src_tleft}}
     if trace:
         out['trace'] = tr_
     return out
