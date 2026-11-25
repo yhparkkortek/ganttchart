@@ -69,3 +69,38 @@
 2. 📣 담당 PC 에서 상태판: `isNotifier` 가 참이고, 17:00 뒤 미작성 알림 줄의 "오늘 N명" 이 올라가는지.
 3. 핀셋 알람 규칙 하나를 지금+2분으로 걸어 **실제 텔레그램**이 오는지 — 상태판 ⏰ 줄의 `lastResult.source` 가 `nas` 인지(`drive` 면 지도·색인에 그 id 가 없다는 뜻).
 4. 새 메일 알림 줄이 "그룹웨어 로그인 필요" 면 앱에서 그룹웨어 로그인 1회.
+
+## 6. 🔔 알람 수신자 — 메일 AI 가 적은 이름을 주소록에서 "정확히 한 사람"으로만 (2026-11-25)
+
+### 이름이 들어오는 곳
+메일 AI 분석(js/04a 프롬프트 → js/14b `buildMailTaskRow`)이 간트 행 **상세내용 칸** 첫 줄에
+`[업무유형][발신자→수신자] YYYY-MM-DD` 를 **자유 텍스트**로 적는다. 프롬프트가 "본문 이름을 있는 그대로,
+영문 애칭(Anthony→Andy) 우선" 을 지시하므로 주소록 표기와 다를 수 있고, 서명·인사말에서 잘못 뽑힐 수도 있다.
+별도 칸·`projectMeta` 에는 저장하지 않는다(행 메타 `_mailRaw` 에 원문 메일이 따로 있다).
+
+### 이름 → 주소가 되는 길(전부)
+| 경로 | 파일 | 해석 |
+|---|---|---|
+| 알람 탭 표·자동 알람(D-7/3/1)·즉시 발송·미발송 일괄 | js/22c `collectAlarmItems` → js/22a `checkAndSendAlarms`, js/22c `sendAlarmNow`·`sendAllPendingAlarms` | `_addrResolveRecipient`(js/22b) |
+| 위 경로의 텔레그램 | js/22a·22c `allowedPeople` → `_addrFindByName` 으로 telegramId | `allowedPeople` 에서 발송 제외 이름을 미리 뺀다 |
+| 예약 발송(기간·반복) 업무 알람 | kortek_backend.py `_fire_alarm_rule` → `_build_alarm_task_snapshot` | `_addr_resolve_recipient`(사본) |
+| 예약 발송 텔레그램 | 같은 함수 | `_addr_resolve_recipient(...)['person']` |
+| 공지(notice) 예약 발송 | `_fire_notice_rule` | 이름 해석 없음 — 사람이 고른 수신자 목록 그대로 |
+
+### 고치기 전에 재현된 위험(합성 데이터, 진짜 함수)
+1. **동명이인** — `_addrFindByName` 은 `Array.find` 라 주소록(전사 394명)에서 **첫 번째 사람**에게 갔다.
+2. **이름 자리의 이메일 글자** — 주소록 대조 없이 그대로 발송(`fake.person@kortek.co.kr` 도 사내 도메인이라 통과).
+3. **영문 직함 떼기가 이름을 먹음** — 낱말 경계가 없어 `Adams`→`Ada`(ms), `Drew`→`ew`(dr). 잘린 이름이 다른 사람과 맞으면 그 사람에게 감.
+4. **외부 도메인 게이트 구멍** — 발신인이 여럿이면 주소를 쉼표로 합친 글자를 통째로 검사해 **마지막 도메인만** 봤다(`out@customer.com,sy.lee@kortek.co.kr` → 허용). 프런트·백엔드 둘 다.
+
+### 지금 규칙
+- `_addrResolveRecipient(name)` → `{email, person, reason}`: `ok` / `no-email`(텔레그램만 가능) / `none`(주소록에 없음) / **`ambiguous`**(서로 다른 사람 둘 이상 → 발송 제외) / **`email-not-in-book`**(주소록에 없는 주소 → 발송 제외). 같은 이메일로 두 줄 등록된 사람은 한 사람으로 본다.
+- 발송 제외는 "미등록" 과 따로 `excludedPeople` 로 들고 다닌다 → 알람 표 이메일 칸 `⚠ 제외 N`(말풍선에 사유) · 상세 창 `발송 제외` 줄 · 예약 발송 결과 `excluded`.
+- 백엔드는 **사본**이다 — 한쪽만 고치면 화면 알람과 예약 발송이 갈린다.
+- 검증: `node tests/alarm-recipient-resolve.test.js` 26/26(진짜 js/22b·22a·22c 를 잘라 돌림, 옛 코드로는 같은 하네스에서 9건 실패) · `py -3 tests/test_alarm_recipient_resolve.py` 16/16(입구는 진짜 `_fire_alarm_rule`, 가짜는 프로젝트·주소록 읽기와 메일·텔레그램 발송).
+- ⚠️ 백엔드 쪽은 **재시작 뒤에** 적용된다(PC 마다).
+
+### 남은 위험 — 사람이 정할 것
+- **이름이 하나도 안 풀리면 프로젝트 전원에게 간다** — js/22a 자동 알람 `item.toEmail || allEmails`(Summary 담당자 이메일 전부, 도메인 게이트도 안 거침)와 즉시 발송 창. 반면 미발송 일괄(js/22c)은 "건너뜀"이다. 동명이인으로 제외된 경우도 이 대체 발송을 탄다(사내 팀원이라 엉뚱한 외부인은 아니다).
+- **영문 이름 하나(Andy)** 는 주소록에 Andy 가 한 명뿐이면 그 사람이 받는다 — 메일 속 Andy 가 고객사 사람이어도. 근본 해결은 AI 가 적은 이름 대신 **메일 헤더(`_mailRaw` 의 실제 발신·수신 주소)** 와 맞춰 보는 것(헤더에 있는 주소만 인정) — 데이터 흐름이 바뀌는 일이라 사용자 확인 후.
+- `_addrFindByName`(첫 번째 사람)은 Summary 담당자 이메일 자동 채움·텔레그램 chat id 채우기 등 **사람이 보면서 쓰는** 곳에 그대로 남아 있다.

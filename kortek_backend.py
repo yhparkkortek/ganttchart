@@ -2663,8 +2663,9 @@ def _addr_strip_title_suffix(name: str) -> str:
             if n.startswith(t) and len(n) > len(t):
                 n = n[len(t):].strip(); break
         for t in ADDR_EN_TITLE_WORDS:
-            re_suf = re.compile(r'[.,]?\s*' + t + r'\.?$', re.IGNORECASE)
-            re_pre = re.compile(r'^' + t + r'\.?\s*', re.IGNORECASE)
+            # ⚠️ [2026-11-25] 낱말 경계 필수 — 경계 없이 떼면 "Adams"→"Ada", "Drew"→"ew" (js/22b 와 같은 규칙)
+            re_suf = re.compile(r'(?:[.,]\s*|\s+)' + t + r'\.?$', re.IGNORECASE)
+            re_pre = re.compile(r'^' + t + r'(?:\.\s*|\s+)', re.IGNORECASE)
             if re_suf.search(n):
                 n = re_suf.sub('', n).strip(); break
             if re_pre.search(n):
@@ -2712,14 +2713,60 @@ def _addr_find_by_name(address_book: list, name: str):
     return found
 
 
+def _addr_resolve_recipient(address_book: list, name: str) -> dict:
+    """🔔 [2026-11-25] 자동 발송 수신자 해석 — 주소록에서 **정확히 한 사람**일 때만 주소를 준다.
+       js/22b `_addrResolveRecipient` 의 사본(한쪽만 고치면 화면 알람과 예약 발송이 갈린다).
+       reason: ok / no-email / none / ambiguous(동명이인 → 제외) / email-not-in-book(주소록에 없는 주소 → 제외)"""
+    trimmed = str(name or '').strip()
+    if not trimmed:
+        return {'email': '', 'person': None, 'reason': 'none'}
+
+    def pkey(p):
+        em = str(p.get('email') or '').strip().lower()
+        return em or ('#' + str(p.get('name') or '').strip() + '|' + str(p.get('nameEn') or '').strip().lower())
+
+    def uniq(lst):
+        seen, out = set(), []
+        for p in lst:
+            k = pkey(p)
+            if k not in seen:
+                seen.add(k)
+                out.append(p)
+        return out
+
+    book = [p for p in (address_book or []) if isinstance(p, dict)]
+    if re.match(r'^[^\s@]+@[^\s@]+\.[^\s@]+$', trimmed):
+        lo = trimmed.lower()
+        hit = uniq([p for p in book if str(p.get('email') or '').strip().lower() == lo])
+        if not hit:
+            return {'email': '', 'person': None, 'reason': 'email-not-in-book'}
+        return {'email': str(hit[0].get('email')).strip(), 'person': hit[0], 'reason': 'ok'}
+
+    def match(n):
+        if not n:
+            return []
+        return uniq([p for p in book
+                     if (str(p.get('name') or '').strip() == n)
+                     or (str(p.get('nameEn') or '').strip().lower() == n.lower() and str(p.get('nameEn') or '').strip())])
+
+    hits = match(trimmed)
+    if not hits:
+        stripped = _addr_strip_title_suffix(trimmed)
+        if stripped and stripped != trimmed:
+            hits = match(stripped)
+    if not hits:
+        return {'email': '', 'person': None, 'reason': 'none'}
+    if len(hits) > 1:
+        return {'email': '', 'person': None, 'reason': 'ambiguous', 'count': len(hits)}
+    em = str(hits[0].get('email') or '').strip()
+    return {'email': em, 'person': hits[0], 'reason': 'ok' if em else 'no-email'}
+
+
 def _lookup_email(address_book: list, name: str) -> str:
+    # 주소록에서 정확히 한 사람으로 맞을 때만 주소(동명이인·주소록에 없는 주소는 빈 글자)
     if not name:
         return ''
-    trimmed = name.strip()
-    if re.match(r'^[^\s@]+@[^\s@]+\.[^\s@]+$', trimmed):  # 이름 자리에 이메일이 이미 들어있는 경우
-        return trimmed
-    found = _addr_find_by_name(address_book, trimmed)
-    return (found.get('email') or '') if found else ''
+    return _addr_resolve_recipient(address_book, name)['email']
 
 
 def _is_alarm_domain_allowed(email: str, allowed_external_domains: list) -> bool:
@@ -2817,7 +2864,14 @@ def _build_alarm_task_snapshot(project_data: dict, row_idx: int):
     all_people     = list(dict.fromkeys([n for n in (sender_names + receiver_names) if n]))
 
     assignee        = ', '.join(sender_names) or '-'
-    assignee_email  = ','.join(dict.fromkeys([e for e in (_lookup_email(address_book, n) for n in sender_names) if e]))
+    sender_emails   = list(dict.fromkeys([e for e in (_lookup_email(address_book, n) for n in sender_names) if e]))
+    assignee_email  = ','.join(sender_emails)
+    # 🔔 [2026-11-25] 발송 제외(동명이인·주소록에 없는 주소) — 결과 기록에 사유를 남긴다
+    excluded = []
+    for n in all_people:
+        r = _addr_resolve_recipient(address_book, n)
+        if r['reason'] in ('ambiguous', 'email-not-in-book'):
+            excluded.append({'name': n, 'reason': r['reason'], 'count': r.get('count')})
     receiver_str    = ', '.join(receiver_names) or '-'
     receiver_emails = list(dict.fromkeys([e for e in (_lookup_email(address_book, n) for n in receiver_names) if e]))
 
@@ -2825,7 +2879,8 @@ def _build_alarm_task_snapshot(project_data: dict, row_idx: int):
 
     return {
         'taskName': task_name, 'status': status_val,
-        'assignee': assignee, 'assigneeEmail': assignee_email,
+        'assignee': assignee, 'assigneeEmail': assignee_email, 'senderEmails': sender_emails,
+        'excludedPeople': excluded,
         'receiverStr': receiver_str, 'receiverEmails': receiver_emails,
         'allPeopleNames': all_people,
         'dueStr': due_str, 'diffDays': diff_days, 'content': content_raw_for_mail,
@@ -2931,9 +2986,14 @@ def _fire_alarm_rule(rule: dict):
         out['skipped'] = '업무 없음/알림 꺼짐/완료예정일 없음'; return out
 
     allowed_domains = rule.get('allowedExternalDomainsSnapshot') or []
-    assignee_email  = snap['assigneeEmail'] if _is_alarm_domain_allowed(snap['assigneeEmail'], allowed_domains) else ''
+    # ⚠️ [2026-11-25] 발신인 주소는 하나씩 검사 — 합친 글자("a@외부.com,b@kortek.co.kr")를 넣으면 마지막 도메인만 보였다
+    sender_emails   = [e for e in (snap.get('senderEmails') or []) if _is_alarm_domain_allowed(e, allowed_domains)]
     receiver_emails = [e for e in snap['receiverEmails'] if _is_alarm_domain_allowed(e, allowed_domains)]
-    to_email = ','.join(dict.fromkeys([e for e in ([assignee_email] + receiver_emails) if e]))
+    to_email = ','.join(dict.fromkeys([e for e in (sender_emails + receiver_emails) if e]))
+    if snap.get('excludedPeople'):
+        out['excluded'] = ['%s(%s)' % (x['name'], '동명이인' if x['reason'] == 'ambiguous' else '주소록에 없는 주소')
+                           for x in snap['excludedPeople']]
+        print(f"[업무알람 발송 제외] '{snap['taskName']}' — {', '.join(out['excluded'])}")
     # 💡 [2026-08-31] 수신 대상(기본수신/개별수신) 스냅샷 — 이메일 켜져있고(emailOn) 도메인 허용된
     #    사람만 이메일 cc로, 텔레그램 켜져있는(tgOn) 사람은 아래에서 별도로 텔레그램 발송
     cc_recipients = rule.get('ccRecipientsSnapshot') or []
@@ -2997,7 +3057,7 @@ def _fire_alarm_rule(rule: dict):
                 out['telegram'] += 1
 
         for name in snap['allPeopleNames']:
-            person = _addr_find_by_name(address_book, name)
+            person = _addr_resolve_recipient(address_book, name)['person']  # 동명이인이면 None — 첫 번째 사람을 집지 않는다
             if not person or not person.get('telegramId'):
                 continue
             email = person.get('email') or ''
