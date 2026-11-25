@@ -3375,10 +3375,8 @@
             var daysM = monthDays(date);
             var th = '<th style="padding:5px 7px; border:1px solid #cfe3e5; font-size:11.5px; color:#2c5f8a; white-space:nowrap;">' + esc(T('이름', 'Name')) + '</th>'
                 + daysM.map(function (d) {
-                    var off = offDay(d);
-                    var wd = new Date(d + 'T00:00:00').getDay();
-                    var hol = (wd === 0) || !!(window.isHoliday && window.isHoliday(d));
-                    var dcls = hol ? 'daily-mdate daily-mdate-hol' : (wd === 6 ? 'daily-mdate daily-mdate-sat' : 'daily-mdate daily-mdate-wk');
+                    // 🎨 판정은 공용 `window._dateDayCls`(js/04a) 한 곳 — 결과 이름(hol/sat/wk)만 이 표 클래스(daily-mdate-*)로 옮긴다.
+                    var dcls = 'daily-mdate daily-mdate-' + ((window._dateDayCls ? window._dateDayCls(d) : '').replace('date-day-', '') || 'wk');
                     return '<th class="' + dcls + '" style="padding:4px 2px; border:1px solid #cfe3e5; font-size:10.5px; font-weight:bold; text-align:center;">' + (+d.slice(8)) + '</th>';
                 }).join('');
             var trs = peopleM.map(function (p, pi) {
