@@ -474,6 +474,12 @@ const reset = window._driveModalSearchState.q === '';
   rows[0]._calcStartTs = ts(2026, 10, 20); rows[0]._calcPlanTs = ts(2026, 10, 28);   // 기간
   rows[1]._calcStartTs = ts(2026, 3, 25);  rows[1]._calcPlanTs = ts(2026, 3, 25);    // 하루짜리 (글자 "32" 가 날짜 안에 안 걸리는지도)
   rows[2]._calcStartTs = t0.getTime();     rows[2]._calcPlanTs = t0.getTime();       // 오늘
+  // 📅 [2026-11-25 2차] 기본은 시작일만 — 시작일이 아닌 날짜는 안 걸린다
+  W._gsSetDateSpan(false);
+  [['2026-10-25', '', '[Gantt 날짜·시작일] 기간 한가운데는 안 걸림'], ['2026-10-20', '0', '[Gantt 날짜·시작일] 시작일 당일'],
+   ['2026-10', '0', '[Gantt 날짜·시작일] 그 달에 시작'], ['2026-10-28', '', '[Gantt 날짜·시작일] 완료일은 안 걸림']
+  ].forEach(([q, want, label]) => { const got = hit(q); const ok = got === want; ok ? pass++ : fail++; console.log((ok ? 'ok  ' : 'FAIL') + ' ' + label + ' "' + q + '" → ' + got + (ok ? '' : ' (기대 ' + want + ')')); });
+  W._gsSetDateSpan(true);   // 아래는 '기간 포함' 켠 상태
   [['2026-10-25', '0', '[Gantt 날짜] YYYY-MM-DD 가 기간 안'],
    ['2026.10.25', '0', '[Gantt 날짜] 점'], ['20261025', '0', '[Gantt 날짜] 8자리'], ['26-10-20', '0', '[Gantt 날짜] 2자리 연도 · 시작일 당일'],
    ['2026-10-29', '', '[Gantt 날짜] 기간 밖은 안 걸림'],

@@ -14,6 +14,10 @@
 
     // ─── 상태 ──────────────────────────────────────────────────────────────────
     var _query  = '';          // 현재 검색어
+    // 📅 [2026-11-25 사용자 요청] 날짜 검색은 기본 **시작일**만 본다. 기간에 그 날이 들어 있는 업무까지 보려면
+    //    검색 바의 '기간 포함' 을 켠다(이 PC 에 기억). false = 시작일만, true = [시작, 완료] 겹침.
+    var _dateSpan = false;
+    try { _dateSpan = localStorage.getItem('gantt_gs_date_span_v1') === '1'; } catch (e) {}
     var _mode   = 'filter';    // 'highlight' | 'filter' (filter=비매칭 숨기기) — 🙈 [2026-11-24 사용자 요청] 기본은 숨기기(체크된 채로 연다)
     var _matchedIndices = [];  // 매칭된 globalData 인덱스 목록
     // 🐛🐛 [2026-09-16 실사용 버그수정] "AI 검색 후 V 체크해서 일괄 삭제할 때 어떤 행(특히
@@ -128,7 +132,8 @@
             '  placeholder="' + (_en
                 ? 'Name·task·content·date (11/25, 2026-11-25, today)  /  @project  /  #ai'
                 : '이름·업무명·상세내용·날짜(11/25 · 2026-11-25 · 오늘)  /  @프로젝트  /  #ai (AI 등록 전체)') + '"' +
-            '  style="flex:1;min-width:200px;' + _GS_BOX + 'padding:0 10px;border:1px solid ' + c.inputBorder + ';' +
+            // ↔ [2026-11-25 사용자 요청 "검색칸이 너무 길어 버튼 누르기 불편"] 줄 폭을 다 먹지 않게 고정 폭 — 버튼들이 칸 바로 옆(왼쪽)에 붙는다
+            '  style="flex:0 1 320px;width:320px;min-width:180px;' + _GS_BOX + 'padding:0 10px;border:1px solid ' + c.inputBorder + ';' +
             '  outline:none;background:#fff;color:' + c.text + ';">' +
             // 🐢 [2026-11-11] "타이핑할 때마다 바로 필터링되어 글 작성이 느려진다 — 딜레이를
             //    넣거나 검색 버튼을 두자" → [2026-11-11 2차] "디바운스는 쓰지 않는다 — 지금
@@ -136,7 +141,11 @@
             //    눌러야만 검색이 적용된다(아래 input 리스너 참고).
             '<button id="gantt-search-now" title="' + (_en ? 'Search now (Enter)' : '지금 검색 (Enter)') + '"' +
             '  style="' + _GS_BOX + 'padding:0 9px;background:' + c.btnBg + ';border:1px solid ' + c.inputBorder + ';cursor:pointer;color:' + c.text + ';">🔍</button>' +
-            '<button id="gantt-search-prev" title="' + (_en ? 'Previous result (Shift+Enter)' : '이전 결과 (Shift+Enter)') + '"' +
+            // 📅 [2026-11-25 사용자 요청 "날짜는 달력으로 찾으면 더 좋다"] 앱 공용 달력(showGenericCalendar, js/04i)으로 날짜를 골라
+            //    검색칸에 YYYY-MM-DD 를 넣고 바로 찾는다. 시작일/기간 포함은 옆 '기간 포함' 을 따른다.
+            '<button id="gantt-search-cal" title="' + (_en ? 'Pick a date from calendar' : '달력에서 날짜 골라 찾기') + '"' +
+            '  style="' + _GS_BOX + 'padding:0 8px;background:' + c.btnBg + ';border:1px solid ' + c.inputBorder + ';cursor:pointer;color:' + c.text + ';">📅</button>' +
+            '<button id="gantt-search-prev" title=""' + (_en ? 'Previous result (Shift+Enter)' : '이전 결과 (Shift+Enter)') + '"' +
             '  style="' + _GS_BOX + 'padding:0 9px;background:' + c.btnBg + ';border:1px solid ' + c.inputBorder + ';cursor:pointer;color:' + c.text + ';">↑</button>' +
             '<button id="gantt-search-next" title="' + (_en ? 'Next result (Enter)' : '다음 결과 (Enter)') + '"' +
             '  style="' + _GS_BOX + 'padding:0 9px;background:' + c.btnBg + ';border:1px solid ' + c.inputBorder + ';cursor:pointer;color:' + c.text + ';">↓</button>' +
@@ -146,6 +155,11 @@
             '<label style="white-space:nowrap;cursor:pointer;font-size:12px;color:#555;">' +
             '  <input type="checkbox" id="gantt-ai-search-filtermode"' + (_mode === 'filter' ? ' checked' : '') + ' style="cursor:pointer;accent-color:' + c.text + ';"> ' +
             '<span id="gantt-ai-search-filtermode-label">' + (_en ? 'Hide non-matching' : '비매칭 숨기기') + '</span></label>' +
+            '<label id="gantt-ai-search-datespan-wrap" style="white-space:nowrap;cursor:pointer;font-size:12px;color:#555;" title="' +
+            (_en ? 'Date search: off = start date only, on = any task whose period includes the date'
+                 : '날짜 검색: 끄면 시작일이 그 날인 업무만, 켜면 기간(시작~완료)에 그 날이 들어 있는 업무까지') + '">' +
+            '  <input type="checkbox" id="gantt-ai-search-datespan"' + (_dateSpan ? ' checked' : '') + ' style="cursor:pointer;accent-color:' + c.text + ';"> ' +
+            '<span id="gantt-ai-search-datespan-label">' + (_en ? 'Include period' : '기간 포함') + '</span></label>' +
             '<button id="gantt-ai-search-clear" title="' + (_en ? 'Clear search (Esc)' : '검색 초기화 (Esc)') + '"' +
             '  style="' + _GS_BOX + 'padding:0 9px;background:' + c.btnBg + ';border:1px solid ' + c.inputBorder + ';cursor:pointer;color:' + c.text + ';">✕ ' + (_en ? 'Clear' : '초기화') + '</button>';
 
@@ -172,11 +186,28 @@
             // 전역 핸들러가 isSearchInput 분기로 처리하므로 여기선 따로 처리하지 않음
         });
         document.getElementById('gantt-search-now').addEventListener('click', runNow);
+        var calBtn = document.getElementById('gantt-search-cal');
+        calBtn.addEventListener('click', function (e) {
+            e.stopPropagation();
+            var cur = _gsDateRange(inp.value) ? inp.value.trim() : '';
+            calBtn.value = /^\d{4}-\d{2}-\d{2}$/.test(cur) ? cur : '';
+            if (window.showGenericCalendar) window.showGenericCalendar(calBtn);
+        });
+        calBtn.addEventListener('change', function () {   // 달력이 value 를 채우고 change 를 쏜다
+            var v = calBtn.value; if (!v) return;
+            inp.value = v; _query = v; _selected.clear(); _navIndex = -1;
+            _applySearch();
+        });
         document.getElementById('gantt-search-prev').addEventListener('click', function() { _navGo(-1); });
         document.getElementById('gantt-search-next').addEventListener('click', function() { _navGo(1); });
         document.getElementById('gantt-ai-search-filtermode').addEventListener('change', function() {
             _mode = this.checked ? 'filter' : 'highlight';
             _applySearch();
+        });
+        document.getElementById('gantt-ai-search-datespan').addEventListener('change', function() {
+            _dateSpan = this.checked;
+            try { localStorage.setItem('gantt_gs_date_span_v1', _dateSpan ? '1' : '0'); } catch (e) {}
+            if (_lastAppliedQuery) _applySearch();
         });
         document.getElementById('gantt-ai-search-clear').addEventListener('click', _clearSearch);
         // 🔍 [2026-11-25] AND/OR 을 바꾸면 이미 적용된 검색을 다시 돌린다(타이핑만으론 안 도는 칸이라 input 이벤트로는 안 된다)
@@ -234,6 +265,8 @@
         if (inp) inp.placeholder = _en
             ? 'Name·task·content·date (11/25, 2026-11-25, today)  /  @project  /  #ai'
             : '이름·업무명·상세내용·날짜(11/25 · 2026-11-25 · 오늘)  /  @프로젝트  /  #ai (AI 등록 전체)';
+        var calB = document.getElementById('gantt-search-cal');
+        if (calB) calB.title = _en ? 'Pick a date from calendar' : '달력에서 날짜 골라 찾기';
         var nowBtn = document.getElementById('gantt-search-now');
         if (nowBtn) nowBtn.title = _en ? 'Search now (Enter)' : '지금 검색 (Enter)';
         var prevBtn = document.getElementById('gantt-search-prev');
@@ -242,6 +275,8 @@
         if (nextBtn) nextBtn.title = _en ? 'Next result (Enter)' : '다음 결과 (Enter)';
         var fmLabel = document.getElementById('gantt-ai-search-filtermode-label');
         if (fmLabel) fmLabel.textContent = _en ? 'Hide non-matching' : '비매칭 숨기기';
+        var dsLabel = document.getElementById('gantt-ai-search-datespan-label');
+        if (dsLabel) dsLabel.textContent = _en ? 'Include period' : '기간 포함';
         var clearBtn = document.getElementById('gantt-ai-search-clear');
         if (clearBtn) {
             clearBtn.title = _en ? 'Clear search (Esc)' : '검색 초기화 (Esc)';
@@ -326,6 +361,7 @@
             if (e >= r.from && e <= to) hitE = true;
         });
         if (!any) return;
+        if (!_dateSpan) hitE = false;   // 시작일만 볼 땐 시작 칸만 칠한다
         if (!hitS && !hitE) { hitS = hitE = true; }
         tr.querySelectorAll('span.date-clickable').forEach(function (sp) {
             var m = String(sp.getAttribute('onclick') || '').match(/showCalendar\(this,\s*[\d.]+,\s*\d+,\s*(\d+)\)/);
@@ -431,10 +467,12 @@
     function _gsRowOnDate(row, r) {
         var s = row && row._calcStartTs, e = row && (row._calcPlanTs || row._calcStartTs);
         if (!s) return false;
+        if (!_dateSpan) return s >= r.from && s <= r.to + _DAY - 1;   // 기본: 시작일이 그 날(그 달)
         if (e < s) { var x = s; s = e; e = x; }
         return s <= r.to + _DAY - 1 && e >= r.from;
     }
     window._gsDateRange = _gsDateRange;   // 시험용
+    window._gsSetDateSpan = function (on) { _dateSpan = !!on; };   // 시험용
 
     function _rowMatches(row, kw, isProject, isAiAll, isAlarm) {
         if (!row) return false;
@@ -1600,7 +1638,7 @@
         _query = iso; _selected.clear(); _navIndex = -1;
         _showSearchBar();
         _applySearch();
-        if (!_matchedIndices.length && window.showToast) window.showToast(window._t ? window._t('오늘(' + iso + ')에 걸친 업무가 없습니다', 'No tasks on today (' + iso + ')') : '오늘 업무 없음', 'info');
+        if (!_matchedIndices.length && window.showToast) window.showToast(window._t ? window._t(_dateSpan ? '오늘(' + iso + ')에 걸친 업무가 없습니다' : '오늘(' + iso + ') 시작하는 업무가 없습니다 — 기간에 걸친 업무는 ‘기간 포함’을 켜세요', 'No tasks on today (' + iso + ')') : '오늘 업무 없음', 'info');
     };
 
     // MutationObserver: table-body가 재렌더링될 때마다 검색 재적용
