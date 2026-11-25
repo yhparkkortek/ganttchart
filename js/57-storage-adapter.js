@@ -128,8 +128,8 @@
             Object.keys(_idMap).forEach(function (k) { if (_idMap[k] === was) _relToOldId[was] = k; });
         }
         _staleAliasQ[pid] = was;
-        note('idmap-stale-alias', { id: rel, pointed: was });
-        if (_staleAliasT) return;
+        try { note('idmap-stale-alias', { id: rel, pointed: was }); } catch (e) { /* 기록 준비 전엔 건너뛴다 */ }
+        if (_staleAliasT || typeof setTimeout !== 'function') return;
         _staleAliasT = setTimeout(async function () {
             _staleAliasT = null;
             var q = _staleAliasQ; _staleAliasQ = {};
@@ -143,6 +143,21 @@
                 await nasJson('POST', '/nas/app/put', { rel: ID_MAP_REL_ADAPTER, text: JSON.stringify(doc) });
             } catch (e) { note('idmap-stale-alias-fail', String((e && e.message) || e)); }
         }, 2000);
+    }
+
+    /** 옛 이름 파일이 다시 생겨 한 프로젝트가 두 파일(옛 경로 · 별칭이 가리키는 새 경로)로 갈라진 것 — 지우지 않고 드러낸다.
+     *  별칭은 그대로라 이 앱의 읽기·쓰기는 새 파일로 간다. 옛 파일은 사람이 내용을 보고 정리한다(되살린 쪽의 쓰기가 들어 있을 수 있다). */
+    var _splitNoted = {};
+    function noteSplitPath(rel) {
+        rel = normRel(rel);
+        if (!rel || _splitNoted[rel]) return;
+        var pid = 'nas_f_' + b64urlEncode(rel);
+        var to = _idMap[pid];
+        if (!to || to === rel) return;
+        _splitNoted[rel] = 1;
+        try { note('idmap-split', { old: rel, alias: to }); } catch (e) { /* 기록 준비 전(어댑터 꺼짐)엔 건너뛴다 */ }
+        try { if (window._issueLog) window._issueLog('storage-split-path', { old: rel, alias: to }); } catch (e) { /* 기록 실패가 목록을 막지 않게 */ }
+        try { console.warn('[저장소] 옛 이름 파일이 다시 생겼습니다 — ' + rel + ' (이 앱은 계속 ' + to + ' 를 씁니다. 옛 파일 내용을 확인해 정리하세요)'); } catch (e) { /* 무시 */ }
     }
 
     /** 상대경로 → fileId. **이사해 온 파일은 옛 Drive id 를 그대로 돌려준다.** */
@@ -266,9 +281,17 @@
     }
 
     /** NAS 목록 항목 → Drive files 항목 모양. */
-    function toDriveFile(item, parentRel) {
+    function toDriveFile(item, parentRel, opts) {
         var rel = joinRel(parentRel, item.name);
-        if (!item.isdir) dropStalePathAlias(rel);
+        // 🪢 [2026-11-25 실측 — SLIM SLOT 이 두 파일로 갈라짐] 낡은 별칭을 지우는 건 **이 탭이 그 이름으로 파일을
+        //    방금 만들었을 때만**(의도한 생성). 목록에서 옛 이름 파일이 "보이기만" 한 걸로 지우면 안 된다 —
+        //    이름이 바뀌기 전 화면을 열어 둔 PC(옛 코드)가 옛 id 로 저장하며 옛 이름 파일(LNW.json)을 되살렸고,
+        //    목록이 그걸 보고 별칭(LNW.json → LNW_SLIM SLOT IDECK.json)을 지워, 그 뒤 배치 4건이 진짜 파일이 아닌
+        //    옛 사본으로 갔다. 목록에선 별칭을 지키고, 두 파일이 같이 있다는 사실을 기록만 한다.
+        if (!item.isdir) {
+            if (opts && opts.created) dropStalePathAlias(rel);
+            else noteSplitPath(rel);
+        }
         var f = {
             id: idOf(rel, item.isdir),
             name: item.name,
@@ -1221,7 +1244,7 @@
         var nm = parts.pop();
         return toDriveFile({ name: nm, isdir: false,
                              size: (put && put.bytes != null) ? put.bytes : undefined,
-                             mtime: Math.floor(Date.now() / 1000) }, parts.join('/'));
+                             mtime: Math.floor(Date.now() / 1000) }, parts.join('/'), { created: true });
     }
 
     /** 🗑️ Drive `trashed:true` 의 NAS 판 — `Trash/<YYYYMMDD_HHMM>__<이름>` 으로 옮긴다(읽기→쓰기 확인→원본 삭제).

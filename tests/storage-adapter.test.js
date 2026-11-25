@@ -270,6 +270,15 @@ F.aliasOnRename('개발3팀/OLD_DRIVE.json', '개발3팀/NEW_DRIVE.json');
 eq('Drive id 프로젝트는 Drive id 가 대표로 남는다(nas 별칭을 새로 만들지 않는다)', F.idOf('개발3팀/NEW_DRIVE.json', false), 'DRV1');
 eq('Drive id 도 새 경로로 풀린다', (F.relOf('DRV1') || {}).rel, '개발3팀/NEW_DRIVE.json');
 
+// 🪢 [2026-11-25 실측 — SLIM SLOT 이 LNW.json / LNW_SLIM SLOT IDECK.json 두 파일로 갈라짐]
+//    옛 이름 파일이 목록에 다시 "보이기만" 해서는 별칭을 지우지 않는다. 이 탭이 그 이름으로 **만들었을 때만** 지운다.
+const slimOld = F.idOf('개발3팀/LNW.json', false);
+F.aliasOnRename('개발3팀/LNW.json', '개발3팀/LNW_SLIM SLOT IDECK.json');
+F.toDriveFile({ name: 'LNW.json', isdir: false, mtime: 1795517441 }, '개발3팀');
+eq('목록에 옛 이름 파일이 보여도 옛 id 는 새 파일로 풀린다', (F.relOf(slimOld) || {}).rel, '개발3팀/LNW_SLIM SLOT IDECK.json');
+F.toDriveFile({ name: 'LNW.json', isdir: false, mtime: 1795517441 }, '개발3팀', { created: true });
+eq('이 탭이 그 이름으로 만들면 별칭을 푼다(보관함 yhpark 파일 경우)', (F.relOf(slimOld) || {}).rel, '개발3팀/LNW.json');
+
 console.log('\n통과 ' + ok + ' · 실패 ' + bad);
 console.log('⚠ 번역기만 검증했다. 앱이 NAS 로 저장하는지는 브라우저에서 확인해야 한다' +
             ' (tests/storage-adapter.browser.js).');
