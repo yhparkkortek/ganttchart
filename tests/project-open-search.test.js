@@ -479,6 +479,14 @@ const reset = window._driveModalSearchState.q === '';
   [['2026-10-25', '', '[Gantt 날짜·시작일] 기간 한가운데는 안 걸림'], ['2026-10-20', '0', '[Gantt 날짜·시작일] 시작일 당일'],
    ['2026-10', '0', '[Gantt 날짜·시작일] 그 달에 시작'], ['2026-10-28', '', '[Gantt 날짜·시작일] 완료일은 안 걸림']
   ].forEach(([q, want, label]) => { const got = hit(q); const ok = got === want; ok ? pass++ : fail++; console.log((ok ? 'ok  ' : 'FAIL') + ' ' + label + ' "' + q + '" → ' + got + (ok ? '' : ' (기대 ' + want + ')')); });
+  // 🗓 기간 "A~B" (시작일만 모드: 시작일이 그 안)
+  [['2026-10-01~2026-10-31', '0', '[Gantt 기간·시작일] 시작일이 기간 안'], ['2026-10-21 ~ 2026-10-31', '', '[Gantt 기간·시작일] 시작일이 기간 밖(띄어 써도 한 기간)'],
+   ['2026-10-31~2026-10-01', '0', '[Gantt 기간] 거꾸로 적어도'], ['2026-03-01~', '0,1', '[Gantt 기간] 열린 끝 — 그 뒤 전부(오늘 행은 올해가 2026 이면)'],
+   ['~2026-03-31', '1', '[Gantt 기간] 열린 시작'], ['2026-09~2026-10', '0', '[Gantt 기간] 월~월']
+  ].forEach(([q, want, label]) => { let got = hit(q); if (q === '2026-03-01~') got = got.split(',').filter(x => x !== '2').join(','); const ok = got === want; ok ? pass++ : fail++; console.log((ok ? 'ok  ' : 'FAIL') + ' ' + label + ' "' + q + '" → ' + got + (ok ? '' : ' (기대 ' + want + ')')); });
+  W._gsSetDateSpan(true);
+  [['2026-10-25~2026-10-30', '0', '[Gantt 기간·기간포함] 기간끼리 겹치면 걸림'], ['2026-10-29~2026-10-30', '', '[Gantt 기간·기간포함] 안 겹치면 안 걸림']
+  ].forEach(([q, want, label]) => { const got = hit(q); const ok = got === want; ok ? pass++ : fail++; console.log((ok ? 'ok  ' : 'FAIL') + ' ' + label + ' "' + q + '" → ' + got + (ok ? '' : ' (기대 ' + want + ')')); });
   W._gsSetDateSpan(true);   // 아래는 '기간 포함' 켠 상태
   [['2026-10-25', '0', '[Gantt 날짜] YYYY-MM-DD 가 기간 안'],
    ['2026.10.25', '0', '[Gantt 날짜] 점'], ['20261025', '0', '[Gantt 날짜] 8자리'], ['26-10-20', '0', '[Gantt 날짜] 2자리 연도 · 시작일 당일'],

@@ -130,8 +130,8 @@
             '<span style="color:' + c.text + ';font-weight:700;white-space:nowrap;font-size:12px;">🔍 ' + (_en ? 'Search' : '검색') + '</span>' +
             '<input id="gantt-ai-search-input" type="text"' +
             '  placeholder="' + (_en
-                ? 'Name·task·content·date (11/25, 2026-11-25, today)  /  @project  /  #ai'
-                : '이름·업무명·상세내용·날짜(11/25 · 2026-11-25 · 오늘)  /  @프로젝트  /  #ai (AI 등록 전체)') + '"' +
+                ? 'Name·task·content·date (11/25, 2026-11-01~2026-11-20, today)  /  @project  /  #ai'
+                : '이름·업무명·상세내용·날짜(11/25 · 2026-11-01~2026-11-20 · 오늘)  /  @프로젝트  /  #ai (AI 등록 전체)') + '"' +
             // ↔ [2026-11-25 사용자 요청 "검색칸이 너무 길어 버튼 누르기 불편"] 줄 폭을 다 먹지 않게 고정 폭 — 버튼들이 칸 바로 옆(왼쪽)에 붙는다
             '  style="flex:0 1 320px;width:320px;min-width:180px;' + _GS_BOX + 'padding:0 10px;border:1px solid ' + c.inputBorder + ';' +
             '  outline:none;background:#fff;color:' + c.text + ';">' +
@@ -145,6 +145,8 @@
             //    검색칸에 YYYY-MM-DD 를 넣고 바로 찾는다. 시작일/기간 포함은 옆 '기간 포함' 을 따른다.
             '<button id="gantt-search-cal" title="' + (_en ? 'Pick a date from calendar' : '달력에서 날짜 골라 찾기') + '"' +
             '  style="' + _GS_BOX + 'padding:0 8px;background:' + c.btnBg + ';border:1px solid ' + c.inputBorder + ';cursor:pointer;color:' + c.text + ';">📅</button>' +
+            '<button id="gantt-search-calrange" title="' + (_en ? 'Pick a period (start → end) from calendar' : '달력에서 기간 골라 찾기 (시작 → 끝)') + '"' +
+            '  style="' + _GS_BOX + 'padding:0 8px;background:' + c.btnBg + ';border:1px solid ' + c.inputBorder + ';cursor:pointer;color:' + c.text + ';">📅~📅</button>' +
             '<button id="gantt-search-prev" title=""' + (_en ? 'Previous result (Shift+Enter)' : '이전 결과 (Shift+Enter)') + '"' +
             '  style="' + _GS_BOX + 'padding:0 9px;background:' + c.btnBg + ';border:1px solid ' + c.inputBorder + ';cursor:pointer;color:' + c.text + ';">↑</button>' +
             '<button id="gantt-search-next" title="' + (_en ? 'Next result (Enter)' : '다음 결과 (Enter)') + '"' +
@@ -196,6 +198,31 @@
         calBtn.addEventListener('change', function () {   // 달력이 value 를 채우고 change 를 쏜다
             var v = calBtn.value; if (!v) return;
             inp.value = v; _query = v; _selected.clear(); _navIndex = -1;
+            _applySearch();
+        });
+        // 🗓 기간: 시작을 고르면 칸에 "A~" 를 넣고 달력을 다시 연다 → 끝을 고르면 "A~B" 로 찾는다.
+        //    끝을 안 고르고 달력을 닫으면 칸에 "A~" 가 남는다(Enter = 그날 이후 전부).
+        var rngBtn = document.getElementById('gantt-search-calrange'), _rngStart = '';
+        rngBtn.addEventListener('click', function (e) {
+            e.stopPropagation();
+            _rngStart = ''; rngBtn.value = '';
+            if (window.showGenericCalendar) window.showGenericCalendar(rngBtn);
+            if (window.showToast) window.showToast(_en ? 'Pick the START date' : '시작 날짜를 고르세요', 'info');
+        });
+        rngBtn.addEventListener('change', function () {
+            var v = rngBtn.value; if (!v) return;
+            if (!_rngStart) {
+                _rngStart = v; inp.value = v + '~'; _query = inp.value;
+                rngBtn.value = v;
+                setTimeout(function () {   // 달력이 이 change 뒤에 스스로 닫히므로 한 틱 뒤에 다시 연다
+                    if (window.showGenericCalendar) window.showGenericCalendar(rngBtn);
+                    if (window.showToast) window.showToast(_en ? 'Now pick the END date' : '이제 끝 날짜를 고르세요', 'info');
+                }, 0);
+                return;
+            }
+            var a = _rngStart, b = v; _rngStart = '';
+            if (b < a) { var x = a; a = b; b = x; }
+            inp.value = a + '~' + b; _query = inp.value; _selected.clear(); _navIndex = -1;
             _applySearch();
         });
         document.getElementById('gantt-search-prev').addEventListener('click', function() { _navGo(-1); });
@@ -263,8 +290,10 @@
         if (lbl) lbl.textContent = '🔍 ' + (_en ? 'Search' : '검색');
         var inp = document.getElementById('gantt-ai-search-input');
         if (inp) inp.placeholder = _en
-            ? 'Name·task·content·date (11/25, 2026-11-25, today)  /  @project  /  #ai'
-            : '이름·업무명·상세내용·날짜(11/25 · 2026-11-25 · 오늘)  /  @프로젝트  /  #ai (AI 등록 전체)';
+            ? 'Name·task·content·date (11/25, 2026-11-01~2026-11-20, today)  /  @project  /  #ai'
+            : '이름·업무명·상세내용·날짜(11/25 · 2026-11-01~2026-11-20 · 오늘)  /  @프로젝트  /  #ai (AI 등록 전체)';
+        var rngB = document.getElementById('gantt-search-calrange');
+        if (rngB) rngB.title = _en ? 'Pick a period (start → end) from calendar' : '달력에서 기간 골라 찾기 (시작 → 끝)';
         var calB = document.getElementById('gantt-search-cal');
         if (calB) calB.title = _en ? 'Pick a date from calendar' : '달력에서 날짜 골라 찾기';
         var nowBtn = document.getElementById('gantt-search-now');
@@ -437,6 +466,18 @@
     }
     function _gsDateRange(t) {
         t = String(t || '').trim().toLowerCase();
+        // 🗓 [2026-11-25 사용자 요청 "달력에서 기간도 골라 찾기"] "A~B" = A 부터 B 까지(양 끝 포함).
+        //    한쪽을 비우면 열린 기간("2026-11-01~" = 그 뒤 전부, "~2026-11-20" = 그 전 전부). 각 끝은 위 모양 그대로(월도 된다).
+        if (t.indexOf('~') >= 0) {
+            var pp = t.split('~');
+            if (pp.length !== 2 || (!pp[0].trim() && !pp[1].trim())) return null;
+            var a = pp[0].trim() ? _gsDateRange(pp[0]) : { from: -Infinity, to: -Infinity };
+            var b = pp[1].trim() ? _gsDateRange(pp[1]) : { from: Infinity, to: Infinity };
+            if (!a || !b) return null;
+            var lo = a.from, hi = b.to;
+            if (hi < lo) { lo = b.from; hi = a.to; }   // 거꾸로 적어도 받는다
+            return { from: lo, to: hi };
+        }
         var now = new Date(); now.setHours(0, 0, 0, 0);
         var Y = now.getFullYear(), m, s, e;
         var rel = { '오늘': 0, 'today': 0, '어제': -1, 'yesterday': -1, '내일': 1, 'tomorrow': 1 };
@@ -463,7 +504,7 @@
         return null;
     }
     // "11월 25일" 은 띄어 써도 한 날짜다(낱말로 쪼개기 전에 붙인다)
-    function _gsJoinKoDate(kw) { return String(kw || '').replace(/(\d{1,2})월\s+(\d{1,2})일/g, '$1월$2일'); }
+    function _gsJoinKoDate(kw) { return String(kw || '').replace(/(\d{1,2})월\s+(\d{1,2})일/g, '$1월$2일').replace(/\s*~\s*/g, '~'); }   // "A ~ B" 도 한 기간
     function _gsRowOnDate(row, r) {
         var s = row && row._calcStartTs, e = row && (row._calcPlanTs || row._calcStartTs);
         if (!s) return false;
