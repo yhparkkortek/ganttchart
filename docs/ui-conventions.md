@@ -673,3 +673,21 @@ a[onclick]:not([href]) { cursor: pointer; text-decoration: underline; }
 Sample Report **원본저장** 구간이 옛 `/doc/docx` 한 길만 기대해서 2건이 실패했다 — 실제 코드는 2026-11-19 부터 **원본 .docx 양식 경로(`/doc/sample-report-docx`)가 먼저**고, 그게 404·오류면 일반 문서(`/doc/docx`)로 **폴백**하며, 둘 다 안 되면 "재시작" 안내를 한다. 세 경로를 다 시험하게 고쳤다(경계 가짜는 `fetch` 하나 — 경로별로 ok/404 를 고른다):
 ① 원본 양식이 되면 `/doc/docx` 는 **부르지 않는다**, 보내는 칸이 `_docSampleReportFields` 와 같다 ② 원본 양식 404 → `/doc/docx` 폴백, 내용이 화면·엑셀과 같은 `_docToAoa`, 폴백했다고 알린다(`일반 문서로 대신`) ③ 둘 다 404 → "재시작" 안내·파일 안 받음.
 ⚠️ **실패 한 줄이 예외로 뒤를 막고 있었다** — 첫 실패 뒤 `docxReq.name`(null)에서 `TypeError` 로 뻗어 그 아래 검사(NAS 폴더 등) **31건이 아예 실행되지 않았다**(140/142 는 "2건 실패"가 아니라 "여기서 멈춤"). 고친 뒤 173/173. 숫자만 보지 말고 **"멈춘 줄"** 을 볼 것. 가짜 경계(`fetch`·`showToast`·`HTMLAnchorElement.click`)는 `try/finally` 로 반드시 되돌린다.
+
+## ↔ 표 머리글 가운데 정렬 (2026-11-25)
+
+**규칙**: 페이지 표의 머리글(`th`)은 **가운데**. 본문 칸이 왼쪽 정렬(긴 글)이어도 머리글은 가운데 — 한 표 안에서 머리글이 왼쪽·가운데로 섞이면 열 경계가 흔들려 보인다.
+
+실측(정렬 전 → 후, 모든 페이지를 열어 보이는 `th` 의 `text-align` 을 셌다):
+| 페이지 | 전 | 고친 곳 |
+|---|---|---|
+| Project list | 28칸 전부 왼쪽 | styles.css `.pl-table th` |
+| JIRA 연결 이슈·전체 검색 | 키·요약·구성/해결/MS·출처·프로젝트가 왼쪽, 나머지 가운데 | js/70 `headerCell`(열마다 받던 `align` 인자는 이제 안 쓴다) |
+| Project Review 요약 표 | 정렬 머리글 전부 + 근거 왼쪽 | js/62 |
+| Alarm/Notice | Notice `제목`·예약 규칙 `제목` 만 왼쪽 | kortek_pm.html |
+| 주소록·Alarm·BOM·Customer SPEC·M.C·Summary·간트·Daily | 이미 가운데 | — |
+
+예외(그대로 둔 것): PARTS 비교표 첫 열 `Comparison table`(왼쪽 항목 이름 열 — PARTS 표는 손대지 않기로 함) · Document 지원 해상도 표 `RESOLUTION`(Document 표 보류).
+남은 것: **모달 안 표**(AI 문답 결과 표·자재 보관함·기안 미리보기·Project list 도면 이력/점검·결재 고르기·명단 알림 상태 등)는 왼쪽이 섞여 있다 — 페이지 표만 맞췄다.
+
+검증: 고친 뒤 실제 화면에서 Project list `th` 28개·JIRA 10개가 전부 `center`, Notice·예약 규칙 `제목` 칸 `center`. Project Review 표는 AI 요약을 만들어야 나타나서 화면으로는 못 봤다(문법 검사만).

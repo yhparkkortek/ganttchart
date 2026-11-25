@@ -443,7 +443,7 @@
         var S = tblState(tbl);
         var col = S.byKey[colKey];
         var filterActive = !!S.filters[colKey];
-        return '<th style="padding:6px 8px; text-align:' + align + '; width:' + widthPct + '%; background:#eef6f7; border-bottom:2px solid #cfe3e5; white-space:nowrap;"'
+        return '<th style="padding:6px 8px; text-align:center; width:' + widthPct + '%; background:#eef6f7; border-bottom:2px solid #cfe3e5; white-space:nowrap;"'
             + (col.title ? (' title="' + esc(col.title) + '"') : '') + '>'
             + '<span onclick="window._jiraSetSort(' + qa(colKey, tbl) + ')" style="cursor:pointer;" title="' + esc(T('클릭해서 정렬', 'Click to sort')) + '">'
             + esc(col.label) + sortArrow(colKey, tbl) + '</span>'

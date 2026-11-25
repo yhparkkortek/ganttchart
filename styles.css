@@ -942,7 +942,7 @@ a[onclick]:not([href]) { cursor: pointer; text-decoration: underline; }
 .pl-table th {
     position: sticky; top: 0; z-index: 4; background: #eef6f7; color: #00707d;   /* 2026-11-24: bg -> headerTint (다른 표와 같게) */
     border-bottom: 1px solid #a3d9e0; border-right: 1px solid #d9e9ec;
-    padding: 6px; text-align: left; font-size: 11px; line-height: 1.2;
+    padding: 6px; text-align: center; font-size: 11px; line-height: 1.2;   /* 2026-11-25: left -> center (다른 표 머리글과 같게) */
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis; user-select: none;
 }
 .pl-table td {
