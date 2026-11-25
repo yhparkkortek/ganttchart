@@ -26,6 +26,13 @@ window.collectAlarmItems = function() {
     const resolveRow = function(name, hdr) {
         const r = resolve(name);
         if (!hdr) return r;
+        // 같은 이름이 여럿이면 메일 헤더에 있는 후보로 가린다 — 헤더에 정확히 하나면 그 사람
+        if (r.candidates && r.candidates.length > 1) {
+            const inH = r.candidates.filter(p => hdr.indexOf(String(p.email || '').trim().toLowerCase()) !== -1);
+            if (inH.length === 1) return { email: String(inH[0].email).trim(), person: inH[0], reason: 'ok', picked: 'mail-header', candidates: r.candidates };
+            if (inH.length === 0) return Object.assign({}, r, { email: '', person: null, reason: 'not-in-mail-headers' });
+            return Object.assign({}, r, { email: '', person: null, reason: 'ambiguous' });
+        }
         if (r.reason === 'ok' && hdr.indexOf(String(r.email).toLowerCase()) === -1) return Object.assign({}, r, { email: '', reason: 'not-in-mail-headers' });
         if (r.reason === 'no-email') return Object.assign({}, r, { reason: 'not-in-mail-headers' }); // 확인할 주소가 없다 — 텔레그램도 안 보낸다
         return r;

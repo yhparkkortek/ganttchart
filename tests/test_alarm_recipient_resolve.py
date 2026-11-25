@@ -122,6 +122,14 @@ out = fire('[샘플요청][Andy→이서연] 2026-11-20', {'sender': '', 'to': '
 ok('헤더 글자가 비면 대조 안 함', 'andy.park@kortek.co.kr' in (SENT_MAIL[0] if SENT_MAIL else ''), SENT_MAIL)
 ok('배열 헤더도 읽는다', B._mail_header_addrs({'to': ['a@x.com', 'B@Y.co.kr']}) == ['a@x.com', 'b@y.co.kr'])
 
+print('3-2) 🏢 같은 이름 여러 줄')
+BOOK.append({'name': '박지훈', 'email': 'jh.personal@gmail.com'})
+ok('회사+개인 두 줄 → 회사 주소', R('박지훈')['email'] == 'andy.park@kortek.co.kr', R('박지훈'))
+BOOK.pop()
+out = fire('[문의][김민수→이서연] 2026-11-20', {'sender': 'KIM.MINSU@kortek.co.kr', 'to': 'sy.lee@kortek.co.kr'})
+ok('동명이인을 메일 헤더로 가린다', SENT_MAIL and 'kim.minsu@kortek.co.kr' in SENT_MAIL[0] and 'minsu.kim@' not in SENT_MAIL[0], SENT_MAIL)
+ok('가린 사람에게만 텔레그램', '222' in SENT_TG and '111' not in SENT_TG, SENT_TG)
+
 print('4) 👥 그룹 주소로 온 메일')
 for p in BOOK:
     if p['name'] in ('박지훈', '이서연'):

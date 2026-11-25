@@ -2757,7 +2757,13 @@ def _addr_resolve_recipient(address_book: list, name: str) -> dict:
     if not hits:
         return {'email': '', 'person': None, 'reason': 'none'}
     if len(hits) > 1:
-        return {'email': '', 'person': None, 'reason': 'ambiguous', 'count': len(hits)}
+        # 🏢 같은 사람이 회사 주소 + 개인 주소(gmail)로 두 줄인 경우 — 사내 주소가 정확히 하나면 그 사람(js/22b 와 같은 규칙)
+        dom = '@' + KORTEK_INTERNAL_DOMAIN
+        internal = [p for p in hits if str(p.get('email') or '').strip().lower().endswith(dom)]
+        if len(internal) == 1 and all(p is internal[0] or str(p.get('email') or '').strip() for p in hits):
+            return {'email': str(internal[0].get('email')).strip(), 'person': internal[0], 'reason': 'ok',
+                    'picked': 'internal', 'candidates': hits}
+        return {'email': '', 'person': None, 'reason': 'ambiguous', 'count': len(hits), 'candidates': hits}
     em = str(hits[0].get('email') or '').strip()
     return {'email': em, 'person': hits[0], 'reason': 'ok' if em else 'no-email'}
 
@@ -2809,6 +2815,15 @@ def _addr_resolve_for_row(address_book: list, name: str, hdr) -> dict:
     r = _addr_resolve_recipient(address_book, name)
     if not hdr:
         return r
+    cands = r.get('candidates') or []
+    if len(cands) > 1:   # 같은 이름이 여럿 — 메일 헤더에 정확히 하나 있으면 그 사람
+        in_h = [p for p in cands if str(p.get('email') or '').strip().lower() in hdr]
+        if len(in_h) == 1:
+            return {'email': str(in_h[0].get('email')).strip(), 'person': in_h[0], 'reason': 'ok',
+                    'picked': 'mail-header', 'candidates': cands}
+        if not in_h:
+            return dict(r, email='', person=None, reason='not-in-mail-headers')
+        return dict(r, email='', person=None, reason='ambiguous')
     if r['reason'] == 'ok' and str(r['email']).lower() not in hdr:
         return dict(r, email='', reason='not-in-mail-headers')
     if r['reason'] == 'no-email':

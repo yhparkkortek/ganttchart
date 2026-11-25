@@ -1203,7 +1203,17 @@ window._addrResolveRecipient = function(name) {
         if (stripped && stripped !== trimmed) hits = match(stripped);
     }
     if (!hits.length) return { email: '', person: null, reason: 'none' };
-    if (hits.length > 1) return { email: '', person: null, reason: 'ambiguous', count: hits.length };
+    if (hits.length > 1) {
+        // 🏢 [2026-11-25 실측] 같은 사람이 회사 주소 + 개인 주소(gmail)로 두 줄 등록된 경우가 있다(주소록 423행 중 1명 —
+        //    다른 4명은 서로 다른 사내 주소라 진짜 동명이인). 후보 중 사내 주소가 **정확히 하나**이고 나머지가 전부 외부면 그 사람.
+        //    candidates 는 js/22c resolveRow 가 메일 헤더로 다시 가릴 때 쓴다.
+        const dom = '@' + String(window.KORTEK_INTERNAL_DOMAIN || 'kortek.co.kr').toLowerCase();
+        const internal = hits.filter(p => String(p.email || '').trim().toLowerCase().endsWith(dom));
+        if (internal.length === 1 && hits.every(p => p === internal[0] || String(p.email || '').trim())) {
+            return { email: String(internal[0].email).trim(), person: internal[0], reason: 'ok', picked: 'internal', candidates: hits };
+        }
+        return { email: '', person: null, reason: 'ambiguous', count: hits.length, candidates: hits };
+    }
     const em = String(hits[0].email || '').trim();
     return { email: em, person: hits[0], reason: em ? 'ok' : 'no-email' };
 };
