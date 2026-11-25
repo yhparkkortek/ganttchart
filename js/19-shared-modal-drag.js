@@ -301,6 +301,7 @@ window._modalPosSave = function(boxId, withSize) {
            .slice(0, ids.length - window.MODAL_POS_POLICY.maxEntries).forEach(function(k) { delete all[k]; });
     }
     try { localStorage.setItem(window.MODAL_POS_POLICY.key, JSON.stringify(all)); } catch (e) { /* 꽉 차도 모달 동작은 그대로 */ }
+    if (box.dataset.fitDocked === '1') { box.dataset.fitDocked = '0'; if (window._modalDockSync) window._modalDockSync(); }
 };
 // 📐 [2026-11-25 사용자 요청] **넓게 써야 하는 모달**은 처음 열 때 메인 페이지 영역에 맞춰 연다 —
 //    사이드바 오른쪽·상단바 아래·하단 작업표시줄 위, 페이지 여백(패딩)을 남기고 **오른쪽 절반**에 붙인다
@@ -345,7 +346,31 @@ window._modalFitWide = function(boxId) {
     box.style.transform = 'none';
     box.style.left = r.l + 'px';
     box.style.top  = r.t + 'px';
+    box.dataset.fitDocked = '1';
+    window._modalDockSync();
     return true;
+};
+
+// 🧲 [2026-11-25 사용자 요청 "겹쳐지지 않도록"] 넓은 모달이 **기본 자리(오른쪽 절반)에 붙어 열려 있는 동안**
+//    메인 페이지를 그만큼 왼쪽으로 비킨다(#app-main 오른쪽 여백) — 모달이 페이지 내용을 덮지 않는다.
+//    사람이 끌거나 크기를 바꾸면(_modalPosSave) 떠 있는 창으로 보고, 닫거나 최소화하면 페이지를 원래 폭으로 되돌린다.
+window._modalDockSync = function() {
+    const main = document.getElementById('app-main');
+    if (!main) return;
+    let reserve = 0;
+    (window.MODAL_FIT_WIDE || []).forEach(function (id) {
+        const box = document.getElementById(id);
+        if (!box || box.dataset.fitDocked !== '1' || !window._mreszIsShown(box)) return;
+        const r = box.getBoundingClientRect();
+        const a = main.getBoundingClientRect();
+        reserve = Math.max(reserve, Math.round(a.left + main.clientWidth - r.left));
+    });
+    // 페이지와 모달 사이에도 페이지 여백만큼 띄운다(붙어 보이지 않게)
+    const want = reserve > 0 ? (reserve + ((window.MODAL_FIT_POLICY || {}).gapDefault || 10)) + 'px' : '';
+    if (main.style.paddingRight === want) return;
+    main.style.paddingRight = want;
+    // 표·간트처럼 창 크기로 폭을 다시 재는 화면이 따라오게
+    try { window.dispatchEvent(new Event('resize')); } catch (e) { /* 옛 브라우저 */ }
 };
 
 window._modalPosRestore = function(boxId) {
@@ -366,6 +391,8 @@ window._modalPosRestore = function(boxId) {
     box.style.left = p.l + 'px';
     box.style.top  = p.t + 'px';
     window._clampModalToViewport(box);
+    box.dataset.fitDocked = '0';
+    if (window._modalDockSync) window._modalDockSync();
     return true;
 };
 
@@ -621,7 +648,7 @@ window._makeResizable = function(boxId, _retry, handleId) {
         const shown = window._mreszIsShown(box);
         const justOpened = shown && !_wasShown;
         _wasShown = shown;
-        if (!shown) return;
+        if (!shown) { if (box.dataset.fitDocked === '1' && window._modalDockSync) window._modalDockSync(); return; }
         if (justOpened && !(window._modalPosRestore && window._modalPosRestore(boxId)) && window._modalFitWide) window._modalFitWide(boxId);
         // 🌐 [2026-11-25] 영어일 때 모달이 열리면 그 글자도 영어로 — 번역 맵(04j)은 언어 버튼을 누를 때만
         //    돌아서, 영어로 바꾼 **뒤에** 처음 만든 모달은 한국어 소스 그대로였다. 한 프레임에 한 번만.
