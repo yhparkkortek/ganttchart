@@ -326,8 +326,11 @@ window._modalFitRect = function() {
     const a = main.getBoundingClientRect();
     const P = window.MODAL_FIT_POLICY;
     // 페이지 여백 = 지금 보이는 페이지 머리 상자가 메인 영역 왼쪽에서 떨어진 만큼(위·오른쪽·아래도 같은 값)
-    let gap = P.gapDefault, top = a.top + gap;
-    const hdr = Array.prototype.find.call(main.querySelectorAll('.concept-header-box'), function (h) { return h.offsetWidth > 0; });
+    // 위끝 기본값 = 메인 영역 맨 위 — 페이지도 왼쪽 여백 없이 메인 영역에 붙어 시작한다(간트처럼 머리 상자가 없는 페이지).
+    //    머리 상자는 **지금 보는 탭 안**에서만 찾는다(다른 탭의 상자를 집으면 엉뚱한 높이가 된다).
+    let gap = P.gapDefault, top = a.top;
+    const actTab = document.querySelector('.tab-panel.active') || main;
+    const hdr = Array.prototype.find.call(actTab.querySelectorAll('.concept-header-box'), function (h) { return h.offsetWidth > 0; });
     if (hdr) {
         const r = hdr.getBoundingClientRect();
         if (r.left - a.left >= 0 && r.left - a.left < 60) gap = Math.round(r.left - a.left) || P.gapDefault;
@@ -349,7 +352,8 @@ window._modalFitRect = function() {
     const wrap = act && Array.prototype.find.call(act.querySelectorAll('.concept-tab-wrap'), function (e) { return e.offsetWidth > 0; });
     const cap = wrap ? parseFloat(window.getComputedStyle(wrap).maxWidth) : NaN;   // 'none' → NaN
     if (cap > 0 && isFinite(cap)) {
-        const free = Math.round(fullW - cap - gap);
+        // 페이지는 메인 영역 왼쪽 끝(a.left)에서 시작한다 — 거기서 cap 만큼 + 간격 gap 뒤가 모달 왼쪽(전엔 fullL 기준이라 간격이 20px 이 됐다)
+        const free = Math.round(right - (a.left + cap + gap));
         w = Math.min(Math.max(free, P.minW || 600), Math.round(fullW));
         l = right - w;
     }
