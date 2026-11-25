@@ -130,6 +130,21 @@ out = fire('[문의][김민수→이서연] 2026-11-20', {'sender': 'KIM.MINSU@k
 ok('동명이인을 메일 헤더로 가린다', SENT_MAIL and 'kim.minsu@kortek.co.kr' in SENT_MAIL[0] and 'minsu.kim@' not in SENT_MAIL[0], SENT_MAIL)
 ok('가린 사람에게만 텔레그램', '222' in SENT_TG and '111' not in SENT_TG, SENT_TG)
 
+print('3-3) 🏷 이름 옆 부서·직함')
+BOOK[0]['dept'], BOOK[0]['title'] = '개발1팀', '팀장'
+BOOK[1]['dept'], BOOK[1]['title'] = '영업팀', '책임매니저'
+ok('괄호 부서', R('김민수(영업팀)')['email'] == 'kim.minsu@kortek.co.kr')
+ok('이름 뒤 직함', R('김민수 팀장')['email'] == 'minsu.kim@kortek.co.kr')
+ok('이름 앞 직함+님', R('팀장 김민수님')['email'] == 'minsu.kim@kortek.co.kr')
+ok('괄호 부서 안 맞으면 제외', R('김민수(구매팀)')['reason'] == 'qualifier-mismatch')
+ok('괄호 안 주소', R('김민수(kim.minsu@kortek.co.kr)')['email'] == 'kim.minsu@kortek.co.kr')
+out = fire('[문의][이서연→김민수 팀장] 2026-11-20')
+ok('예약 알람도 직함으로 가려진다', SENT_MAIL and sorted(SENT_MAIL[0].split(',')) == ['minsu.kim@kortek.co.kr', 'sy.lee@kortek.co.kr'], SENT_MAIL)
+out = fire('[문의][이서연→김민수(구매팀)] 2026-11-20')
+ok('안 맞는 부서는 사유와 함께 제외', SENT_MAIL == ['sy.lee@kortek.co.kr'] and any('부서' in x for x in out.get('excluded', [])), (SENT_MAIL, out))
+for k in ('dept', 'title'):
+    BOOK[0].pop(k, None); BOOK[1].pop(k, None)
+
 print('4) 👥 그룹 주소로 온 메일')
 for p in BOOK:
     if p['name'] in ('박지훈', '이서연'):

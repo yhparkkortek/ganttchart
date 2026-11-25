@@ -2735,7 +2735,7 @@ def _addr_resolve_recipient(address_book: list, name: str) -> dict:
         return out
 
     book = [p for p in (address_book or []) if isinstance(p, dict)]
-    if re.match(r'^[^\s@]+@[^\s@]+\.[^\s@]+$', trimmed):
+    if re.match(r"^[A-Za-z0-9._%+'-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$", trimmed):   # 주소 글자만(괄호·한글 섞이면 이름)
         lo = trimmed.lower()
         hit = uniq([p for p in book if str(p.get('email') or '').strip().lower() == lo])
         if not hit:
@@ -2749,13 +2749,44 @@ def _addr_resolve_recipient(address_book: list, name: str) -> dict:
                      if (str(p.get('name') or '').strip() == n)
                      or (str(p.get('nameEn') or '').strip().lower() == n.lower() and str(p.get('nameEn') or '').strip())])
 
-    hits = match(trimmed)
+    # 🏷 [2026-11-25] 이름 옆 부서·직함으로 동명이인 가리기 — js/22b 와 같은 규칙
+    #    괄호 안(부서·직함·영문이름·주소)은 반드시 맞아야 하고, 이름 앞뒤 직함은 같은 이름이 여럿일 때만 쓴다.
+    base, paren_q, title_q = trimmed, [], []
+    pm = re.match(r'^(.+?)\s*[\(（\[]([^\)）\]]+)[\)）\]]\s*$', trimmed)
+    if pm:
+        base = pm.group(1).strip()
+        paren_q = [s.strip() for s in re.split(r'[/,，\s]+', pm.group(2)) if s.strip()]
+    hits = match(base)
     if not hits:
-        stripped = _addr_strip_title_suffix(trimmed)
-        if stripped and stripped != trimmed:
+        stripped = _addr_strip_title_suffix(base)
+        if stripped and stripped != base:
             hits = match(stripped)
+            title_q = [re.sub(r'(님|씨)$', '', s).strip() for s in base.replace(stripped, ' ', 1).split()]
+            title_q = [s for s in title_q if s]
     if not hits:
         return {'email': '', 'person': None, 'reason': 'none'}
+
+    def qn(s):
+        return re.sub(r'\s+', '', str(s or '')).lower()
+
+    def fits(p, q):
+        nq = qn(q)
+        return bool(nq) and any(qn(f) and nq in qn(f) for f in (p.get('dept'), p.get('title'), p.get('nameEn'), p.get('email')))
+
+    picked = ''
+    if paren_q:
+        ok = [p for p in hits if all(fits(p, q) for q in paren_q)]
+        if not ok:
+            return {'email': '', 'person': None, 'reason': 'qualifier-mismatch', 'qualifier': ' '.join(paren_q)}
+        if len(ok) < len(hits):
+            hits, picked = ok, 'qualifier'
+    if len(hits) > 1 and title_q:
+        ok = [p for p in hits if all(fits(p, q) for q in title_q)]
+        if len(ok) == 1:
+            hits, picked = ok, 'qualifier'
+    if len(hits) == 1 and picked:
+        em1 = str(hits[0].get('email') or '').strip()
+        return {'email': em1, 'person': hits[0], 'reason': 'ok' if em1 else 'no-email', 'picked': picked}
     if len(hits) > 1:
         # 🏢 같은 사람이 회사 주소 + 개인 주소(gmail)로 두 줄인 경우 — 사내 주소가 정확히 하나면 그 사람(js/22b 와 같은 규칙)
         dom = '@' + KORTEK_INTERNAL_DOMAIN
@@ -2807,7 +2838,7 @@ def _mail_header_addrs(mr, address_book=None):
     return out
 
 
-_ALARM_EXCLUDE_REASONS = ('ambiguous', 'email-not-in-book', 'not-in-mail-headers')
+_ALARM_EXCLUDE_REASONS = ('ambiguous', 'email-not-in-book', 'not-in-mail-headers', 'qualifier-mismatch')
 
 
 def _addr_resolve_for_row(address_book: list, name: str, hdr) -> dict:
@@ -3058,7 +3089,8 @@ def _fire_alarm_rule(rule: dict):
     receiver_emails = [e for e in snap['receiverEmails'] if _is_alarm_domain_allowed(e, allowed_domains)]
     to_email = ','.join(dict.fromkeys([e for e in (sender_emails + receiver_emails) if e]))
     if snap.get('excludedPeople'):
-        _why = {'ambiguous': '동명이인', 'email-not-in-book': '주소록에 없는 주소', 'not-in-mail-headers': '메일 헤더에 없음'}
+        _why = {'ambiguous': '동명이인', 'email-not-in-book': '주소록에 없는 주소', 'not-in-mail-headers': '메일 헤더에 없음',
+                'qualifier-mismatch': '이름 옆 부서·직함이 주소록과 다름'}
         out['excluded'] = ['%s(%s)' % (x['name'], _why.get(x['reason'], x['reason'])) for x in snap['excludedPeople']]
         print(f"[업무알람 발송 제외] '{snap['taskName']}' — {', '.join(out['excluded'])}")
     # 💡 [2026-08-31] 수신 대상(기본수신/개별수신) 스냅샷 — 이메일 켜져있고(emailOn) 도메인 허용된

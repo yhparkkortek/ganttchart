@@ -1189,7 +1189,7 @@ window._addrResolveRecipient = function(name) {
     const pkey = p => String((p && p.email) || '').trim().toLowerCase()
         || ('#' + String((p && p.name) || '').trim() + '|' + String((p && p.nameEn) || '').trim().toLowerCase());
     const uniq = list => { const m = new Map(); list.forEach(p => { const k = pkey(p); if (!m.has(k)) m.set(k, p); }); return [...m.values()]; };
-    if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
+    if (/^[A-Za-z0-9._%+'-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/.test(trimmed)) {   // 주소 글자만(괄호·한글이 섞이면 이름으로 본다 — "박성준(psj@…)")
         const lo = trimmed.toLowerCase();
         const hit = uniq(addressBook.filter(p => String(p.email || '').trim().toLowerCase() === lo));
         if (!hit.length) return { email: '', person: null, reason: 'email-not-in-book' };
@@ -1197,12 +1197,37 @@ window._addrResolveRecipient = function(name) {
     }
     const match = n => n ? uniq(addressBook.filter(p =>
         (p.name && p.name.trim() === n) || (p.nameEn && p.nameEn.trim().toLowerCase() === n.toLowerCase()))) : [];
-    let hits = match(trimmed);
+    // 🏷 [2026-11-25 사용자 요청] 이름 옆 부서·직함으로 동명이인을 가린다 — "박성준(개발3팀)", "박성준 팀장", "팀장 박성준님".
+    //    괄호 안(부서·직함·영문이름·주소)은 **반드시 맞아야** 한다(한 사람뿐이어도 — "김민수(삼성)" 가 사내 김민수로 가면 안 된다).
+    //    이름 앞뒤 직함은 예전처럼 떼고 찾되, 같은 이름이 여럿일 때만 그 직함으로 가린다(직함은 바뀌므로 한 사람일 땐 안 따진다).
+    let base = trimmed, parenQ = [], titleQ = [];
+    const pm = trimmed.match(/^(.+?)\s*[\(（\[]([^\)）\]]+)[\)）\]]\s*$/);
+    if (pm) { base = pm[1].trim(); parenQ = pm[2].split(/[\/,，\s]+/).map(s => s.trim()).filter(Boolean); }
+    let hits = match(base);
     if (!hits.length) {
-        const stripped = window._addrStripTitleSuffix(trimmed);
-        if (stripped && stripped !== trimmed) hits = match(stripped);
+        const stripped = window._addrStripTitleSuffix(base);
+        if (stripped && stripped !== base) {
+            hits = match(stripped);
+            titleQ = base.replace(stripped, ' ').split(/\s+/).map(s => s.replace(/(님|씨)$/u, '').trim()).filter(Boolean);
+        }
     }
     if (!hits.length) return { email: '', person: null, reason: 'none' };
+    const qn = s => String(s || '').replace(/\s+/g, '').toLowerCase();
+    const fits = (p, q) => { const nq = qn(q); return !!nq && [p.dept, p.title, p.nameEn, p.email].some(f => qn(f) && qn(f).indexOf(nq) !== -1); };
+    let picked = '';
+    if (parenQ.length) {
+        const ok = hits.filter(p => parenQ.every(q => fits(p, q)));
+        if (!ok.length) return { email: '', person: null, reason: 'qualifier-mismatch', qualifier: parenQ.join(' ') };
+        if (ok.length < hits.length) { hits = ok; picked = 'qualifier'; }
+    }
+    if (hits.length > 1 && titleQ.length) {
+        const ok = hits.filter(p => titleQ.every(q => fits(p, q)));
+        if (ok.length === 1) { hits = ok; picked = 'qualifier'; }
+    }
+    if (hits.length === 1 && picked) {
+        const em1 = String(hits[0].email || '').trim();
+        return { email: em1, person: hits[0], reason: em1 ? 'ok' : 'no-email', picked: picked };
+    }
     if (hits.length > 1) {
         // 🏢 [2026-11-25 실측] 같은 사람이 회사 주소 + 개인 주소(gmail)로 두 줄 등록된 경우가 있다(주소록 423행 중 1명 —
         //    다른 4명은 서로 다른 사내 주소라 진짜 동명이인). 후보 중 사내 주소가 **정확히 하나**이고 나머지가 전부 외부면 그 사람.
@@ -1227,6 +1252,8 @@ window._addrResolveReasonText = function(x) {
                                                     : (x.name + ': 주소록에 없는 주소 — 발송 제외');
     if (x.reason === 'not-in-mail-headers') return en ? (x.name + ': not among the original mail\'s From/To/Cc — not sent')
                                                       : (x.name + ': 원본 메일의 보낸사람·받는사람·참조에 없음 — 발송 제외');
+    if (x.reason === 'qualifier-mismatch') return en ? (x.name + ': "' + (x.qualifier || '') + '" does not match the address book dept/title — not sent')
+                                                     : (x.name + ': 이름 옆 "' + (x.qualifier || '') + '"이(가) 주소록의 부서·직함과 다름 — 발송 제외');
     return x.name;
 };
 

@@ -164,6 +164,26 @@ const run = contents => { setRows(contents); return window.collectAlarmItems(); 
     ok(g3.toEmail === '', '주소록에 없는 메일링 리스트는 펼치지 않는다 (toEmail=' + g3.toEmail + ')');
     window.tabData.addressBook.pop();
 }
+// 5-4) 🏷 이름 옆 부서·직함으로 동명이인 가리기
+{
+    const R = window._addrResolveRecipient;
+    const ab = window.tabData.addressBook;
+    ab[0].title = '팀장'; ab[1].title = '책임매니저';
+    ok(R('김민수(영업팀)').email === 'kim.minsu@kortek.co.kr', '괄호 부서로 가린다');
+    ok(R('김민수 (개발1팀)').email === 'minsu.kim@kortek.co.kr', '괄호 앞 띄어쓰기도');
+    ok(R('김민수 팀장').email === 'minsu.kim@kortek.co.kr' && R('팀장 김민수님').email === 'minsu.kim@kortek.co.kr', '이름 앞뒤 직함으로 가린다');
+    ok(R('김민수 책임').email === 'kim.minsu@kortek.co.kr', '직함 일부(책임 ⊂ 책임매니저)');
+    ok(R('김민수(구매팀)').reason === 'qualifier-mismatch', '괄호 부서가 어느 쪽과도 안 맞으면 제외');
+    ok(R('이서연(영업팀)').reason === 'qualifier-mismatch', '한 사람뿐이어도 괄호 부서가 틀리면 제외');
+    ok(R('이서연(개발3팀)').email === 'sy.lee@kortek.co.kr', '한 사람 + 괄호 부서 맞음');
+    ok(R('이서연 팀장').email === 'sy.lee@kortek.co.kr', '한 사람일 땐 이름 옆 직함은 안 따진다(예전 그대로)');
+    ok(R('김민수(kim.minsu@kortek.co.kr)').email === 'kim.minsu@kortek.co.kr', '괄호 안 주소로도 가린다');
+    const [q1] = run(['[문의][이서연→김민수 팀장] 2026-11-20']);
+    ok(q1.toEmail.split(',').sort().join(',') === 'minsu.kim@kortek.co.kr,sy.lee@kortek.co.kr', '알람 수신자도 직함으로 가려진다 (toEmail=' + q1.toEmail + ')');
+    const [q2] = run(['[문의][이서연→김민수(구매팀)] 2026-11-20']);
+    ok(q2.excludedPeople.some(x => x.reason === 'qualifier-mismatch') && /구매팀/.test(window._addrResolveReasonText(q2.excludedPeople[0])), '안 맞는 부서는 사유와 함께 제외');
+    delete ab[0].title; delete ab[1].title;
+}
 // 6) 해석기 직접 — 공개 계약
 {
     const r = window._addrResolveRecipient;

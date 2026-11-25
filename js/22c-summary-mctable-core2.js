@@ -37,7 +37,7 @@ window.collectAlarmItems = function() {
         if (r.reason === 'no-email') return Object.assign({}, r, { reason: 'not-in-mail-headers' }); // 확인할 주소가 없다 — 텔레그램도 안 보낸다
         return r;
     };
-    const EXCLUDE_REASONS = ['ambiguous', 'email-not-in-book', 'not-in-mail-headers'];
+    const EXCLUDE_REASONS = ['ambiguous', 'email-not-in-book', 'not-in-mail-headers', 'qualifier-mismatch'];
 
     // 💡 [2026-08-31] 수신 대상(CC)은 업무마다 다를 수 있음 — 기본수신(전역 공용 명단, 대부분의
     //    업무가 여기 해당)이거나 개별수신(그 업무의 row._알림수신자)이거나. 행마다 아래서 계산.
