@@ -492,14 +492,6 @@
     //    프로젝트 데이터(tabData)가 아니라 이 PC의 localStorage에 저장한다(접힘 상태와 같은 방식).
     var SB_ORDER_KEY = 'gantt_sidebar_order_v1';
 
-    function _sbSaveOrder() {
-        var order = Array.prototype.map.call(
-            document.querySelectorAll('#sb-nav .sb-item[data-tab]'),
-            function (el) { return el.dataset.tab; }
-        );
-        try { localStorage.setItem(SB_ORDER_KEY, JSON.stringify(order)); } catch (e) { /* ignore */ }
-    }
-
     // 저장된 순서대로 재배치 — 저장 목록에 없는(새로 생긴) 탭은 원래 자리 순서 그대로 끝에 남는다.
     function _sbApplySavedOrder() {
         var nav = document.getElementById('sb-nav');
@@ -515,34 +507,13 @@
         Object.keys(items).forEach(function (tab) { nav.appendChild(items[tab]); });
     }
 
-    // 끌기 자체 — 드래그 중인 항목을 마우스가 걸쳐진 항목의 위/아래로 바로 옮겨서, 놓을 때 이미
-    // 제자리에 있게 한다(별도 미리보기 placeholder 없이 가장 단순한 방식).
+    // 끌기 자체 — js/19b 공용 헬퍼(`_ddReorder`)가 한다. 드롭다운 네 곳과 **같은 코드**다 — 놓는 순간(drop)에도 자리를 반영하므로
+    //   마우스를 빠르게 휙 옮겨 놓아도 놓은 자리에 들어간다(예전엔 dragover 에만 걸려 있어 마지막 자리에서 dragover 가 안 뜨면 덜 올라갔다).
+    //   저장 형식(`data-tab` 목록)·키(`gantt_sidebar_order_v1`)·끄는 모양(`.sb-dragging`)은 그대로라 저장된 순서가 이어진다.
     function _sbInitDragReorder() {
         var nav = document.getElementById('sb-nav');
-        if (!nav) return;
-        var dragEl = null;
-        nav.querySelectorAll('.sb-item[data-tab]').forEach(function (el) {
-            el.setAttribute('draggable', 'true');
-            el.addEventListener('dragstart', function (e) {
-                dragEl = el;
-                el.classList.add('sb-dragging');
-                e.dataTransfer.effectAllowed = 'move';
-                try { e.dataTransfer.setData('text/plain', el.dataset.tab); } catch (err) { /* ignore */ }
-            });
-            el.addEventListener('dragend', function () {
-                el.classList.remove('sb-dragging');
-                dragEl = null;
-                _sbSaveOrder();
-            });
-            el.addEventListener('dragover', function (e) {
-                if (!dragEl || dragEl === el) return;
-                e.preventDefault();
-                var rect = el.getBoundingClientRect();
-                var before = (e.clientY - rect.top) < rect.height / 2;
-                nav.insertBefore(dragEl, before ? el : el.nextSibling);
-            });
-            el.addEventListener('drop', function (e) { e.preventDefault(); });
-        });
+        if (!nav || !window._ddReorder) return;
+        window._ddReorder.init(nav, SB_ORDER_KEY, 'data-tab', 'sb-dragging');
     }
 
     // 🎨 [2026-11-25] Summary 마일스톤(계획·실적) 날짜 입력칸 글자색 — 일·공휴일=빨강, 토=파랑, 평일=회색(다른 페이지와 같은 규칙).

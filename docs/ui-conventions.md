@@ -635,7 +635,7 @@ a[onclick]:not([href]) { cursor: pointer; text-decoration: underline; }
 | **새 항목** | 저장 뒤 새로 생긴 항목(예: 새 주요자재 구분)은 **맨 끝**에 붙는다. 없어진 항목은 저장 목록에 남아 있어도 무시된다 |
 | **기본 순서로 되돌리기** | 저장 키를 지운다 — `_ddReorder.reset('<키>')` 또는 `localStorage.removeItem('<키>')`. **화면 단추는 없다**(사이드바 순서 바꾸기도 단추가 없다 — 같은 규칙) |
 
-저장 키: `gantt_alarmview_order_v1`(알람/공지) · `gantt_elecview_order_v1`(주요부품) · `gantt_docform_order_v1`(Document — 예전 키 그대로라 저장된 순서가 이어진다) · `gantt_rptview_order_v1`(보고/리뷰) · 참고로 사이드바는 `gantt_sidebar_order_v1`(별도 구현, `js/23`).
+저장 키: `gantt_alarmview_order_v1`(알람/공지) · `gantt_elecview_order_v1`(주요부품) · `gantt_docform_order_v1`(Document — 예전 키 그대로라 저장된 순서가 이어진다) · `gantt_rptview_order_v1`(보고/리뷰) · 사이드바 메뉴도 같은 헬퍼를 쓴다 — `gantt_sidebar_order_v1`(`js/23` 이 `_ddReorder.init(nav, 키, 'data-tab', 'sb-dragging')` 만 부른다).
 
 ### 새 드롭다운에 붙이는 법
 키 하나·항목 id 만 정한다 — `order(key, items, idOf)` 로 저장된 순서대로 → `itemHtml({id, onclick, active, labelHtml})` 로 항목 그리기 → `init(pop, key)` 로 끌기 켜기. 코드 예는 `js/19b` 머리 주석.
@@ -697,4 +697,27 @@ Sample Report **원본저장** 구간이 옛 `/doc/docx` 한 길만 기대해서
 검증: 고친 뒤 실제 화면에서 Project list `th` 28개·JIRA 10개가 전부 `center`, Notice·예약 규칙 `제목` 칸 `center`. Project Review 표는 AI 요약을 만들어야 나타나서 화면으로는 못 봤다(문법 검사만).
 
 ### 드롭다운 끌기 — 놓는 자리 반영 (2026-11-25, 실제 프로젝트 확인 중 발견)
-실제 마우스 드래그로 `TOUCH CTRL` 을 맨 위로 끌었는데 **두 칸만 올라간** 적이 있었다 — 자리 바꾸기가 `dragover` 에만 걸려 있어서, 마우스를 빠르게 휙 옮겨 놓으면 **마지막 자리에서 `dragover` 가 한 번도 안 뜰 수 있다**. 그래서 `js/19b` 가 **`drop` 에서도 같은 위/아래 계산**을 한다(놓은 자리가 곧 최종 자리). 이후 실제 드래그 6/6 성공(이벤트 기록 3회 포함: `dragstart → dragenter → dragover → drop` 모두 `panel` 위쪽 절반). ⚠️ **수정 직후 한 번은 같은 증상이 다시 나왔고 원인을 확정하지 못했다**(그 뒤 6번은 재현 안 됨). 사이드바(`js/23`)의 자체 드래그는 `drop` 에서 아무것도 안 하므로 같은 약점이 있을 수 있다(건드리지 않았다).
+실제 마우스 드래그로 `TOUCH CTRL` 을 맨 위로 끌었는데 **두 칸만 올라간** 적이 있었다 — 자리 바꾸기가 `dragover` 에만 걸려 있어서, 마우스를 빠르게 휙 옮겨 놓으면 **마지막 자리에서 `dragover` 가 한 번도 안 뜰 수 있다**. 그래서 `js/19b` 가 **`drop` 에서도 같은 위/아래 계산**을 한다(놓은 자리가 곧 최종 자리). 이후 실제 드래그 6/6 성공(이벤트 기록 3회 포함: `dragstart → dragenter → dragover → drop` 모두 `panel` 위쪽 절반). ⚠️ **수정 직후 한 번은 같은 증상이 다시 나왔고 원인을 확정하지 못했다**(그 뒤 6번은 재현 안 됨). 사이드바(`js/23`)도 같은 약점이 있었는데 **같은 날 공용 헬퍼로 바꿔** 함께 고쳤다(아래).
+
+## ↔ 표 본문 정렬 — 값의 종류로 (2026-11-25)
+
+**규칙**(이미 대부분의 표가 따르던 것을 글로 적었다): **긴 글 = 왼쪽 · 숫자·금액 = 오른쪽 · 짧은 값 = 가운데**.
+짧은 값 = No.·날짜·상태·사람 이름·단위·D-Day·구분 같은 한두 낱말. 긴 글 = 업무명·요약·내용·이메일·자재내역.
+
+실측(페이지마다 보이는 표의 열별 `text-align` × 값의 종류를 셌다):
+- 이미 규칙대로: 간트(No·날짜·소요 가운데, 업무 왼쪽) · JIRA(키·요약·구성·출처 왼쪽, 상태·사람·우선순위·수정일 가운데) · BOM(내역 왼쪽, 수량·금액 오른쪽, 단위·상태 가운데) · 주소록(이메일 빼고 짧은 값 가운데).
+- 고친 것:
+  | 표 | 전 | 후 |
+  |---|---|---|
+  | Alarm | 업무명·담당자 이메일·수신인 이메일도 가운데 | 왼쪽(js/22c) |
+  | 주소록 | 이메일 입력칸도 가운데 | 왼쪽(styles.css `input.u-input[data-field="email"]`) |
+  | Daily 하루 보기 | 이름·종류가 왼쪽 | 가운데(js/59 — 구분은 원래 `.daily-cat-cell` 가운데) |
+- 예외: **Project list** 는 사내 엑셀 "제품 SPEC" 을 그대로 옮긴 90열 목록이라 엑셀처럼 **전부 왼쪽**(No. 만 가운데) — 열마다 정렬을 바꾸면 줄임표(…)로 잘린 값이 열마다 다른 자리에서 잘려 오히려 읽기 어렵다. Summary·M.C·PARTS·Document 표는 앞서 정한 대로 손대지 않는다. Daily 의 `미작성` 줄은 나머지 칸을 합친 안내 칸이라 왼쪽 그대로.
+- 새 표: 칸에 정렬을 적을 땐 이 규칙으로. 머리글은 값과 상관없이 가운데(위 절).
+
+검증: 고친 뒤 실제 화면에서 Alarm 행 칸 정렬 `center center left center center left center left center …`(업무명·두 이메일만 left), 주소록 입력칸 `email:left` 나머지 center, Daily 이름·종류 center.
+
+### 사이드바 끌기도 공용 헬퍼로 (2026-11-25)
+`js/23` 의 자체 구현(`_sbSaveOrder` + `_sbInitDragReorder`, `dragover` 에만 자리 바꿈)을 걷고 **`_ddReorder.init(nav, SB_ORDER_KEY, 'data-tab', 'sb-dragging')`** 한 줄로 바꿨다 — 이제 드롭다운 네 곳과 사이드바가 **같은 코드**(놓는 자리 반영 포함). 헬퍼에 `dragClass` 인자를 더했다: 주면 끄는 동안 항목에 그 클래스를 붙이고(사이드바는 `.sb-dragging` — 투명도 0.4 + `grabbing` 커서), 안 주면 인라인 투명도 0.4(드롭다운). **저장 형식(`data-tab` 목록)·키·끄는 모양은 그대로**라 이미 저장된 사이드바 순서가 이어지고, 로드 때 순서 적용(`_sbApplySavedOrder`)도 그대로다.
+- 검증(실제 앱): `dragover` 없이 `drop` 만으로 맨 끝 항목이 맨 앞으로 · 끄는 동안 `sb-dragging` 이 붙었다 떨어짐 · 저장 목록 = 화면 순서 · **새로고침하면 저장된 순서로 복원**되고 끌기도 다시 켜져 있음 · **진짜 마우스로 `일일 보고` 를 맨 위까지 먼 거리 한 번에** 끌어 정확히 맨 위(저장·클릭으로 안 침, 탭 안 바뀜).
+- ⚠️ `_ddReorder` 가 없으면(js/19b 로드 실패) `_sbInitDragReorder` 는 **조용히 아무것도 안 한다**(사이드바가 끌리지 않을 뿐 메뉴는 정상). js/19b 는 js/23 보다 **앞**에서 로드돼야 한다(HTML 순서).

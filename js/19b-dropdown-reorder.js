@@ -64,8 +64,11 @@
                  + '<span style="flex:1 1 auto;">' + o.labelHtml + '</span></div>';
         },
 
-        /** 팝업 안 `[attr]` 항목을 끌 수 있게 하고, 놓을 때 지금 순서를 저장한다. 열 때마다 부를 것. */
-        init: function (pop, key, attr) {
+        /**
+         * 팝업(또는 사이드바 같은 목록) 안 `[attr]` 항목을 끌 수 있게 하고, 놓을 때 지금 순서를 저장한다. 팝업은 열 때마다 부를 것.
+         * dragClass(선택): 끄는 동안 항목에 붙일 클래스 — 안 주면 인라인 투명도 0.4. 사이드바는 제 CSS(`.sb-dragging`: 투명도+grabbing 커서)를 쓴다.
+         */
+        init: function (pop, key, attr, dragClass) {
             attr = attr || ATTR;
             var dragEl = null;
             var save = function () {
@@ -75,11 +78,15 @@
             pop.querySelectorAll('[' + attr + ']').forEach(function (el) {
                 el.setAttribute('draggable', 'true');
                 el.addEventListener('dragstart', function (e) {
-                    dragEl = el; el.style.opacity = '0.4';
+                    dragEl = el;
+                    if (dragClass) el.classList.add(dragClass); else el.style.opacity = '0.4';
                     e.dataTransfer.effectAllowed = 'move';
                     try { e.dataTransfer.setData('text/plain', el.getAttribute(attr)); } catch (err) { /* ignore */ }
                 });
-                el.addEventListener('dragend', function () { el.style.opacity = ''; dragEl = null; save(); });
+                el.addEventListener('dragend', function () {
+                    if (dragClass) el.classList.remove(dragClass); else el.style.opacity = '';
+                    dragEl = null; save();
+                });
                 el.addEventListener('dragover', function (e) {
                     if (!dragEl || dragEl === el) return;
                     e.preventDefault();
