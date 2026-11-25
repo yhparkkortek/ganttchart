@@ -3370,7 +3370,10 @@
             var th = '<th style="padding:5px 7px; border:1px solid #cfe3e5; font-size:11.5px; color:#2c5f8a; white-space:nowrap;">' + esc(T('이름', 'Name')) + '</th>'
                 + daysM.map(function (d) {
                     var off = offDay(d);
-                    return '<th class="daily-mdate" style="padding:4px 2px; border:1px solid #cfe3e5; font-size:10.5px; font-weight:bold; text-align:center;">' + (+d.slice(8)) + '</th>';
+                    var wd = new Date(d + 'T00:00:00').getDay();
+                    var hol = (wd === 0) || !!(window.isHoliday && window.isHoliday(d));
+                    var dcls = hol ? 'daily-mdate daily-mdate-hol' : (wd === 6 ? 'daily-mdate daily-mdate-sat' : 'daily-mdate');
+                    return '<th class="' + dcls + '" style="padding:4px 2px; border:1px solid #cfe3e5; font-size:10.5px; font-weight:bold; text-align:center;">' + (+d.slice(8)) + '</th>';
                 }).join('');
             var trs = peopleM.map(function (p, pi) {
                 // 🦓 줄 색은 다른 표와 같은 흰색/팔레트 제브라(사람 단위). 작성함·주말 칸만 클래스로 제 색(styles.css·js/21)
