@@ -249,8 +249,59 @@ ${mailText}`;
     //    따로 두면 "여기선 걸리는데 저기선 안 걸린다"가 생긴다 — 규칙은 여기서만 고칠 것.
     var _SEARCH_NOISE = /[\s\-_>\/.,()]+/g;
     window._searchNorm = function (s) { return String(s == null ? '' : s).toLowerCase().replace(_SEARCH_NOISE, ''); };
-    /** 검색어 → 낱말 배열(소문자). 비면 []. */
-    window._searchTokens = function (q) { return String(q == null ? '' : q).trim().toLowerCase().split(/\s+/).filter(Boolean); };
+    /** 검색어 → 낱말 배열(소문자). 비면 [].
+     *  🔍 [2026-11-25 사용자 요청 `32", LNW, 인증`] 쉼표(, ， ;)가 있으면 **쉼표로만** 나눈다 —
+     *  그래야 띄어쓰기가 든 말("LNW K43", "Harness 300mm")도 한 덩어리로 찾는다. 쉼표가 없으면 예전처럼 띄어쓰기. */
+    window._searchTokens = function (q) {
+        var s = String(q == null ? '' : q).trim().toLowerCase();
+        var parts = /[,，;]/.test(s) ? s.split(/[,，;]/) : s.split(/\s+/);
+        return parts.map(function (p) { return p.trim(); }).filter(Boolean);
+    };
+    // 🔍 [2026-11-25 사용자 요청] AND / OR 고르기 — 앱 전체 한 값(localStorage). 기본 AND(전부 들어 있어야).
+    //    OR = 하나라도 들어 있으면. 모든 검색이 `_searchMatchAll` 을 지나므로 여기 한 곳에서 바뀐다.
+    var _SEARCH_MODE_KEY = 'gantt_search_mode_v1';
+    window._searchMode = function () { try { return localStorage.getItem(_SEARCH_MODE_KEY) === 'or' ? 'or' : 'and'; } catch (e) { return 'and'; } };
+    /** 낱말마다 pred 를 돌려 지금 모드(AND=전부 / OR=하나라도)로 합친다. 직접 낱말을 도는 곳(간트 날짜)용. */
+    window._searchCombine = function (tokens, pred) { return window._searchMode() === 'or' ? tokens.some(pred) : tokens.every(pred); };
+    /** AND/OR 전환 버튼 html — forId: 다시 돌릴 입력칸 id, run: (선택) 다시 돌릴 전역 함수 이름(oninput 이 검색을 안 돌리는 칸). */
+    window._searchModeBtnHtml = function (forId, style, run) {
+        var or = window._searchMode() === 'or';
+        return '<button type="button" class="search-mode-btn' + (or ? ' is-or' : '') + '" data-for="' + (forId || '') + '"' +
+            (run ? ' data-run="' + run + '"' : '') + ' onclick="event.stopPropagation(); window._searchToggleMode()"' +
+            ' title="' + window._searchModeTitle() + '" style="' + (style || '') + '">' + (or ? 'OR' : 'AND') + '</button>';
+    };
+    window._searchModeTitle = function () {
+        var en = window._currentLang === 'en', or = window._searchMode() === 'or';
+        return en ? ((or ? 'OR — any word matches' : 'AND — every word must match') + ' (click to switch). Separate words with commas to keep spaces: 32", LNW, cert')
+                  : ((or ? 'OR — 하나라도 들어 있으면' : 'AND — 모두 들어 있어야') + ' (눌러서 바꾸기). 쉼표로 나누면 띄어쓰기가 든 말도 한 덩어리: 32", LNW, 인증');
+    };
+    /** 모드를 바꾸고, 앱의 모든 전환 버튼 글자를 맞추고, 글자가 들어 있는 검색칸을 다시 돌린다. */
+    window._searchToggleMode = function () {
+        var next = window._searchMode() === 'or' ? 'and' : 'or';
+        try { localStorage.setItem(_SEARCH_MODE_KEY, next); } catch (e) {}
+        var t = window._searchModeTitle();
+        document.querySelectorAll('.search-mode-btn').forEach(function (b) {
+            b.textContent = next === 'or' ? 'OR' : 'AND';
+            b.classList.toggle('is-or', next === 'or');
+            b.title = t;
+            var inp = b.getAttribute('data-for') ? document.getElementById(b.getAttribute('data-for')) : null;
+            if (!inp || !String(inp.value || '').trim()) return;
+            var run = b.getAttribute('data-run');
+            if (run && typeof window[run] === 'function') { try { window[run](); } catch (e) { console.warn('[search-mode]', run, e); } }
+            else inp.dispatchEvent(new Event('input', { bubbles: true }));
+        });
+        try { window.dispatchEvent(new CustomEvent('searchmodechange', { detail: next })); } catch (e) {}
+    };
+    /** HTML 에 박힌 전환 버튼(Project list·주소록)을 저장된 모드에 맞춘다 — 처음 그릴 때 한 번. */
+    window._searchModeSync = function () {
+        var or = window._searchMode() === 'or', t = window._searchModeTitle();
+        document.querySelectorAll('.search-mode-btn').forEach(function (b) {
+            b.textContent = or ? 'OR' : 'AND'; b.classList.toggle('is-or', or); b.title = t;
+        });
+    };
+    if (typeof document === 'undefined') { /* node 하네스 */ }
+    else if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function () { window._searchModeSync(); });
+    else setTimeout(function () { window._searchModeSync(); }, 0);
     /** 한 낱말이 이 글에 있나(글자 그대로 또는 기호 뗀 모양). hayNorm 은 미리 만들어 넘기면 빠르다. */
     window._searchHasToken = function (hayLower, token, hayNorm) {
         if (hayLower.indexOf(token) !== -1) return true;
@@ -258,11 +309,12 @@ ${mailText}`;
         if (!tn) return false;
         return (hayNorm != null ? hayNorm : window._searchNorm(hayLower)).indexOf(tn) !== -1;
     };
-    /** 낱말이 전부 들어 있나(AND). tokens 가 비면 true. */
+    /** 검색어가 걸리나 — 지금 모드대로(AND=전부 / OR=하나라도, `_searchMode`). tokens 가 비면 true.
+     *  ⚠️ 이름은 옛날 그대로(호출지 30곳) — 거르기는 전부 이 함수를 지난다. */
     window._searchMatchAll = function (hay, tokens) {
         if (!tokens || !tokens.length) return true;
         var low = String(hay == null ? '' : hay).toLowerCase(), norm = window._searchNorm(low);
-        return tokens.every(function (t) { return window._searchHasToken(low, t, norm); });
+        return window._searchCombine(tokens, function (t) { return window._searchHasToken(low, t, norm); });
     };
     /** 낱말이 하나라도 들어 있나 — 걸린 칸/글자 강조용. */
     window._searchMatchAny = function (text, tokens) {

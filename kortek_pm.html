@@ -18,7 +18,7 @@
 <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
 
-<link rel="stylesheet" href="styles.css?v=2026112743">
+<link rel="stylesheet" href="styles.css?v=2026112501">
 <!-- 💡 [2026-09-04] FOUC 방지: 저장된 테마 CSS를 첫 렌더 전에 즉시 주입.
      styles.css가 파싱된 직후, <body>가 렌더되기 전에 실행되므로
      "청록 → 파랑" 깜빡임 없이 바로 올바른 테마색이 적용된다.
@@ -1156,6 +1156,7 @@
                 <span id="addr-search-clear" onclick="document.getElementById('addr-search-input').value=''; window.filterAddressRows('');"
                     style="display:none; position:absolute; right:8px; cursor:pointer; color:#999; font-size:13px;">✕</span>
             </div>
+            <button type="button" class="search-mode-btn" data-for="addr-search-input" onclick="event.stopPropagation(); window._searchToggleMode()" style="height:31px; box-sizing:border-box; padding:0 9px; min-width:44px; border:1px solid #cfd8e3; border-radius:16px; background:#fff; color:var(--ui-accent,#00707d); font-size:12px; font-weight:bold; cursor:pointer; margin-left:4px;">AND</button>
             <span id="addr-search-count" style="font-size:12px; color:#888;"></span>
             <!-- 💡 [2026-08-31 버그 수정] 다른 탭들은 이 빈 .btn-group(margin-left:auto)으로 인쇄 버튼을
                  헤더 박스 맨 오른쪽에 고정시키는데, Address 탭에만 이게 빠져 있어서 인쇄 버튼이 검색창
@@ -1214,6 +1215,8 @@
             <input id="pl-search" type="text" oninput="window.plSearch(this.value)"
                 onkeydown="if(event.key==='Enter'){event.preventDefault();window.plSearchNow();}"
                 style="width:170px; height:31px; padding:0 10px; border:1px solid #ccc; border-radius:16px; font-size:12px; box-sizing:border-box; margin-right:4px;">
+            <!-- 🔍 [2026-11-25] AND/OR 전환(js/04a, 앱 전체 한 값) -->
+            <button type="button" class="search-mode-btn" data-for="pl-search" data-run="plSearchNow" onclick="event.stopPropagation(); window._searchToggleMode()" style="height:31px; box-sizing:border-box; padding:0 9px; min-width:44px; border:1px solid #cfd8e3; border-radius:16px; background:#fff; color:var(--ui-accent,#00707d); font-size:12px; font-weight:bold; cursor:pointer; margin-right:4px;">AND</button>
             <button id="pl-btn-search" class="concept-add-row-btn" onclick="window.plSearchNow()"
                 style="margin:0 6px 0 0; height:31px; box-sizing:border-box; padding:0 12px; display:inline-flex; align-items:center; border:none; border-radius:6px; white-space:nowrap;">🔍</button>
             <span id="pl-count" style="font-size:12px; color:#888; margin-right:8px;"></span>
@@ -2066,9 +2069,9 @@
 <script src="js/03-drive-modal-drag.js?v=20261124a4"></script>
 
 <!-- 04-core-app.js 분리 (토큰 절약 · 협업용): 로딩 순서는 기존과 동일하게 유지 -->
-<script src="js/04a-core-app-globals.js?v=2026112662"></script>
+<script src="js/04a-core-app-globals.js?v=2026112502"></script>
 <script src="js/04b-core-app-drive-sync.js?v=2026112531"></script>
-<script src="js/04c-core-app-mail-pipeline.js?v=2026112622"></script>
+<script src="js/04c-core-app-mail-pipeline.js?v=2026112501"></script>
 <script src="js/04d-core-app-gantt-core.js?v=2026112631"></script>
 <script src="js/04e-core-app-undo-redo.js?v=2026112672"></script>
 <script src="js/04f-core-app-upload-utils-1.js?v=20261124a4"></script>
@@ -2720,7 +2723,7 @@
 
 <!-- 22-tabs-summary-mctable.js 분리 (토큰 절약 · 협업용): 로딩 순서는 기존과 동일하게 유지 -->
 <script src="js/22a-summary-mctable-parse.js?v=2026112631"></script>
-<script src="js/22b-summary-mctable-core1.js?v=2026112731"></script>
+<script src="js/22b-summary-mctable-core1.js?v=2026112501"></script>
 <script src="js/22c-summary-mctable-core2.js?v=2026112541"></script>
 <script src="js/22d-summary-mctable-core3.js?v=2026112735"></script>
 <script src="js/22e-summary-mctable-core4.js?v=2026112735"></script>
@@ -2739,7 +2742,7 @@
 
 <script src="js/27-topic-contamination.js?v=20261124a4"></script>
 
-<script src="js/26-gantt-search.js?v=2026112503"></script>
+<script src="js/26-gantt-search.js?v=2026112504"></script>
 
 <script src="js/28-new-project-wizard.js?v=2026112791"></script>
 

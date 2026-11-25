@@ -1391,6 +1391,8 @@ window._hdrFindWidget = function (o) {
         '<button type="button" class="hdr-find-btn ep-theme-hover-btn" style="height:31px; box-sizing:border-box; padding:0 10px; background:#e0f5f7; color:#00707d; border:none; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; white-space:nowrap;">🔍</button>'
         + '<div class="hdr-find-pop" style="display:none; position:fixed; z-index:9000; background:#fff; border:1px solid #cfe3e5; border-radius:8px; box-shadow:0 6px 18px rgba(0,0,0,.15); padding:6px; gap:4px; align-items:center; white-space:nowrap;">'
         +   '<input id="' + o.inputId + '" type="search" autocomplete="off" style="width:' + (o.width || 230) + 'px; height:28px; box-sizing:border-box; padding:0 10px; border:1px solid #ccc; border-radius:14px; font-size:12px; outline:none;">'
+        // 🔍 [2026-11-25] AND/OR 전환(js/04a, 앱 전체 한 값) — 바꾸면 이 칸의 검색이 다시 돈다
+        +   window._searchModeBtnHtml(o.inputId, navBtn + ' font-weight:bold; min-width:42px;')
         +   (o.nav ? '<button type="button" id="' + o.nav.prevId + '" style="' + navBtn + '">▲</button><button type="button" id="' + o.nav.nextId + '" style="' + navBtn + '">▼</button>' : '')
         +   '<span id="' + o.countId + '" style="font-size:12px; color:#888; white-space:nowrap; min-width:36px;"></span>'
         +   '<button type="button" class="hdr-find-x" title="' + (en ? 'Close (search stays on)' : '닫기 (찾기는 유지)') + '" style="border:none; background:none; color:#888; cursor:pointer; font-size:14px; padding:0 4px;">✕</button>'

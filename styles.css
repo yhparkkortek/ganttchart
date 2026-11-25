@@ -2781,3 +2781,6 @@ tr.jira-zebra-b { background: #e8f2f3; }
 
 /* 🔍 [2026-11-24] 헤더 찾기 위젯(js/22b _hdrFindWidget) — 인쇄엔 안 찍는다. */
 @media print { .hdr-find, .hdr-find-pop { display:none !important; } }
+
+/* 🔍 [2026-11-25] 검색 AND/OR 전환 버튼(js/04a) — OR 일 때 채워서 "지금 느슨하게 찾는 중" 이 보이게 */
+.search-mode-btn.is-or { background: var(--ui-accent, #00707d) !important; color: #fff !important; border-color: var(--ui-accent, #00707d) !important; }

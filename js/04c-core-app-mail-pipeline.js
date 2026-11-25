@@ -2547,6 +2547,8 @@
               '<input id="drive-modal-search-input" type="search" autocomplete="off" placeholder="' +
                 (_dmEn ? '🔍 Search projects — name, keyword, member, inch, family, customer…' : '🔍 프로젝트 검색 — 이름·연관 검색어·멤버·인치·제품군·고객사…') + '" ' +
                 'style="flex:1; height:31px; box-sizing:border-box; padding:0 12px; border:1px solid #cfd8e3; border-radius:16px; font-size:13px; outline:none;">' +
+              (window._searchModeBtnHtml ? window._searchModeBtnHtml('drive-modal-search-input',
+                'height:31px; box-sizing:border-box; padding:0 10px; min-width:46px; border:1px solid #cfd8e3; border-radius:16px; background:#fff; color:var(--ui-accent,#00707d); font-size:12px; font-weight:bold; cursor:pointer;') : '') +
               '<span id="drive-modal-search-count" style="font-size:12px; color:#868e96; white-space:nowrap;"></span>' +
             '</div>';
         // ✂️ [2026-11-24 사용자 결정] 검색 범위 칩(전체·프로젝트명·멤버…)은 뺐다 — '전체' 하나로 충분하고,

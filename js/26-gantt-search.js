@@ -140,6 +140,8 @@
             '  style="' + _GS_BOX + 'padding:0 9px;background:' + c.btnBg + ';border:1px solid ' + c.inputBorder + ';cursor:pointer;color:' + c.text + ';">↑</button>' +
             '<button id="gantt-search-next" title="' + (_en ? 'Next result (Enter)' : '다음 결과 (Enter)') + '"' +
             '  style="' + _GS_BOX + 'padding:0 9px;background:' + c.btnBg + ';border:1px solid ' + c.inputBorder + ';cursor:pointer;color:' + c.text + ';">↓</button>' +
+            (window._searchModeBtnHtml ? window._searchModeBtnHtml('gantt-ai-search-input',
+                _GS_BOX + 'padding:0 9px;min-width:42px;font-weight:bold;background:' + c.btnBg + ';border:1px solid ' + c.inputBorder + ';cursor:pointer;color:' + c.text + ';') : '') +
             '<span id="gantt-ai-search-count" style="color:' + c.text + ';font-size:12px;white-space:nowrap;min-width:62px;text-align:center;"></span>' +
             '<label style="white-space:nowrap;cursor:pointer;font-size:12px;color:#555;">' +
             '  <input type="checkbox" id="gantt-ai-search-filtermode"' + (_mode === 'filter' ? ' checked' : '') + ' style="cursor:pointer;accent-color:' + c.text + ';"> ' +
@@ -177,6 +179,8 @@
             _applySearch();
         });
         document.getElementById('gantt-ai-search-clear').addEventListener('click', _clearSearch);
+        // 🔍 [2026-11-25] AND/OR 을 바꾸면 이미 적용된 검색을 다시 돌린다(타이핑만으론 안 도는 칸이라 input 이벤트로는 안 된다)
+        window.addEventListener('searchmodechange', function () { if (_lastAppliedQuery) _applySearch(); });
 
         // 전역 단축키 Ctrl+Shift+F → 검색 포커스
         document.addEventListener('keydown', function(e) {
@@ -460,7 +464,8 @@
             hay = hay.concat(row._aiMatchKeywords || [], [row._aiSourceSnippet, row._aiMatchBasis]);
             hay = hay.map(function (v) { return v == null ? '' : String(v); }).join(' \u0001 ');
             var low = hay.toLowerCase(), norm = window._searchNorm(low);
-            return toks.every(function (t) {
+            // 🔍 [2026-11-25] AND/OR 은 앱 공용 모드(js/04a `_searchCombine`)
+            return window._searchCombine(toks, function (t) {
                 if (window._searchHasToken(low, t, norm)) return true;
                 var r = _gsDateRange(t);
                 return !!r && _gsRowOnDate(row, r);
