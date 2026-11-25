@@ -285,6 +285,58 @@ window.__psTest = async function (opt) {
         });
         window._docState.formId = 'product-spec';
 
+        // 📥 불러오기 섞임 3가지(2026-11-25, OBSIDIAN 27 사양서를 OBSIDIAN27 DB 에 불러와 Word 로 보고 찾음) — 합성 문서로 늘 돈다
+        //   ① A/D 연결표는 원본 줄을 Symbol 로 BOM 줄에 맞춘다(순서로 넣으면 'J2 = DC JACK') · BOM 에 없는 설치지점은 뺀다
+        //   ② 다른 제품(KTK PN 다름) 사양서의 개정 이력은 안 가져온다 · 같은 제품이면 가져온다
+        //   ③ 원본에서 읽은 표의 나머지 칸은 초안(표준 타이밍)이 안 채운다
+        window.tabData.bomByUnit = { LOWER: { rows: [
+            { _level: 1, IDNRK: '777010', OJTXP: 'PBA-AD>VIDEO,ADB-TEST,R1,V00', WGBEZ60: 'BD 반제품/PBA' },
+            { _level: 2, IDNRK: '700001', OJTXP: 'CON>D,NOR,ABC200-04,4P1MS,200', WGBEZ60: '회로자재/CONNECTOR', EBORT: 'J1,J7', MFRPN: '연호전자' },
+            { _level: 2, IDNRK: '700002', OJTXP: 'SWC TACT>S,9999SB9,SR,4P', WGBEZ60: '회로자재/SWITCH', EBORT: 'SW1,SW2,SW3,SW4', MFRPN: 'CT 전자' },
+            { _level: 2, IDNRK: '700003', OJTXP: 'JACK USB>D,2,B,AN,KUSB99,H,4P,PCB,WHT', WGBEZ60: '회로자재/JACK', EBORT: 'J3', MFRPN: '어느전자' }] } };
+        var bsI = window.tabData.briefSpec;
+        window.tabData.briefSpec = bsI.concat([{ sub: 'Native Resolution', modelA: '1920 x 1080' }]);
+        var draftBefore = window.DOC_AUTO_HOOKS.ps(window._dgCollect(), 'tim.r1.c2').v;
+        var fI = window._docDataOf('product-spec').fields;
+        fI['adc.r1.c1'] = 'STALE-ROW-ORDER';                  // 지난번(줄 순서) 불러오기가 넣어 둔 값
+        fI['rev.r2.c3'] = 'OTHER HISTORY';                    // 지난번 불러오기가 넣어 둔 다른 제품 이력
+        var synth = function (pn) {
+            return JSON.stringify({ ok: true, variant: 'base', layout: null, align: { ratio: 1 }, skipped: [], images: {}, shape: [],
+                values: { 'cover.r1.c0': pn, 'rev.r2.c0': '2020-01-01', 'rev.r2.c3': 'OTHER HISTORY',
+                    'adc.r1.c0': 'J9', 'adc.r1.c1': 'NOT IN BOM',
+                    'adc.r2.c0': 'J7', 'adc.r2.c1': 'EXT OSD', 'adc.r2.c2': 'WRONGPN',
+                    'adc.r3.c0': 'J1', 'adc.r3.c1': 'POWER IN',
+                    'adc.r4.c0': 'SW1~4', 'adc.r4.c1': 'OSD KEY',
+                    'tim.r1.c1': '1920x1080', 'tim.r3.c1': '148.5' } });
+        };
+        var runImport = async function (pn) {
+            var body = synth(pn);
+            window.fetch = function (u) {
+                if (String(u).indexOf('/doc/product-spec-parse') >= 0) return Promise.resolve(new Response(body, { status: 200 }));
+                return saved.fetch.apply(this, arguments);
+            };
+            toasts.length = 0;
+            await window._docImportFile(new File([new Uint8Array([80, 75])], 'spec.docx'));
+            window.fetch = saved.fetch;
+            return window._psPayload().values;
+        };
+        var vI = await runImport('888777');
+        var row = function (r) { return [vI['adc.r' + r + '.c0'], vI['adc.r' + r + '.c1'], vI['adc.r' + r + '.c2']].join('|'); };
+        check([1, 2, 3, 4].map(row).join(' / ') === 'J1|POWER IN|ABC200-04 / J3||KUSB99 / J7|EXT OSD|ABC200-04 / SW1~4|OSD KEY|9999SB9',
+              '① 원본 줄을 Symbol 로 BOM 줄에 맞춤·품번은 BOM (' + [1, 2, 3, 4].map(row).join(' / ') + ')');
+        check(!Object.keys(vI).some(function (k) { return vI[k] === 'NOT IN BOM' || vI[k] === 'STALE-ROW-ORDER'; }),
+              '① BOM 에 없는 설치지점(J9)·지난번 줄 순서 값은 안 남는다');
+        var lastToast = (toasts.filter(function (t) { return /불러왔습니다/.test(t[1]); })[0] || [])[1] || '';
+        check(/J9/.test(lastToast) && /다른 제품/.test(lastToast), '① ② 뺀 것을 토스트로 알린다 (' + lastToast.replace(/\n/g, ' ') + ')');
+        check(vI['rev.r2.c3'] === '' && vI['rev.r2.c0'] !== '2020-01-01', '② 다른 제품 사양서의 개정 이력은 안 가져옴 (' + vI['rev.r2.c3'] + ')');
+        check(draftBefore !== '' && vI['tim.r1.c2'] === '' && vI['tim.r3.c1'] === '148.5',
+              '③ 불러온 타이밍 표의 빈 열은 초안이 안 채움 (전 "' + draftBefore + '" → "' + vI['tim.r1.c2'] + '")');
+        var vS = await runImport('999001');                    // 같은 제품이면 이력을 가져온다
+        check(vS['rev.r2.c3'] === 'OTHER HISTORY', '② 같은 제품(KTK PN 같음)이면 개정 이력도 가져옴 (' + vS['rev.r2.c3'] + ')');
+        window.tabData.documents = {};
+        window.tabData.briefSpec = bsI;
+        delete window.tabData.bomByUnit;
+
         // 📂 불러오기 — 실제 사양서를 백엔드가 읽은 결과가 있으면
         var parsedText = null;
         try { var rr = await saved.fetch('tests/_tmp_ps_parse.json', { cache: 'no-store' }); if (rr.ok) parsedText = await rr.text(); } catch (e0) { /* 없음 */ }
@@ -304,7 +356,12 @@ window.__psTest = async function (opt) {
             check(uploads.every(function (n) { return /_product-spec_LOWER_R1_img_/.test(n); }),
                   '첨부 이름에 모델·리비전이 들어가야 (' + uploads[0] + ')');
             var ctx = window._dgCollect(), p2 = window._psPayload(), bad = 0;
+            var otherProd = String(j.values['cover.r1.c0'] || '').replace(/\W/g, '') !== '999001';
+            if (otherProd) check(Object.keys(j.values).filter(function (k) { return window.PS_IMPORT_SAME_PRODUCT.test(k) && String(j.values[k]).trim(); })
+                                     .every(function (k) { return String(p2.values[k] || '') !== String(j.values[k]) || /^rev\.r1\./.test(k); }),
+                                 '다른 제품 사양서 — 개정 이력(2줄 이후)은 원본저장에 안 실림');
             Object.keys(j.values).forEach(function (k) {
+                if (otherProd && window.PS_IMPORT_SAME_PRODUCT.test(k)) return;   // ② 일부러 안 가져온 칸
                 // 앱이 **아는** 값(hardOnly)만 불러온 값을 이긴다 — 표준 타이밍·다른 사양서는 불러온 값에 진다
                 var auto = window.PS_AUTO[k] ? window.DOC_AUTO_HOOKS.ps(ctx, k, { hardOnly: true }).v : '';
                 if (!auto && !String(j.values[k]).trim()) return;       // 원본이 비운 칸 — 초안(표준 타이밍)이 채워도 된다
@@ -315,7 +372,10 @@ window.__psTest = async function (opt) {
             check(Object.keys(j.images).every(function (k) { var a = (p2.images[k] || [])[0]; return a && a.cx === j.images[k].cx && a.cy === j.images[k].cy; }),
                   '그림의 원래 크기(cx,cy)가 실려야');
             check(JSON.stringify(p2.layout) === JSON.stringify(j.layout), '쪽 맞춤 빈 줄(layout)이 실려야');
-            var owned = Object.keys(window._docDataOf('product-spec').fields).filter(function (k) { return !String(window._docDataOf('product-spec').fields[k]).trim(); });
+            // 빈 값은 저장하지 않는다 — 단 원본에서 읽은 표의 칸을 초안이 못 채우게 막는 빈 값(③)은 예외
+            var owned = Object.keys(window._docDataOf('product-spec').fields).filter(function (k) {
+                return !String(window._docDataOf('product-spec').fields[k]).trim() && !(window.PS_AUTO[k] && window.DOC_AUTO_HOOKS.ps(ctx, k).v !== '' && !window.DOC_AUTO_HOOKS.ps(ctx, k, { hardOnly: true }).v && /\.r\d+\.c\d+$/.test(k));
+            });
             check(owned.length === 0, '빈 값은 저장하지 않아야 (' + owned.length + ')');
             await window._docSaveDocx();
             check(sent && sent.variant === j.variant && Object.keys(sent.values).length > 600, '원본저장이 payload 를 보내야');

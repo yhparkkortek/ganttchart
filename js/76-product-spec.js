@@ -1215,6 +1215,13 @@
     // 🪶 "앱이 아는 값"이 아닌 출처(데이터) — 표준 타이밍 초안 · 📑 다른 사양서. 불러오기에선 이 둘이 **불러온 값을 못 이긴다**
     //   (원본 사양서의 실제 EDID·핀 표가 초안이나 다른 제품 문서에 밀려 지워지면 안 된다 — 2026-11-25 에 그렇게 돌고 있던 것을 발견)
     window.PS_SOFT_SOURCES = window.PS_SOFT_SOURCES || /^fn:(tim|ref):/;
+    // 📥 불러오기 규칙(데이터, 2026-11-25 OBSIDIAN 27 → OBSIDIAN27 DB 실측으로 정함)
+    //   · PS_IMPORT_KEYED — 줄이 **설치지점(Symbol) 하나의 기록**인 표: 원본 줄을 순서가 아니라 Symbol 로 BOM 줄에 맞춘다
+    //     (순서로 넣었더니 BOM 정렬 순서와 달라 'J2 = DC JACK'·'SW1~4 = DVI INPUT' 이 됐다). BOM 에 없는 설치지점은 뺀다(BOM 이 진실).
+    //   · PS_IMPORT_SAME_PRODUCT — **같은 제품(KTK PN)의 문서**일 때만 가져오는 칸: 개정 이력은 그 문서의 이력이라
+    //     다른 제품 사양서에서 가져오면 남의 이력(옛 KTK PN 변경 기록까지)이 들어갔다.
+    window.PS_IMPORT_KEYED = window.PS_IMPORT_KEYED || { adc: 0 };
+    window.PS_IMPORT_SAME_PRODUCT = window.PS_IMPORT_SAME_PRODUCT || /^rev\./;
     window.DOC_AUTO_HOOKS.ps = function (ctx, key, opts) {
         var list = window.PS_AUTO[key] || [];
         if (opts && opts.hardOnly) list = list.filter(function (t) { return !window.PS_SOFT_SOURCES.test(t); });
@@ -1397,8 +1404,50 @@
         if (!confirm(msg)) return;
         var ctx = window._dgCollect ? window._dgCollect() : { meta: {} };
         var d = window._docDataOf(FORM_ID);
-        var put = 0, kept = 0;
-        Object.keys(j.values || {}).forEach(function (k) {
+        var put = 0, kept = 0, notes = [];
+        var _own = function (k) { return Object.prototype.hasOwnProperty.call(d.fields, k); };
+        var _hard = function (k) { return window.PS_AUTO[k] ? window.DOC_AUTO_HOOKS.ps(ctx, k, { hardOnly: true }).v : ''; };
+        j.values = j.values || {};
+        // ① 다른 제품의 사양서면 그 문서에만 속한 칸(개정 이력)은 안 가져온다 — 지난번 불러오기가 넣은 같은 값은 걷어 낸다
+        var srcPn = String(j.values['cover.r1.c0'] || j.values.hdrKtkPn || '').trim();
+        var appPn = String(_hard('cover.r1.c0') || _hard('hdrKtkPn') || '').trim();
+        if (srcPn && appPn && _alnum(srcPn) !== _alnum(appPn)) {
+            var nSkip = 0;
+            Object.keys(j.values).forEach(function (k) {
+                if (!window.PS_IMPORT_SAME_PRODUCT.test(k)) return;
+                if (_own(k) && String(d.fields[k]) === String(j.values[k])) delete d.fields[k];
+                if (String(j.values[k] || '').trim()) nSkip++;
+                delete j.values[k];
+            });
+            if (nSkip) notes.push(_t('다른 제품(KTK PN ' + srcPn + ')의 개정 이력은 안 가져옴', 'revision history of another product skipped'));
+        }
+        // ② 설치지점 기록 표 — 원본 줄을 Symbol 로 BOM 줄에 맞춘다(BOM 을 못 받았으면 예전처럼 줄 순서)
+        Object.keys(window.PS_IMPORT_KEYED).forEach(function (pre) {
+            var keyCol = window.PS_IMPORT_KEYED[pre];
+            var rowsB = pre === 'adc' ? _adcRows() : null;
+            if (!rowsB || !rowsB.length) return;
+            var re = new RegExp('^' + pre + '\\.r(\\d+)\\.c(\\d+)$');
+            var recs = {};
+            Object.keys(j.values).forEach(function (k) {
+                var m = re.exec(k);
+                if (!m) return;
+                (recs[m[1]] = recs[m[1]] || {})[m[2]] = j.values[k];
+                delete j.values[k];
+            });
+            Object.keys(d.fields).forEach(function (k) { if (re.test(k)) delete d.fields[k]; });   // 지난 불러오기(줄 순서)가 넣은 값
+            var dropped = [];
+            Object.keys(recs).forEach(function (rn) {
+                var rec = recs[rn], sym = String(rec[keyCol] || '').trim();
+                if (!sym) return;
+                var first = sym.toUpperCase().split(/[~,\s]/)[0].trim();
+                var idx = -1;
+                rowsB.forEach(function (b, i) { if (idx < 0 && b.all.some(function (e) { return String(e).toUpperCase() === first; })) idx = i; });
+                if (idx < 0) { dropped.push(sym); return; }
+                Object.keys(rec).forEach(function (c) { if (+c !== keyCol) j.values[pre + '.r' + (idx + 1) + '.c' + c] = rec[c]; });
+            });
+            if (dropped.length) notes.push(_t('BOM 에 없는 설치지점 ' + dropped.join(', ') + ' 줄은 뺌', 'not in BOM: ' + dropped.join(', ')));
+        });
+        Object.keys(j.values).forEach(function (k) {
             var v = j.values[k];
             if (v == null) return;
             // 빈 칸은 적지 않는다 — 출력은 같고(빈 칸), 화면에 '✏️ 직접 적음' 이 수백 개 붙지 않는다
@@ -1414,6 +1463,21 @@
             d.fields[k] = String(v);
             put++;
         });
+        // ③ 원본에서 읽은 표의 나머지 칸은 초안(표준 타이밍·📑 다른 사양서)으로 채우지 않는다 — 표 하나는 한 문서에서
+        //    (실측: 원본 타이밍 5개 모드 + 초안이 채운 6번째 1024x768 열 — 그 모니터 EDID 에 없는 모드였다)
+        var readPre = {};
+        Object.keys(j.values).forEach(function (k) {
+            if (/\.r\d+\.c\d+$/.test(k) && String(j.values[k] || '').trim()) readPre[k.split('.')[0]] = 1;
+        });
+        var blanked = 0;
+        _allKeys().forEach(function (k) {
+            if (!/\.r\d+\.c\d+$/.test(k) || !readPre[k.split('.')[0]]) return;
+            if (String(j.values[k] || '').trim() || _own(k) || _hard(k)) return;
+            if (!window.PS_AUTO[k] || !window.DOC_AUTO_HOOKS.ps(ctx, k).v) return;
+            d.fields[k] = '';
+            blanked++;
+        });
+        if (blanked) notes.push(_t('원본에서 읽은 표의 빈 칸 ' + blanked + '개는 초안으로 안 채움', blanked + ' draft cells left empty'));
         d.fields.hasTouch = j.variant === 'touch' ? 'YES' : 'NO';
         d.psLayout = j.layout ? { variant: j.variant, gaps: j.layout } : null;
         // 그림 — NAS 첨부로 올리고(문서엔 참조만) 원래 크기·자리도 같이 둔다
@@ -1430,7 +1494,8 @@
         _built = null;
         if (window._docRender) window._docRender();
         _toast('📥 ' + _t('불러왔습니다 — 칸 ' + put + '개 채움 · 앱 값 유지 ' + kept + '개 · 그림 ' + keys.length + '장'
-            + (j.skipped && j.skipped.length ? ' · 못 읽음 ' + j.skipped.length + '개' : ''),
+            + (j.skipped && j.skipped.length ? ' · 못 읽음 ' + j.skipped.length + '개' : '')
+            + (notes.length ? '\n' + notes.join(' · ') : ''),
             'Imported ' + put + ' cells, ' + keys.length + ' images'), (j.skipped && j.skipped.length) ? 'warning' : 'success');
     };
 
