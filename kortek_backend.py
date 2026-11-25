@@ -10151,6 +10151,92 @@ def _ps_detect_variant(doc):
     return 'base'
 
 
+# 📐 사양서 계열마다 같은 것을 다른 이름으로 부른다(데이터) — 정렬할 때만 바꿔 읽는다, 값은 원문 그대로.
+#   (2026-11-25 실측: OBSIDIAN 계열은 'Converter Board' 장을 'LED Driver' 로, VCP 표 제목을 'VCP Code Table' 로 쓴다)
+_PS_PARSE_ALIASES = [
+    (r'LED\s*Driver', 'Converter Board'),
+    (r'^\s*VCP\s*Code\s*Table', 'VCP Specification'),
+    (r'^\s*Function\s*$', 'Signal'),          # 핀 표 머리글 — 보드마다 'Pin|Signal' 또는 'Pin|Function'
+]
+
+
+def _ps_alias(text):
+    t = text or ''
+    for rx, to in _PS_PARSE_ALIASES:
+        t = re.sub(rx, to, t, flags=re.I)
+    return t
+
+
+def _ps_norm(text):
+    """정렬용 글 — 별칭을 바꾸고, 장 번호('12.1 ', '7. ')·기호·띄어쓰기·대소문자를 지운다."""
+    t = _ps_alias(text)
+    t = re.sub(r'^\s*\d+(\.\d+)*\.?\s+', '', t)
+    return re.sub(r'[^0-9a-z가-힣]', '', t.lower())
+
+
+def _ps_align(tpl_items, src_items):
+    """두 문서의 내용 요소를 **순서를 지키며** 맞댄다(가중치 최장 공통 부분열).
+    ⚠️ 위치(몇 번째 요소)로 읽으면 장 하나만 더 있어도 그 뒤가 전부 밀린다 — 2021년 이후 원본 ~130개가 전부
+       일치율 50% 아래였다(2026-11-25 실측). 고정 글(장 제목·설명)·표 머리글·그림이 닻이 되고,
+       값만 있는 문단('{{scope}}')은 닻 사이에서 약하게 붙는다.
+    tpl_items: (kind, data) — kind P(고정 글)·M(앞머리 + 값)·W(값만)·T(표)·I(그림)
+    src_items: (kind, data) — kind P·T·I
+    돌려줌: {tpl 번호: (src 번호, 점수)}"""
+    def score(t, s):
+        tk, td = t
+        sk, sd = s
+        if tk == 'P' and sk == 'P':
+            if not td or not sd:
+                return 0
+            if td == sd:
+                return 10
+            a, b = td[:60], sd[:60]
+            if len(a) >= 8 and len(b) >= 8 and (a.startswith(b) or b.startswith(a)):
+                return 8
+            return 0
+        if tk == 'M' and sk == 'P':
+            return 9 if td and sd.startswith(td) else 0
+        if tk == 'W' and sk == 'P':
+            return 1
+        if tk == 'T' and sk == 'T':
+            tn, th = td
+            sn, sh = sd
+            fixed = [(i, h) for i, h in enumerate(th) if h]
+            if fixed:
+                hit = sum(1 for i, h in fixed if i < len(sh) and sh[i] == h)
+                if hit == len(fixed) and tn == sn:
+                    return 10
+                if hit * 2 >= len(fixed):
+                    return 6
+            return 3 if tn == sn else 1
+        if tk == 'I' and sk == 'I':
+            return 4
+        return 0
+    n, m = len(tpl_items), len(src_items)
+    dp = [[0] * (m + 1) for _ in range(n + 1)]
+    for i in range(n - 1, -1, -1):
+        row, nxt = dp[i], dp[i + 1]
+        ti = tpl_items[i]
+        for j in range(m - 1, -1, -1):
+            best = nxt[j] if nxt[j] > row[j + 1] else row[j + 1]
+            sc = score(ti, src_items[j])
+            if sc and sc + nxt[j + 1] > best:
+                best = sc + nxt[j + 1]
+            row[j] = best
+    out, i, j = {}, 0, 0
+    while i < n and j < m:
+        sc = score(tpl_items[i], src_items[j])
+        if sc and dp[i][j] == sc + dp[i + 1][j + 1]:
+            out[i] = (j, sc)
+            i += 1
+            j += 1
+        elif dp[i][j] == dp[i + 1][j]:
+            i += 1
+        else:
+            j += 1
+    return out
+
+
 def _ps_parse(src_bytes):
     """기존 사양서(.docx) → 칸 값·그림. 양식과 **같은 자리**(본문 몇 번째 요소·몇 번째 표의 몇 행 몇 열)에서 읽는다.
     ⚠️ 구조가 다른 문서면 자리가 어긋난다 — 그래서 표식이 없는 문단(공통 글)을 양식과 맞대어 본
@@ -10179,28 +10265,55 @@ def _ps_parse(src_bytes):
         return el.find('.//' + qn('w:drawing')) is not None or el.find('.//' + qn('w:object')) is not None \
             or el.find('.//' + qn('w:pict')) is not None
     tpl_pos = {}
-    k = 0
+    tc = []
     for i, el in enumerate(tb_all):
         if _is_content(el):
-            tpl_pos[i] = k
-            k += 1
+            tpl_pos[i] = len(tc)
+            tc.append(el)
     sb = [el for el in sb_all if _is_content(el)]
+
+    def _row0(tbl_el, marker_none):
+        tr = tbl_el.find(qn('w:tr'))
+        cells = tr.findall(qn('w:tc')) if tr is not None else []
+        out = []
+        for c in cells:
+            t = _ps_para_text(c)
+            out.append(None if (marker_none and '{{' in t) else _ps_norm(t))
+        return len(cells), out
+
+    def _tpl_item(el):
+        if el.tag == qn('w:tbl'):
+            return ('T', _row0(el, True))
+        t = _ps_para_text(el).strip()
+        if not t:
+            return ('I', None)
+        if '{{' in t:
+            lit = _ps_norm(t.split('{{', 1)[0])
+            return ('M', lit) if len(lit) >= 4 else ('W', None)
+        return ('P', _ps_norm(t))
+
+    def _src_item(el):
+        if el.tag == qn('w:tbl'):
+            return ('T', _row0(el, False))
+        t = _ps_para_text(el).strip()
+        return ('P', _ps_norm(t)) if t else ('I', None)
+
+    t_items = [_tpl_item(el) for el in tc]
+    amap = _ps_align(t_items, [_src_item(el) for el in sb])
 
     def _src_at(tpl_index):
         pos = tpl_pos.get(tpl_index)
-        return sb[pos] if pos is not None and pos < len(sb) else None
+        hit = amap.get(pos) if pos is not None else None
+        return sb[hit[0]] if hit else None
 
-    # 일치율 — 표식 없는 글 문단을 같은 자리끼리 비교
+    # 일치율 — 양식의 고정 글 문단 중 원본에서 **같은 글**과 맞대어진 비율
     checked = same = 0
-    for i, el in enumerate(tb_all):
-        if el.tag != qn('w:p') or i not in tpl_pos:
-            continue
-        t = _ps_para_text(el).strip()
-        if not t or '{{' in t:
+    for pos, it in enumerate(t_items):
+        if it[0] != 'P' or not it[1]:
             continue
         checked += 1
-        s_el = _src_at(i)
-        if s_el is not None and s_el.tag == qn('w:p') and _ps_para_text(s_el).strip()[:40] == t[:40]:
+        hit = amap.get(pos)
+        if hit and hit[1] >= 8:
             same += 1
 
     # 문단
@@ -10208,12 +10321,21 @@ def _ps_parse(src_bytes):
         bi = info.get('bodyIndex')
         s_el = _src_at(bi) if bi is not None else None
         if s_el is None or s_el.tag != qn('w:p'):
-            skipped.append(key)
+            if info.get('optional'):
+                values[key] = ''      # 선택 줄 — 원본에 없으면 빈 줄(출력에서 문단째 빠진다)
+            else:
+                skipped.append(key)
             continue
         text = _ps_para_text(s_el)
         if info.get('prefix'):
             lead = len(text) - len(text.lstrip())
             m = re.match(info['prefix'], text[lead:])
+            if not m:
+                # 계열마다 다른 이름('LED Driver Input Connector') — 별칭으로 바꿔 한 번 더(값 부분은 원문 그대로)
+                alt = _ps_alias(text[lead:])
+                m2 = re.match(info['prefix'], alt)
+                if m2 and alt[m2.end():] == text[lead:][len(text[lead:]) - len(alt) + m2.end():]:
+                    text, lead, m = alt, 0, m2
             if not m:
                 skipped.append(key)
                 continue
@@ -10223,15 +10345,54 @@ def _ps_parse(src_bytes):
             values[key] = text
 
     # 표
-    stables = src.tables
+    #   양식의 n 번째 표 → 맞대어진 원본 표(위치가 아니라 정렬로). 모양이 다르면(행·열 수) `shape` 로 드러낸다.
+    from docx.table import Table as _DocxTable
+    tpl_tbl_idx = [i for i, el in enumerate(tb_all) if el.tag == qn('w:tbl')]
+    shape = []
     for prefix, info in (schema.get('tables') or {}).items():
         if info.get('when') == 'touch' and variant != 'touch':
             continue
         ti = info.get('index')
-        if ti is None or ti >= len(stables):
+        s_el = _src_at(tpl_tbl_idx[ti]) if ti is not None and ti < len(tpl_tbl_idx) else None
+        if s_el is None or s_el.tag != qn('w:tbl'):
             skipped.append(prefix)
             continue
-        st = stables[ti]
+        # 칸 격자(병합 칸은 같은 칸이 되풀이된다 — 양식 빌더 `_cell_grid` 와 같은 규칙)
+        sgrid = [list(rw.cells) for rw in _DocxTable(s_el, src._body).rows]
+        tgrid = [list(rw.cells) for rw in _DocxTable(tb_all[tpl_tbl_idx[ti]], tpl._body).rows]
+        tr_n, sr_n = len(tgrid), len(sgrid)
+        tcn = max([len(x) for x in tgrid] or [0])
+        scn = max([len(x) for x in sgrid] or [0])
+        rmap = {r: r for r in range(min(tr_n, sr_n))}
+        cmap = {c: c for c in range(min(tcn, scn))}
+        if (tr_n, tcn) != (sr_n, scn):
+            # 모양이 다르면 칸 번호로 읽지 않는다 — 다음 줄 글이 넘어 들어오거나(열 수 차이) 행이 밀린다(행 추가).
+            #   행은 **첫 칸의 항목 이름**으로, 열은 **첫 행의 머리글**로 맞댄다(값 칸은 닻 사이에서 차례로).
+            def _lab_items(cells_list, tpl_side):
+                out = []
+                for x in cells_list:
+                    t = x.text if x is not None else ''
+                    if tpl_side and '{{' in t:
+                        out.append(('W', None))
+                    else:
+                        n = _ps_norm(t)
+                        out.append(('P', n) if (n or not tpl_side) else ('W', None))
+                return out
+            if tr_n != sr_n:
+                # 첫 줄(머리글)은 늘 첫 줄끼리 — 머리글 첫 칸이 달라('NO' ↔ 'VCP Code') 짝이 안 지어지면 값 행이 한 줄씩 밀린다
+                rmap = {0: 0}
+                rmap.update({a + 1: b + 1 for a, (b, _s) in _ps_align(
+                    _lab_items([rw[0] if rw else None for rw in tgrid[1:]], True),
+                    _lab_items([rw[0] if rw else None for rw in sgrid[1:]], False)).items()})
+            if tcn != scn and tgrid and sgrid:
+                cmap = {a: b for a, (b, _s) in _ps_align(_lab_items(tgrid[0], True), _lab_items(sgrid[0], False)).items()}
+            shape.append({'table': prefix, 'tpl': '%dx%d' % (tr_n, tcn), 'src': '%dx%d' % (sr_n, scn)})
+
+        def _read(rr, cc):
+            sr_, sc_ = rmap.get(rr), cmap.get(cc)
+            if sr_ is None or sc_ is None or sr_ >= len(sgrid) or sc_ >= len(sgrid[sr_]):
+                raise IndexError
+            return sgrid[sr_][sc_].text
         for r, row in enumerate(info.get('rows') or []):
             for cell in row.get('cells') or []:
                 key = cell.get('key')
@@ -10244,7 +10405,7 @@ def _ps_parse(src_bytes):
                     lab = (schema.get('labels') or {}).get(key) or {}
                     rr, cc = lab.get('row'), lab.get('col')
                 try:
-                    values[key] = st.cell(rr, cc).text
+                    values[key] = _read(rr, cc)
                 except Exception:
                     skipped.append(key)
 
@@ -10299,7 +10460,7 @@ def _ps_parse(src_bytes):
     if len(layout) != len(_ps_layout_of(tb_all)):
         layout = None
     return {'ok': True, 'variant': variant, 'values': values, 'images': images, 'skipped': skipped,
-            'layout': layout,
+            'layout': layout, 'shape': shape,
             'align': {'checked': checked, 'same': same,
                       'ratio': round(same / float(checked), 3) if checked else 0}}
 

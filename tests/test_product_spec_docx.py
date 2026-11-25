@@ -109,6 +109,85 @@ for variant in ('base', 'touch'):
     n_out = sum(1 for _ in d.element.body.iter(WSP))
     check(n_out == n_tpl - 2, '%s: 그림 빠진 자리의 덧그림만 지워져야 (양식 %d → %d)' % (variant, n_tpl, n_out))
 
+# ── 1-b. 구조가 다른 사양서 읽기 (원본 없이 — 채운 문서를 일부러 비틀어 본다) ───────────────
+#   (2026-11-25 실측: 위치로 읽던 파서는 원본 ~130개가 전부 일치율 50% 아래였다 — 장 하나·줄 하나만 달라도 밀렸다)
+print('1-b. 구조가 다른 문서')
+from docx.table import Table as _T  # noqa: E402
+vals = {}
+for k in schema['paras']:
+    vals[k] = 'P_' + k
+for pre, t in schema['tables'].items():
+    for row in t['rows']:
+        for c in row['cells']:
+            if c.get('key'):
+                vals[c['key']] = 'V_' + c['key']
+vals['feat4'] = ''
+r = client.post('/doc/product-spec-docx', json={'name': 'x', 'variant': 'base', 'values': vals})
+d = Document(io.BytesIO(r.data))
+body = d.element.body
+
+
+def _ptext(el):
+    return ''.join(x.text or '' for x in el.iter(qn('w:t')))
+
+
+def _find_p(prefix):
+    for el in body.iterchildren():
+        if el.tag == qn('w:p') and _ptext(el).strip().startswith(prefix):
+            return el
+    raise AssertionError(prefix)
+
+
+def _set_text(el, old, new):
+    ts = list(el.iter(qn('w:t')))
+    whole = ''.join(t.text or '' for t in ts)
+    if old not in whole:
+        raise AssertionError(old)
+    ts[0].text = whole.replace(old, new, 1)      # 글이 여러 run 에 쪼개져 있다 — 첫 run 에 모은다
+    for t in ts[1:]:
+        t.text = ''
+
+
+import copy  # noqa: E402
+# ① 앞쪽에 장 하나(제목 + 표) 끼워 넣기 — 뒤가 전부 한 칸씩 밀린다
+anchor = _find_p('Electrical Specification')
+extra_p = copy.deepcopy(anchor)
+_set_text(extra_p, 'Electrical Specification', 'Extra Chapter Inserted')
+extra_t = copy.deepcopy(d.tables[3]._tbl)
+anchor.addprevious(extra_p)
+anchor.addprevious(extra_t)
+# ② 계열마다 다른 장 이름 — 'Converter Board' → 'LED Driver'
+_set_text(_find_p('Converter Board Specification'), 'Converter Board', 'LED Driver')
+_set_text(_find_p('Converter Board Input Connector'), 'Converter Board', 'LED Driver')
+# ③ VCP 표 첫 열(NO) 지우기 — 5열 → 4열
+vcp_t = [t for t in d.tables if 'V_vcp.r1.c1' in _ptext(t._tbl)][0]
+for tr in vcp_t._tbl.findall(qn('w:tr')):
+    tr.remove(tr.findall(qn('w:tc'))[0])
+grid = vcp_t._tbl.find(qn('w:tblGrid'))
+grid.remove(grid.findall(qn('w:gridCol'))[0])
+# ④ 개정 이력 표 마지막 행 지우기
+rev_t = [t for t in d.tables if 'V_rev.r1.c0' in _ptext(t._tbl)][0]
+rev_t._tbl.remove(rev_t._tbl.findall(qn('w:tr'))[-1])
+bio = io.BytesIO()
+d.save(bio)
+pj = kb._ps_parse(bio.getvalue())
+v = pj['values']
+check(pj['align']['ratio'] >= 0.9, '비튼 문서도 일치율 90%% 이상 (%s)' % pj['align'])
+for k in ('pwrVoltage', 'pwrConnPn', 'lumYL', 'panelVendor', 'ledBar', 'adH1', 'adH10', 'vcpTitle', 'scope', 'feat3'):
+    check(v.get(k, '').strip() == 'P_' + k, '끼운 장 뒤의 문단 %s 이 제자리 (%r)' % (k, v.get(k)))
+check(v.get('feat4') == '', '없는 선택 줄은 빈 값 (%r)' % v.get('feat4'))
+check(v.get('convIn', '').strip() == 'P_convIn', "'LED Driver' 이름도 convIn 으로 (%r)" % v.get('convIn'))
+for k in ('tim.r3.c2', 'adp8.r5.c3', 'cvi.r2.c1', 'scr.r4.c1', 'adc.r3.c2'):
+    check(v.get(k) == 'V_' + k, '표 칸 %s 제자리 (%r)' % (k, v.get(k)))
+check(v.get('vcp.r1.c1') == 'V_vcp.r1.c1' and v.get('vcp.r5.c4') == 'V_vcp.r5.c4',
+      '열 하나 빠진 VCP 표도 머리글로 열을 맞춘다 (%r, %r)' % (v.get('vcp.r1.c1'), v.get('vcp.r5.c4')))
+check('vcp.r1.c0' in pj['skipped'] and 'vcp.r1.c0' not in v, '원본에 없는 열(NO)은 지어내지 않고 못 읽음으로')
+check(any(s['table'] == 'vcp' for s in pj['shape']) and any(s['table'] == 'rev' for s in pj['shape']),
+      '모양이 다른 표를 shape 로 드러낸다 (%s)' % pj['shape'])
+check(v.get('rev.r4.c3') == 'V_rev.r4.c3' and 'rev.r5.c0' in pj['skipped'], '개정 이력: 있는 행은 읽고 없는 행은 못 읽음')
+check(all(not str(x).startswith('V_') or str(x) == 'V_' + k for k, x in v.items()),
+      '어떤 칸에도 남의 칸 값이 들어가지 않는다: %s' % [(k, x) for k, x in v.items() if str(x).startswith('V_') and str(x) != 'V_' + k][:5])
+
 # ── 2. 원본 왕복 (인자로 원본을 준 경우만) ─────────────────────────────────────
 srcs = sys.argv[1:]
 if srcs:

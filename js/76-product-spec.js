@@ -1382,6 +1382,13 @@
             + _t('터치 장: ', 'Touch chapter: ') + (j.variant === 'touch' ? 'YES' : 'NO') + '\n'
             + _t('양식과 맞는 정도: ', 'Structure match: ') + Math.round((ratio || 0) * 100) + '%'
             + (ratio < 0.9 ? _t('\n⚠️ 양식과 구조가 많이 달라 일부 칸이 엉뚱한 자리로 갈 수 있습니다.', '\n⚠️ Structure differs.') : '')
+            // 장·제목은 맞대어 찾지만(백엔드 `_ps_align`) 표 모양(행·열 수)은 양식 그대로 나간다 — 넘치는 행·없는 열을 미리 알린다
+            + ((j.shape && j.shape.length)
+                ? _t('\n📐 양식과 모양이 다른 표 ' + j.shape.length + '개: ', '\n📐 Tables shaped differently: ')
+                    + j.shape.slice(0, 6).map(function (s) { return s.table + ' ' + s.src + '→' + s.tpl; }).join(', ')
+                    + (j.shape.length > 6 ? ' …' : '')
+                    + _t('\n   (머리글·항목 이름으로 맞춰 읽고, 양식에 없는 행·열은 빠집니다)', '\n   (matched by headers; extra rows/columns are dropped)')
+                : '')
             + _t('\n\n앱이 아는 칸(KTK PN·패널 사양 등)은 앱 값을 그대로 두고, 앱이 모르는 칸만 채웁니다. 이 리비전의 그림은 바뀝니다. 계속할까요?',
                  '\n\nApp-known cells keep app values; only the rest is filled. Continue?');
         if (!confirm(msg)) return;
