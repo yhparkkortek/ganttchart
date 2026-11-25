@@ -988,8 +988,6 @@ button:disabled:not(.topbar-menu-item), input[type="button"]:disabled, input[typ
 
 /* 📑 [2026-11-23] Project Review — BOM 과 같은 구조: 본문 상자는 안 스크롤, 안쪽 #ps-scroll(표·근거)만 스크롤 */
 #tab-psummary > .concept-tab-wrap > #psummary-page { flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column; margin-bottom: 0 !important; }
-/* 📑 [2026-11-25] 주간 보고 ↔ 프로젝트 리뷰 전환 줄(js/78) — 헤더 **위** 한 줄. 토글 모양은 Calendar 월/주(.cal-view-toggle) 그대로. */
-.rpt-tabs { display: flex; align-items: center; margin: 0 0 6px 0; flex-shrink: 0; }
 
 /* 3. 테이블을 감싼 .concept-section: 남은 공간 전체 차지 (flex:1) */
 #tab-address   > .concept-tab-wrap > .concept-section,
