@@ -349,7 +349,7 @@ window._applyAddressWorkbookBuffer = function(arrayBuffer, sourceLabel) {
         window.tabData.addressBook = list;
         window._addrSelectedRows = new Set();
         window.renderAddressTable();
-        alert('✅ ' + (sourceLabel || '파일') + '에서 주소록 ' + list.length + '명을 불러왔습니다.');
+        alert(window._t('✅ ' + (sourceLabel || '파일') + '에서 주소록 ' + list.length + '명을 불러왔습니다.', '✅ Loaded ' + list.length + ' address book entries from ' + (sourceLabel || 'the file') + '.'));
         return true;
     } catch (err) {
         alert(window._t('❌ 파일을 읽는 중 오류가 발생했습니다: ', '❌ An error occurred while reading the file: ') + err.message);

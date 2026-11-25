@@ -922,7 +922,7 @@ window._macFamilyPick = function(name, fid, members) {
 };
 window._macRejudgeNow = async function() {
     const btn = document.getElementById('mac-rejudge-btn');
-    if (!window.mailRouteRejudgePending) { alert('배분 판정 모듈(js/74)이 로드되지 않았습니다.'); return; }
+    if (!window.mailRouteRejudgePending) { alert(window._t('배분 판정 모듈(js/74)이 로드되지 않았습니다.', 'The placement module (js/74) is not loaded.')); return; }
     if (btn) { btn.disabled = true; btn.textContent = '⏳ 재판정 중…'; }
     try {
         await window.mailRouteRejudgePending({ force: true, max: 50 });
@@ -932,7 +932,7 @@ window._macRejudgeNow = async function() {
     finally { if (btn) { btn.disabled = false; btn.textContent = window._t('🧭 대기 중인 보관함 항목 지금 재판정', '🧭 Re-judge waiting inbox items now'); } }
 };
 window._macCompactIndex = async function() {
-    if (!window.mailRoutingCompactIndex) { alert('배분 판정 모듈(js/74)이 로드되지 않았습니다.'); return; }
+    if (!window.mailRoutingCompactIndex) { alert(window._t('배분 판정 모듈(js/74)이 로드되지 않았습니다.', 'The placement module (js/74) is not loaded.')); return; }
     if (!confirm(window._t('색인에서 미분류 군집 백로그를 떼어 보관 파일(App_Config/unmatchedClusters_archive.json)로 옮깁니다. 군집 감지가 꺼져 있을 때만 권장합니다. 진행할까요?',
                            'Move the unmatched-cluster backlog out of the index into an archive file (App_Config/unmatchedClusters_archive.json)? Recommended only while cluster detection is off.'))) return;
     try {
@@ -1325,14 +1325,14 @@ const AR = {
         const excludedCount = arr.filter(r => r.selected && r.task && !r.registered).length - validTargets.length;
 
         if (!validTargets.length) {
-            alert(excludedCount > 0 ? '⚠️ 날짜가 없는 항목은 등록할 수 없습니다. (제외됨)' : '등록할 항목을 체크해주세요.');
+            alert(excludedCount > 0 ? window._t('⚠️ 날짜가 없는 항목은 등록할 수 없습니다. (제외됨)', '⚠️ Items without a date cannot be registered. (excluded)') : window._t('등록할 항목을 체크해주세요.', 'Check the items to register.'));
             return;
         }
 
-        let previewMsg = `✅ 총 ${validTargets.length}개 항목을 일괄 등록합니다.\n`;
-        if (excludedCount > 0) previewMsg += `\n⚠️ 날짜가 없는 ${excludedCount}개 항목은 자동으로 제외되었습니다.`;
-        previewMsg += '\n\n[등록할 업무 목록]\n' + validTargets.map(r => '• ' + (r.task['업무명']||'새업무')).join('\n');
-        if (!confirm(previewMsg + '\n\n위 내용으로 등록하시겠습니까?')) return;
+        let previewMsg = window._t(`✅ 총 ${validTargets.length}개 항목을 일괄 등록합니다.\n`, `✅ Registering ${validTargets.length} item(s) at once.\n`);
+        if (excludedCount > 0) previewMsg += window._t(`\n⚠️ 날짜가 없는 ${excludedCount}개 항목은 자동으로 제외되었습니다.`, `\n⚠️ ${excludedCount} item(s) without a date were excluded automatically.`);
+        previewMsg += window._t('\n\n[등록할 업무 목록]\n', '\n\n[Tasks to register]\n') + validTargets.map(r => '• ' + (r.task['업무명']||window._t('새업무', 'New task'))).join('\n');
+        if (!confirm(previewMsg + window._t('\n\n위 내용으로 등록하시겠습니까?', '\n\nRegister as above?'))) return;
 
         for (let i = arr.length - 1; i >= 0; i--) {
             const r = arr[i];
@@ -1358,14 +1358,14 @@ const AR = {
         const incomplete = validTargets.filter(r =>
             (r.task['시작일']||'').includes('날짜확인필요') || (r.task['완료일']||'').includes('날짜확인필요')
         );
-        let previewMsg = `📥 총 ${validTargets.length}개 항목을 업무 보관함으로 이동합니다.\n\n[이동할 업무 목록]\n`
+        let previewMsg = window._t(`📥 총 ${validTargets.length}개 항목을 업무 보관함으로 이동합니다.\n\n[이동할 업무 목록]\n`, `📥 Moving ${validTargets.length} item(s) to the task inbox.\n\n[Tasks to move]\n`)
             + validTargets.map(r => '• ' + (r.task['업무명']||'새업무') + (
-                ((r.task['시작일']||'').includes('날짜확인필요') || (r.task['완료일']||'').includes('날짜확인필요')) ? ' ⚠️날짜확인필요' : ''
+                ((r.task['시작일']||'').includes('날짜확인필요') || (r.task['완료일']||'').includes('날짜확인필요')) ? window._t(' ⚠️날짜확인필요', ' ⚠️check date') : ''
               )).join('\n');
         if (incomplete.length) {
-            previewMsg += `\n\n⚠️ ${incomplete.length}개 항목은 시작일/완료일이 미확정 상태입니다.\n보관함에는 담을 수 있지만, "다른 프로젝트로 전송" 시에는 날짜를 먼저 확정해야 합니다.`;
+            previewMsg += window._t(`\n\n⚠️ ${incomplete.length}개 항목은 시작일/완료일이 미확정 상태입니다.\n보관함에는 담을 수 있지만, "다른 프로젝트로 전송" 시에는 날짜를 먼저 확정해야 합니다.`, `\n\n⚠️ ${incomplete.length} item(s) have no fixed start/end date.\nThey can go into the inbox, but the dates must be fixed before "Send to another project".`);
         }
-        if (!confirm(previewMsg + '\n\n위 내용으로 이동하시겠습니까?')) return;
+        if (!confirm(previewMsg + window._t('\n\n위 내용으로 이동하시겠습니까?', '\n\nMove as above?'))) return;
 
         let count = 0;
         for (const r of validTargets) {

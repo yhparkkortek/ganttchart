@@ -996,7 +996,7 @@
                         if (opts.suppressAlert) {
                             window.showToast(_merge3.summaryMsg + window._t(' (🕒 변경 이력 확인에서 상세 확인)', ' (see 🕒 Edit History for details)'), 'warning', 8000);
                         } else {
-                            alert(_merge3.summaryMsg + '\n\n(자세한 내용은 하단 [🕒 변경 이력 확인]에서 확인할 수 있습니다)');
+                            alert(_merge3.summaryMsg + window._t('\n\n(자세한 내용은 하단 [🕒 변경 이력 확인]에서 확인할 수 있습니다)', '\n\n(See [🕒 Change history] below for details)'));
                         }
                     } else {
                         window.showToast(_merge3.summaryMsg, 'info');

@@ -200,7 +200,7 @@
             }
             if (window.showToast && window.INDEX_SELFHEAL.toastOncePerSession && !_toasted) {
                 _toasted = true;
-                window.showToast('🩹 프로젝트 색인 ' + fresh.length + '건을 되살렸습니다 (옛 버전 앱이 열린 PC 가 있을 수 있습니다)',
+                window.showToast(window._t('🩹 프로젝트 색인 ' + fresh.length + '건을 되살렸습니다 (옛 버전 앱이 열린 PC 가 있을 수 있습니다)', '🩹 Restored ' + fresh.length + ' project index entr(ies) (a PC may still be running an old version of the app)'),
                                  'warning', 7000);
             }
             return fresh.length;

@@ -241,7 +241,7 @@
                         
                         if (!isGoogleLoggedIn) {
                             let savedName = localStorage.getItem('gantt_local_user') || "";
-                            let localName = prompt("수정이력에 기록될 이름을 입력해주세요.", savedName);
+                            let localName = prompt(window._t("수정이력에 기록될 이름을 입력해주세요.", "Enter the name to record in the change history."), savedName);
                             if (!localName || localName.trim() === '') localName = savedName || "로컬 사용자";
                             localName = localName.trim();
                             localStorage.setItem('gantt_local_user', localName);

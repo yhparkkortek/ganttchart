@@ -19,7 +19,7 @@ window.mcAddUnitConfirm = function() {
     if (!name) { alert(window._t('이름을 입력해주세요.', 'Please enter a name.')); return; }
     const units = window.getMcUnits();
     if (units.some(function(u) { return u.toLowerCase() === name.toLowerCase(); })) {
-        alert('"' + name + '"은 이미 추가되어 있습니다.');
+        alert(window._t('"' + name + '"은 이미 추가되어 있습니다.', '"' + name + '" is already added.'));
         return;
     }
 
@@ -31,7 +31,7 @@ window.mcAddUnitConfirm = function() {
         const oldName = ov.dataset.renameTarget;
         if (name !== oldName) {
             if (units.some(function(u) { return u.toLowerCase() === name.toLowerCase() && u !== oldName; })) {
-                alert('"' + name + '"은 이미 다른 제품구분자로 사용 중입니다.');
+                alert(window._t('"' + name + '"은 이미 다른 제품구분자로 사용 중입니다.', '"' + name + '" is already used by another product unit.'));
                 return;
             }
             const idx = units.indexOf(oldName);
@@ -95,7 +95,7 @@ window.mcAddUnitConfirm = function() {
 //    확인창 + 관리자 비밀번호 인증(계획 삭제 등 다른 파괴적 액션과 동일한 절차)을 추가함.
 window.mcRemoveUnit = function(unit) {
     if (!unit) return;
-    if (!confirm(`"${unit}" 제품구분자를 삭제할까요?\n(입력된 데이터는 남지만 탭 목록에서 사라져 다시 찾기 어려워집니다)`)) return;
+    if (!confirm(window._t(`"${unit}" 제품구분자를 삭제할까요?\n(입력된 데이터는 남지만 탭 목록에서 사라져 다시 찾기 어려워집니다)`, `Delete the product unit "${unit}"?\n(The entered data stays, but it disappears from the tab list and is hard to find again)`))) return;
     if (!window.verifyAdminPassword(`🔒 "${unit}" 제품구분자를 삭제하려면 관리자 비밀번호를 입력하세요.\n(대/소문자 구분 없음)`)) {
         alert(window._t('❌ 비밀번호 인증 실패. 삭제가 취소되었습니다.', '❌ Authentication failed. Deletion cancelled.'));
         return;

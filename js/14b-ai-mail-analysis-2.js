@@ -935,6 +935,6 @@ window.insertMailTask = function() {
     logChange(pos, -1, "없음", `메일 분석으로 추가: ${built.taskName}`);
     window.closeMailAnalyzer();
     window.recalculateSchedules();
-    window.showToast(`✅ "${built.taskName}" 업무가 추가되었습니다!`, 'success', 3000);
+    window.showToast(window._t(`✅ "${built.taskName}" 업무가 추가되었습니다!`, `✅ Task "${built.taskName}" added!`), 'success', 3000);
 };
 

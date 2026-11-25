@@ -723,6 +723,6 @@
 
         window._selectedRows = new Set();
         if (typeof window.syncRowHighlight === 'function') window.syncRowHighlight();
-        alert(changedCount > 0 ? `✅ ${changedCount}건의 일정이 재계산되고, 구간 내 행 순서도 정리되었습니다.\n(사유: ${reason})` : 'ℹ️ 선택한 구간의 일정에 변경이 없어 순서만 정리되었습니다.');
+        alert(changedCount > 0 ? window._t(`✅ ${changedCount}건의 일정이 재계산되고, 구간 내 행 순서도 정리되었습니다.\n(사유: ${reason})`, `✅ ${changedCount} schedule(s) recalculated and the row order in the range tidied.\n(Reason: ${reason})`) : window._t('ℹ️ 선택한 구간의 일정에 변경이 없어 순서만 정리되었습니다.', 'ℹ️ No schedule changes in the selected range — only the order was tidied.'));
     };
 

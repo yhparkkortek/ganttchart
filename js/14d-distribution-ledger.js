@@ -497,7 +497,7 @@ window.inboxDistExecute = async function(attempt) {
             // 🎓 [2026-11-24 실측] 이 길(🚀 전송 실행)은 직접 PATCH 라 배치 기록 훅(js/74 _mailRoutePlaced)을 안 지났다 —
             //    사람이 고른 배치인데 학습·스레드 근거로 안 남았다(133006 승인원 → SHUFFLER 3.0). 사람 배치로 적는다.
             try { if (window._mailRoutePlaced) window._mailRoutePlaced(ctx.fileId, ctx.fileName, ctx.task, ctx.mailRaw || null, 'human'); } catch (e) { /* 기록 실패는 배치에 영향 없음 */ }
-            if (window.showToast) window.showToast(`🎉 "${built.taskName}" → [${ctx.fileName}] 전송 완료 (${posInfo.previewLabel})`, 'info');
+            if (window.showToast) window.showToast(window._t(`🎉 "${built.taskName}" → [${ctx.fileName}] 전송 완료 (${posInfo.previewLabel})`, `🎉 "${built.taskName}" → [${ctx.fileName}] sent (${posInfo.previewLabel})`), 'info');
 
             window.closeInboxDist();
             window.renderTaskInbox();

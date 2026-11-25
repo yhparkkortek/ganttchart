@@ -1828,17 +1828,17 @@
                 var v = data.vendors[0];
                 if (v.name) {
                     inputEl.value = v.name;
-                    if (window.showToast) window.showToast('🏭 ' + v.name + (v.lifnr ? ' (' + v.lifnr + ')' : '') + ' 자동 입력됨');
+                    if (window.showToast) window.showToast('🏭 ' + v.name + (v.lifnr ? ' (' + v.lifnr + ')' : '') + window._t(' 자동 입력됨', ' filled in automatically'));
                 } else {
-                    if (window.showToast) window.showToast('⚠️ 업체명(NAME1) 컬럼을 찾지 못했습니다. 컬럼: ' + (data.cols || []).slice(0,8).join(', '));
+                    if (window.showToast) window.showToast(window._t('⚠️ 업체명(NAME1) 컬럼을 찾지 못했습니다. 컬럼: ', '⚠️ Vendor name (NAME1) column not found. Columns: ') + (data.cols || []).slice(0,8).join(', '));
                 }
             } else if (data.ok) {
-                if (window.showToast) window.showToast('⚠️ 사업자번호 ' + raw + ' 조회 결과 없음');
+                if (window.showToast) window.showToast(window._t('⚠️ 사업자번호 ' + raw + ' 조회 결과 없음', '⚠️ No result for business no. ' + raw));
             } else {
-                if (window.showToast) window.showToast('⚠️ SAP 조회 실패: ' + (data.error || '알 수 없는 오류'));
+                if (window.showToast) window.showToast(window._t('⚠️ SAP 조회 실패: ', '⚠️ SAP lookup failed: ') + (data.error || window._t('알 수 없는 오류', 'unknown error')));
             }
         } catch (e) {
-            if (window.showToast) window.showToast('⚠️ 백엔드 연결 실패: ' + (e && e.message ? e.message : String(e)));
+            if (window.showToast) window.showToast(window._t('⚠️ 백엔드 연결 실패: ', '⚠️ Backend connection failed: ') + (e && e.message ? e.message : String(e)));
         } finally {
             inputEl.disabled = false;
             inputEl.placeholder = '(선택)';

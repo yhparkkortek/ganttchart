@@ -318,7 +318,7 @@ window.calSyncToGist = async function() {
 
     let token = localStorage.getItem('gantt_gist_token');
     if (!token) {
-        token = prompt('GitHub Personal Access Token을 입력하세요 (gist 권한만 필요, 최초 1회):');
+        token = prompt(window._t('GitHub Personal Access Token을 입력하세요 (gist 권한만 필요, 최초 1회):', 'Enter a GitHub Personal Access Token (gist scope only, first time only):'));
         if (!token) return;
         localStorage.setItem('gantt_gist_token', token);
     }
@@ -354,7 +354,7 @@ window.calSyncToGist = async function() {
             localStorage.setItem('gantt_gist_id', gistId);
         }
         const rawUrl = data.files[filename].raw_url.replace(/\/raw\/[0-9a-f]+\//, '/raw/'); // 항상 최신본을 가리키는 URL
-        prompt('구글 캘린더 좌측 [다른 캘린더 +] → "URL로 만들기"에 아래 주소를 붙여넣으세요:\n(최초 1회만 등록하면 이후 자동 갱신됩니다)', rawUrl);
+        prompt(window._t('구글 캘린더 좌측 [다른 캘린더 +] → "URL로 만들기"에 아래 주소를 붙여넣으세요:\n(최초 1회만 등록하면 이후 자동 갱신됩니다)', 'In Google Calendar, [Other calendars +] → "From URL", paste the address below:\n(Register once and it updates automatically after that)'), rawUrl);
     } catch (err) {
         alert(window._t('동기화 실패: ', 'Sync failed: ') + err.message + window._t('\n토큰이 올바른지, gist 권한이 있는지 확인해주세요.', '\nPlease check that the token is correct and has gist permission.'));
     }

@@ -654,7 +654,7 @@
     //    Gantt(changeLogs)뿐 아니라 M.C Table 등 다른 이력 페이지에서도 동일하게 재사용.
     //    취소(Cancel) 시 null 반환 → 호출부는 작업 자체를 중단하도록 처리할 것.
     window.promptOptionalReason = function(actionLabel) {
-        const input = prompt(`📝 ${actionLabel} 사유를 입력해주세요.\n(선택 입력 — 비워두고 확인을 누르면 "사유 미기재"로 기록됩니다)`, '');
+        const input = prompt(window._t(`📝 ${actionLabel} 사유를 입력해주세요.\n(선택 입력 — 비워두고 확인을 누르면 "사유 미기재"로 기록됩니다)`, `📝 Enter a reason for ${actionLabel}.\n(Optional — leave blank and press OK to record "no reason given")`), '');
         if (input === null) return null;
         const trimmed = input.trim();
         return trimmed ? trimmed : '사유 미기재';
@@ -804,7 +804,7 @@
             say(removedCount + '건의 ' + scope.label + '을 삭제했습니다.');
         };
 
-        const confirmMsg = fromStr + ' ~ ' + toStr + ' 구간의 ' + scope.label + '을 삭제하시겠습니까? (되돌릴 수 없습니다)';
+        const confirmMsg = window._t(fromStr + ' ~ ' + toStr + ' 구간의 ' + scope.label + '을 삭제하시겠습니까? (되돌릴 수 없습니다)', 'Delete ' + scope.label + ' from ' + fromStr + ' to ' + toStr + '? (cannot be undone)');
         if (window.bmConfirmModal) window.bmConfirmModal(confirmMsg, doDelete);
         else if (confirm(confirmMsg)) doDelete();
     };

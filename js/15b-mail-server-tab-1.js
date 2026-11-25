@@ -1693,8 +1693,8 @@ window._autoMailFetchTick = async function() {
                             function(target, result) {
                                 if (window.showToast) {
                                     window.showToast(result.ok
-                                        ? `🎯 "${item.task['업무명']}" 추가매칭 자동배치 완료 → ${target.file_name} (${result.label || ''})`
-                                        : `⚠️ "${item.task['업무명']}" 추가매칭 등록 실패 → ${target ? target.file_name : '?'} (${result.reason || ''})`, result.ok ? 'info' : 'error');
+                                        ? window._t(`🎯 "${item.task['업무명']}" 추가매칭 자동배치 완료 → ${target.file_name} (${result.label || ''})`, `🎯 "${item.task['업무명']}" extra match auto-placed → ${target.file_name} (${result.label || ''})`)
+                                        : window._t(`⚠️ "${item.task['업무명']}" 추가매칭 등록 실패 → ${target ? target.file_name : '?'} (${result.reason || ''})`, `⚠️ "${item.task['업무명']}" extra match failed → ${target ? target.file_name : '?'} (${result.reason || ''})`), result.ok ? 'info' : 'error');
                                 }
                             }
                         );
@@ -2104,7 +2104,7 @@ window._msRenderQueueModal = function(type) {
             if (ruleBtn) {
                 const domain = ruleBtn.dataset.domain;
                 if (!domain) return;
-                if (!confirm(`"${domain}" 도메인을 자동폐기 규칙에 영구 등록할까요?\n앞으로 이 도메인에서 오는 메일은 AI 분석 없이 조용히 폐기됩니다.`)) return;
+                if (!confirm(window._t(`"${domain}" 도메인을 자동폐기 규칙에 영구 등록할까요?\n앞으로 이 도메인에서 오는 메일은 AI 분석 없이 조용히 폐기됩니다.`, `Permanently add "${domain}" to the auto-discard rules?\nMail from this domain will be quietly discarded without AI analysis.`))) return;
                 window._msAddFilterRule('blockedDomains', domain);
                 const r = window._msQueueRows && window._msQueueRows[Number(ruleBtn.dataset.idx)];
                 if (r) window._msQueueRemoveRow(window._msQueueCurrentType, r.fileName);
@@ -2805,7 +2805,7 @@ window._msQueueReanalyzeMulti = async function(fileName, hint, targets) {
         let msg = '';
         if (result.okNames.length) msg += `🎉 ${result.okNames.length}개 프로젝트로 전송 완료!\n· ` + result.okNames.join('\n· ');
         if (result.failNames.length) msg += (msg ? '\n\n' : '') + `❌ ${result.failNames.length}건 실패\n· ` + result.failNames.join('\n· ');
-        alert(msg || '전송할 항목이 없습니다.');
+        alert(msg || window._t('전송할 항목이 없습니다.', 'Nothing to send.'));
     } catch (e) {
         if (window.showToast) window.showToast(window._t('⚠️ 재분석 중 오류: ' + e.message, '⚠️ Error during re-analysis: ' + e.message), 'error');
     }

@@ -559,7 +559,7 @@
 
     /** 🔑 설정을 열고 🚀 간편 전환 패널까지 펼쳐 준다 — "어디서 하나"를 묻지 않게. */
     window.storageOpenQuickSwitch = async function () {
-        if (!window.openSapLoginSettings) { alert('설정 화면을 찾지 못했습니다.'); return; }
+        if (!window.openSapLoginSettings) { alert(window._t('설정 화면을 찾지 못했습니다.', 'Could not find the settings screen.')); return; }
         await window.openSapLoginSettings();
         setTimeout(function () {
             var box = document.getElementById('naslogin-quick');

@@ -1159,7 +1159,7 @@ window.inboxQuickRegisterMatched = function(uid) {
         .then(function(result) {
             if (result.ok) {
                 window.TaskInbox.setStatus(uid, '배치됨', { type: '매칭프로젝트 즉시전송', target: target.file_name, at: new Date().toISOString() });
-                const msg = '✅ "' + taskName + '" → ' + target.file_name + ' 전송 완료 (' + (result.label || '') + ')';
+                const msg = '✅ "' + taskName + '" → ' + target.file_name + window._t(' 전송 완료 (', ' sent (') + (result.label || '') + ')';
                 if (window.showToast) window.showToast(msg, 'info'); else alert(msg);
             } else {
                 window.TaskInbox.setStatus(uid, '대기', { type: '전송실패', reason: result.reason, at: new Date().toISOString() });
@@ -1171,7 +1171,7 @@ window.inboxQuickRegisterMatched = function(uid) {
         .catch(function(e) {
             window.TaskInbox.setStatus(uid, '대기', { type: '전송오류', reason: e.message, at: new Date().toISOString() });
             window.renderTaskInbox();
-            if (window.showToast) window.showToast('❌ 전송 오류: ' + e.message, 'error');
+            if (window.showToast) window.showToast(window._t('❌ 전송 오류: ', '❌ Send error: ') + e.message, 'error');
         });
 };
 
@@ -1202,7 +1202,7 @@ window.inboxPlaceToCandidate = function(uid) {
         .then(function(result) {
             if (result.ok) {
                 window.TaskInbox.setStatus(uid, '배치됨', { type: 'AI분석 프로젝트 전송', target: target.file_name, at: new Date().toISOString() });
-                const msg = '✅ "' + taskName + '" → ' + target.file_name + ' 전송 완료 (' + (result.label || '') + ')';
+                const msg = '✅ "' + taskName + '" → ' + target.file_name + window._t(' 전송 완료 (', ' sent (') + (result.label || '') + ')';
                 if (window.showToast) window.showToast(msg, 'info'); else alert(msg);
             } else {
                 window.TaskInbox.setStatus(uid, '대기', { type: '전송실패', reason: result.reason, at: new Date().toISOString() });
@@ -1214,7 +1214,7 @@ window.inboxPlaceToCandidate = function(uid) {
         .catch(function(e) {
             window.TaskInbox.setStatus(uid, '대기', { type: '전송오류', reason: e.message, at: new Date().toISOString() });
             window.renderTaskInbox();
-            if (window.showToast) window.showToast('❌ 전송 오류: ' + e.message, 'error');
+            if (window.showToast) window.showToast(window._t('❌ 전송 오류: ', '❌ Send error: ') + e.message, 'error');
         });
 };
 
@@ -2458,7 +2458,7 @@ window.inboxPlaceToCurrent = function(uid) {
 
     const built = window.buildMailTaskRow(r, undefined, undefined, it.mailRaw);
     if (!built.row) {
-        if (window.showToast) window.showToast('⚠️ 이미 등록된 메일이라 배치하지 않았습니다 (중복).', 'warning');
+        if (window.showToast) window.showToast(window._t('⚠️ 이미 등록된 메일이라 배치하지 않았습니다 (중복).', '⚠️ Not placed — this mail is already registered (duplicate).'), 'warning');
         return;
     }
     const posInfo = window.computeL0InsertPos(globalData, colIdx, chosenL0, r['시작일'], useAuto, it.mailRaw && it.mailRaw.date);
@@ -2476,7 +2476,7 @@ window.inboxPlaceToCurrent = function(uid) {
         at: new Date().toISOString()
     });
     window.renderTaskInbox();
-    if (window.showToast) window.showToast(`✅ "${built.taskName}" 배치 완료 (${posInfo.previewLabel})`, 'info');
+    if (window.showToast) window.showToast(window._t(`✅ "${built.taskName}" 배치 완료 (${posInfo.previewLabel})`, `✅ "${built.taskName}" placed (${posInfo.previewLabel})`), 'info');
 };
 
 // ─── 💡 [처리됨 정리 모드] 처리됨(대기 아닌 상태) 항목을 어떻게 다룰지 두 모드 ─────────────────
@@ -2534,7 +2534,7 @@ window.mailRightToInbox = function() {
     // 💡 업무 보관함이 지금 열려있다면(둘 다 열어둔 상태), 그 자리에서 바로 목록도 갱신
     const ov = document.getElementById('task-inbox-overlay');
     if (ov && ov.style.display === 'flex' && window.renderTaskInbox) window.renderTaskInbox();
-    alert(`📥 "${window._mailAnalyzedResult['업무명'] || '새 업무'}" 업무를 보관함에 담았습니다.\n상단바 [업무 보관함]에서 프로젝트별로 배치할 수 있습니다.`);
+    alert(window._t(`📥 "${window._mailAnalyzedResult['업무명'] || '새 업무'}" 업무를 보관함에 담았습니다.\n상단바 [업무 보관함]에서 프로젝트별로 배치할 수 있습니다.`, `📥 "${window._mailAnalyzedResult['업무명'] || 'New task'}" was added to the inbox.\nYou can place it per project from [Task Inbox] in the top bar.`));
 };
 
 // 💡 원본 메일 보기 접기/펼치기 — 헤더는 한 번 클릭, 본문은 더블클릭으로 토글(2026-08-28 변경: 본문을

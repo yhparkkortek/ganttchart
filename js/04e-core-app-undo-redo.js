@@ -996,7 +996,7 @@
     window.saveScheduleBaseline = function() {
         if (!globalData || globalData.length <= 1) { alert(window._t('저장할 일정이 없습니다.', 'No schedule to save.')); return; }
         const defaultLabel = new Date().toLocaleString('ko-KR', { year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' });
-        const label = prompt('이 계획의 이름을 입력하세요 (예: 킥오프 계획, 26년 5월 계획 등)', defaultLabel);
+        const label = prompt(window._t('이 계획의 이름을 입력하세요 (예: 킥오프 계획, 26년 5월 계획 등)', 'Name this plan (e.g. Kickoff plan, May 2026 plan)'), defaultLabel);
         if (label === null) return;
 
         const rows = {};

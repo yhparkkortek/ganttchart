@@ -126,7 +126,7 @@
         }
         let localName = localStorage.getItem('gantt_local_user');
         if (!localName) {
-            localName = prompt("드라이브 미연동 상태입니다.\n수정이력에 기록될 PC(또는 사용자) 이름을 입력해주세요.", "로컬 사용자");
+            localName = prompt(window._t("드라이브 미연동 상태입니다.\n수정이력에 기록될 PC(또는 사용자) 이름을 입력해주세요.", "Not connected to storage.\nEnter the PC (or user) name to record in the change history."), window._t("로컬 사용자", "Local user"));
             if (!localName) localName = "로컬 사용자";
             localStorage.setItem('gantt_local_user', localName);
         }

@@ -399,7 +399,7 @@ window.pasteSelectAll = function(select) {
 window.pasteDeleteResult = function(idx) {
     const r = window._pasteResults[idx];
     if (!r) return;
-    if (!confirm(`"${r.task['업무명']||'새업무'}"\n이 분석 항목을 목록에서 삭제하시겠습니까?\n(등록된 항목이라도 Gantt Chart의 실제 데이터는 지워지지 않습니다)`)) return;
+    if (!confirm(`"${r.task['업무명']||'새업무'}"\n` + window._t(`이 분석 항목을 목록에서 삭제하시겠습니까?\n(등록된 항목이라도 Gantt Chart의 실제 데이터는 지워지지 않습니다)`, `Remove this analysis item from the list?\n(Even if it was registered, the actual Gantt chart data is not deleted)`))) return;
     window._pasteResults.splice(idx, 1);
     pasteRenderResultList();
 };
@@ -413,14 +413,14 @@ window.pasteBatchInsert = function() {
     const excludedCount = window._pasteResults.filter(r => r.selected && r.task && !r.registered).length - validTargets.length;
 
     if (!validTargets.length) {
-        alert(excludedCount > 0 ? '⚠️ 날짜가 없는 항목은 등록할 수 없습니다. (제외됨)' : '등록할 항목을 체크해주세요.');
+        alert(excludedCount > 0 ? window._t('⚠️ 날짜가 없는 항목은 등록할 수 없습니다. (제외됨)', '⚠️ Items without a date cannot be registered. (excluded)') : window._t('등록할 항목을 체크해주세요.', 'Check the items to register.'));
         return;
     }
 
-    let previewMsg = `✅ 총 ${validTargets.length}개 항목을 일괄 등록합니다.\n`;
-    if (excludedCount > 0) previewMsg += `\n⚠️ 날짜가 없는 ${excludedCount}개 항목은 자동으로 제외되었습니다.`;
-    previewMsg += '\n\n[등록할 업무 목록]\n' + validTargets.map(r => '• ' + (r.task['업무명']||'새업무')).join('\n');
-    if (!confirm(previewMsg + '\n\n위 내용으로 등록하시겠습니까?')) return;
+    let previewMsg = window._t(`✅ 총 ${validTargets.length}개 항목을 일괄 등록합니다.\n`, `✅ Registering ${validTargets.length} item(s) at once.\n`);
+    if (excludedCount > 0) previewMsg += window._t(`\n⚠️ 날짜가 없는 ${excludedCount}개 항목은 자동으로 제외되었습니다.`, `\n⚠️ ${excludedCount} item(s) without a date were excluded automatically.`);
+    previewMsg += window._t('\n\n[등록할 업무 목록]\n', '\n\n[Tasks to register]\n') + validTargets.map(r => '• ' + (r.task['업무명']||window._t('새업무', 'New task'))).join('\n');
+    if (!confirm(previewMsg + window._t('\n\n위 내용으로 등록하시겠습니까?', '\n\nRegister as above?'))) return;
 
     for (let i = window._pasteResults.length - 1; i >= 0; i--) {
         const r = window._pasteResults[i];
@@ -447,7 +447,7 @@ window.mfHandleFiles = function(files) {
     const _skipped = [];
     const validFiles = Array.from(files).filter(f => {
         if (f.name.toLowerCase().endsWith('.msg')) {
-            alert(`⚠️ '${f.name}'은 MSG 파일입니다.\nMSG 파일은 '메일 서버 탭'을 이용해 주세요.`);
+            alert(window._t(`⚠️ '${f.name}'은 MSG 파일입니다.\nMSG 파일은 '메일 서버 탭'을 이용해 주세요.`, `⚠️ '${f.name}' is an MSG file.\nUse the 'Mail server' tab for MSG files.`));
             return false; // 목록에서 제외
         }
         const hint = window._docReadHint ? window._docReadHint(f.name) : '';
@@ -1082,7 +1082,7 @@ window.clearGeminiCache = function() {
         const k = sessionStorage.key(i);
         if (k && k.startsWith('gemini_cache')) { sessionStorage.removeItem(k); count++; }
     }
-    window.showToast(count > 0 ? `🗑️ 분석 캐시 ${count}건을 초기화했습니다.\n다음 분석부터는 새로 계산됩니다.` : '초기화할 캐시가 없습니다.', (count > 0 ? 'success' : 'info'), 4000);
+    window.showToast(count > 0 ? window._t(`🗑️ 분석 캐시 ${count}건을 초기화했습니다.\n다음 분석부터는 새로 계산됩니다.`, `🗑️ Cleared ${count} analysis cache entr(ies).\nThe next analysis is computed fresh.`) : window._t('초기화할 캐시가 없습니다.', 'No cache to clear.'), (count > 0 ? 'success' : 'info'), 4000);
 };
 
 // 💡 완료일이 AI 분석/파일첨부 등 어떤 경로로 와도 공통 적용되는 기본값 로직
@@ -1266,7 +1266,7 @@ window.mfDeleteItem = function(idx) {
     const r = window._mfResults[idx];
     if (!r) return;
     const label = r.task ? (r.task['업무명'] || '새업무') : r.subject;
-    if (!confirm(`"${label}"\n이 분석 항목을 목록에서 삭제하시겠습니까?\n(등록된 항목이라도 Gantt Chart의 실제 데이터는 지워지지 않습니다)`)) return;
+    if (!confirm(`"${label}"\n` + window._t(`이 분석 항목을 목록에서 삭제하시겠습니까?\n(등록된 항목이라도 Gantt Chart의 실제 데이터는 지워지지 않습니다)`, `Remove this analysis item from the list?\n(Even if it was registered, the actual Gantt chart data is not deleted)`))) return;
     window._mfResults.splice(idx, 1);
     mfRenderList(window._mfResults);
 };
@@ -1475,16 +1475,16 @@ window.mfBatchInsert = async function() {
     const excludedCount = window._mfResults.filter(r => r.selected && r.task && !r.registered).length - validTargets.length;
 
     if (!validTargets.length) {
-        alert(excludedCount > 0 ? '⚠️ 날짜가 없는 항목은 등록할 수 없습니다. (제외됨)' : '등록할 항목을 체크해주세요.');
+        alert(excludedCount > 0 ? window._t('⚠️ 날짜가 없는 항목은 등록할 수 없습니다. (제외됨)', '⚠️ Items without a date cannot be registered. (excluded)') : window._t('등록할 항목을 체크해주세요.', 'Check the items to register.'));
         return;
     }
 
     // 2. 미리보기 검토 안전장치
-    let previewMsg = `✅ 총 ${validTargets.length}개 항목을 일괄 등록합니다.\n`;
-    if (excludedCount > 0) previewMsg += `\n⚠️ 날짜가 없는 ${excludedCount}개 항목은 자동으로 제외되었습니다.`;
-    previewMsg += '\n\n[등록할 업무 목록]\n' + validTargets.map(r => '• ' + (r.task['업무명']||'새업무')).join('\n');
+    let previewMsg = window._t(`✅ 총 ${validTargets.length}개 항목을 일괄 등록합니다.\n`, `✅ Registering ${validTargets.length} item(s) at once.\n`);
+    if (excludedCount > 0) previewMsg += window._t(`\n⚠️ 날짜가 없는 ${excludedCount}개 항목은 자동으로 제외되었습니다.`, `\n⚠️ ${excludedCount} item(s) without a date were excluded automatically.`);
+    previewMsg += window._t('\n\n[등록할 업무 목록]\n', '\n\n[Tasks to register]\n') + validTargets.map(r => '• ' + (r.task['업무명']||window._t('새업무', 'New task'))).join('\n');
     
-    if (!confirm(previewMsg + '\n\n위 내용으로 등록하시겠습니까?')) return;
+    if (!confirm(previewMsg + window._t('\n\n위 내용으로 등록하시겠습니까?', '\n\nRegister as above?'))) return;
 
     // 3. 등록 실행
     // mfBatchInsert 함수 루프 부분 수정
@@ -1518,7 +1518,7 @@ function mfDirectInsert(task, mailRaw, setAlarm) {
     // 📌 [2026-10-26 버그수정] 이 함수는 buildMailTaskRow를 안 거치는 별도 구현이라 그쪽에 추가한
     //    [출처] 태그 중복 방지(js/14b _mailFindDupBySourceTag)가 안 걸렸다 — 같은 가드를 여기도 적용.
     if (window._mailFindDupBySourceTag && window._mailFindDupBySourceTag(task['상세내용'], globalData, colIdx)) {
-        if (window.showToast) window.showToast('⚠️ 이미 등록된 메일이라 추가하지 않았습니다 (중복).', 'warning');
+        if (window.showToast) window.showToast(window._t('⚠️ 이미 등록된 메일이라 추가하지 않았습니다 (중복).', '⚠️ Not added — this mail is already registered (duplicate).'), 'warning');
         else alert(window._t('⚠️ 이미 등록된 메일입니다. 같은 업무가 이미 있어 중복으로 추가하지 않았습니다.', '⚠️ This mail is already registered — a duplicate task already exists, so nothing new was added.'));
         return false;
     }
