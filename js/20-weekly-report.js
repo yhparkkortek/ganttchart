@@ -21,6 +21,16 @@
         const yy = String(d.getFullYear()).slice(-2);
         return `${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')} '${yy}`;
     }
+    // 🎨 [2026-11-25] 화면 전용 날짜 글자색 — 일요일·공휴일=빨강, 토요일=파랑, 평일은 원래 색(다른 페이지와 같은 규칙, 색은 styles.css/js/21).
+    //    ⚠️ t.text(AI·PPT·검색이 읽는 글)는 그대로 두고, 화면에 그릴 때만 span 으로 감싼다.
+    function wrDateSpan(ts) {
+        if (!ts) return "";
+        const d = new Date(ts);
+        const ymd = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+        const c = window._dateDayCls ? window._dateDayCls(ymd) : '';
+        const txt = wrFormatMD(ts);
+        return (c === 'date-day-hol' || c === 'date-day-sat') ? '<span class="' + c + '">' + txt + '</span>' : txt;
+    }
     // 💡 PPT 출력 전용: 년도 제외 (화면 표시는 년도 포함 유지)
     function _pptFormatMD(ts) {
         if (!ts) return "";
@@ -246,9 +256,9 @@
             const dateLabel = `(${wrFormatMD(s)}~${wrFormatMD(e)})`;
 
             if (wrOverlaps(s, e, thisWeek.start, thisWeek.end)) {
-                thisList.push({ idx: i, row, text: `${name} ${dateLabel}` });
+                thisList.push({ idx: i, row, text: `${name} ${dateLabel}`, wrName: name, wrS: s, wrE: e });
             } else if (wrOverlaps(s, e, nextWeek.start, nextWeek.end)) {
-                nextList.push({ idx: i, row, text: `${name} ${dateLabel}` });
+                nextList.push({ idx: i, row, text: `${name} ${dateLabel}`, wrName: name, wrS: s, wrE: e });
             }
         }
         return { thisWeek, nextWeek, thisList, nextList, thisWeekNo: wrGetWeekNumber(thisWeek.start), nextWeekNo: wrGetWeekNumber(nextWeek.start) };
@@ -315,7 +325,7 @@
             const cls       = isAbove ? 'above' : 'below';
             return '<div class="sum-tl-dot" data-idx="' + i + '" style="left:' + dotPct + '%; cursor:pointer;" onclick="window.sumTlBringToFront(' + i + ', \'wr-level0-timeline\')"></div>'
                  + '<div class="sum-tl-bubble ' + cls + '" data-idx="' + i + '" data-dot-pct="' + dotPct + '" data-bubble-pct="' + bubblePct + '" data-above="' + (isAbove ? '1' : '0') + '" style="left:' + bubblePct + '%;" onclick="window.sumTlBringToFront(' + i + ', \'wr-level0-timeline\')">'
-                 + escapeHtml(it.name) + '<br><span class="sum-tl-date">' + wrFormatMD(it.start) + '</span></div>';
+                 + escapeHtml(it.name) + '<br><span class="sum-tl-date">' + wrDateSpan(it.start) + '</span></div>';
         }).join('');
 
         let todayPart = '';
@@ -350,7 +360,7 @@
             const _wrMailBtn = t.row._mailRaw ? `<button onclick="window.showGanttMailRaw(${t.idx}); event.stopPropagation();" style="font-size:11px; padding:3px 10px; background:#e7f3ff; color:#1971c2; border:1px solid #a5c8f0; border-radius:5px; cursor:pointer; margin-top:6px;">📧 ${window._currentLang === 'en' ? 'View Mail Source' : '원문 보기'}</button>` : '';
             return `
                 <div class="wr-print-item" style="border:1px solid #eee; border-radius:6px; padding:10px 12px; margin-bottom:8px;">
-                    <div style="font-weight:bold; font-size:16px; margin-bottom:4px;">${escapeHtml(t.text)}${assignee ? ` <span style="color:#6f42c1; font-weight:normal; font-size:11px;">[${escapeHtml(assignee)}]</span>` : ''}</div>
+                    <div style="font-weight:bold; font-size:16px; margin-bottom:4px;">${t.wrName != null ? escapeHtml(t.wrName) + ' (' + wrDateSpan(t.wrS) + '~' + wrDateSpan(t.wrE) + ')' : escapeHtml(t.text)}${assignee ? ` <span style="color:#6f42c1; font-weight:normal; font-size:11px;">[${escapeHtml(assignee)}]</span>` : ''}</div>
                     <div style="font-size:12px; color:#444; white-space:pre-line; line-height:1.3;">${escapeHtml(contentStr).replace(/\r/g, '').replace(/(\n[ \t]*){2,}/g, '\n')}</div>
                     ${_wrMailBtn}
                 </div>`;
@@ -368,7 +378,7 @@
             const { issue, fix } = wrExtractIssue(contentStr);
             if (!issue) return;
             const assignee = wrExtractAssignee(contentStr);
-            rows.push({ task: t.text, issue, fix, assignee, dateLabel: `${wrFormatMD(t.row._calcStartTs)}~${wrFormatMD(t.row._calcPlanTs)}` });
+            rows.push({ task: t.text, issue, fix, assignee, dateLabel: `${wrDateSpan(t.row._calcStartTs)}~${wrDateSpan(t.row._calcPlanTs)}` });
         });
         const _wiEn = window._currentLang === 'en';
         if (rows.length === 0) return '<div style="color:#999;">' + (_wiEn ? 'No issues this week.' : '이번 주 문제점/이슈 없음') + '</div>';

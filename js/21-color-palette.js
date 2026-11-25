@@ -421,6 +421,8 @@ window._cpApplyLive = function(hex, skipSave) {
         + '#doc-page-body input.date-day-sat { color: #1e6fe8 !important; font-weight: bold; }\n'
         + '#daily-day-label.date-day-hol { color: #d32f2f !important; }\n'
         + '#daily-day-label.date-day-sat { color: #1e6fe8 !important; }\n'
+        + '#weekly-report-page .date-day-hol { color: #d32f2f !important; font-weight: bold; }\n'
+        + '#weekly-report-page .date-day-sat { color: #1e6fe8 !important; font-weight: bold; }\n'
         + '.ui-round-wrap { border-color: ' + gen.border + ' !important; }\n'
         // Project list 마우스 올림 색도 팔레트를 따른다(고정 청록이었다)
         + '.pl-table tbody tr:hover td { background: ' + gen.bg + ' !important; }\n'
