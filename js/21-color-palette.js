@@ -398,7 +398,8 @@ window._cpApplyLive = function(hex, skipSave) {
     css += '.daily-cat-cell { color: ' + gen.darkText + ' !important; }\n'
         + '#daily-report-page tr.daily-zebra-b > td, #weekly-report-page tr.wr-zebra-b > td { background: ' + gen.zebraB + ' !important; }\n'
         // 🦓 [2026-11-25] Daily Report 월 보기 — 같은 선택자가 styles.css 에도 있다(작성함·주말 칸은 제 색 유지)
-        + '#daily-report-page tr.daily-mrow-b > td:not(.daily-mcell-has):not(.daily-mcell-off) { background: ' + gen.zebraB + ' !important; }\n'
+        + '#daily-report-page tr.daily-mrow-b > td:not(.daily-mcell-has) { background: ' + gen.zebraB + ' !important; }\n'
+        + '#daily-report-page table th.daily-mdate { color: #d32f2f !important; }\n'
         // ⚠️ Project Review 제브라는 tr 에 칠하고 !important 를 안 붙인다 — 근거에서 돌아올 때 inline 깜빡임이 이겨야 한다
         + '#psummary-page tr.ps-zebra-b, tr.jira-zebra-b { background: ' + gen.zebraB + '; }\n'
         + '.ui-round-wrap { border-color: ' + gen.border + ' !important; }\n'

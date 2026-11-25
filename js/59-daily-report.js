@@ -3370,21 +3370,21 @@
             var th = '<th style="padding:5px 7px; border:1px solid #cfe3e5; font-size:11.5px; color:#2c5f8a; white-space:nowrap;">' + esc(T('이름', 'Name')) + '</th>'
                 + daysM.map(function (d) {
                     var off = offDay(d);
-                    return '<th style="padding:4px 2px; border:1px solid #cfe3e5; font-size:10.5px; color:' + (off ? '#c0c0c0' : '#2c5f8a') + ';">' + (+d.slice(8)) + '</th>';
+                    return '<th class="daily-mdate" style="padding:4px 2px; border:1px solid #cfe3e5; font-size:10.5px; font-weight:bold; text-align:center;">' + (+d.slice(8)) + '</th>';
                 }).join('');
             var trs = peopleM.map(function (p, pi) {
                 // 🦓 줄 색은 다른 표와 같은 흰색/팔레트 제브라(사람 단위). 작성함·주말 칸만 클래스로 제 색(styles.css·js/21)
                 return '<tr' + ((pi % 2) ? ' class="daily-mrow-b"' : '') + '><td style="padding:5px 7px; border:1px solid #e3e6ea; font-size:12px; font-weight:bold; white-space:nowrap;">' + esc(p.name || p.key) + '</td>'
                     + daysM.map(function (d) {
                         var off = offDay(d), has = !!(byKeyM[p.key] && byKeyM[p.key][d]);
-                        var cls = off ? ' class="daily-mcell-off"' : (has ? ' class="daily-mcell-has"' : '');
+                        var cls = (!off && has) ? ' class="daily-mcell-has"' : '';
                         var mk = off ? '' : (has ? '✓' : '·');
                         return '<td' + cls + ' onclick="window._dailyGoDay(\'' + d + '\')" title="' + d + '" style="cursor:pointer; text-align:center; padding:3px 0; border:1px solid #e3e6ea; font-size:11px; color:' + (has ? '#2f7d3a' : '#b1432f') + ';">' + mk + '</td>';
                     }).join('') + '</tr>';
             }).join('');
             box.innerHTML =
-                '<div style="margin-bottom:9px; font-size:12.5px; color:#555;">' + esc(T('월 보기 — 칸을 누르면 그 날로 갑니다. 회색은 주말·공휴일입니다.',
-                    'Month view — click a cell to open that day. Grey = weekend/holiday.')) + '</div>' +
+                '<div style="margin-bottom:9px; font-size:12.5px; color:#555;">' + esc(T('월 보기 — 칸을 누르면 그 날로 갑니다.',
+                    'Month view — click a cell to open that day.')) + '</div>' +
                 '<div style="overflow-x:auto;"><table style="border-collapse:collapse;"><thead><tr style="background:#eef6f7;">' + th + '</tr></thead>' +
                 '<tbody>' + (trs || '<tr><td style="padding:24px 10px; text-align:center; color:#999; font-size:12.5px;">' + esc(T('이 달에 작성된 보고가 없습니다.', 'No reports this month.')) + '</td></tr>') + '</tbody></table></div>';
             return;

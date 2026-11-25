@@ -2645,9 +2645,9 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
 #daily-report-page tr.daily-zebra-b > td { background: #e8f2f3; }
 /* 🦓 [2026-11-25] 월 보기(사람×날짜 격자) — 이름 칸과 '미작성' 칸은 줄 제브라(흰색/zebraB), 작성함(✓ 초록)·주말/공휴일(회색)만 제 색을 지킨다.
    (예전엔 '미작성' 칸마다 분홍을 칠해 줄무늬가 보이지 않았다 — 미작성은 빨간 · 글자가 이미 말한다) js/21 _cpApplyLive 에 같은 선택자 */
-#daily-report-page tr.daily-mrow-b > td:not(.daily-mcell-has):not(.daily-mcell-off) { background: #e8f2f3; }
+#daily-report-page tr.daily-mrow-b > td:not(.daily-mcell-has) { background: #e8f2f3; }
 #daily-report-page td.daily-mcell-has { background: #eaf6ec; }
-#daily-report-page td.daily-mcell-off { background: #f6f7f8; }
+#daily-report-page table th.daily-mdate { color: #d32f2f !important; font-weight: bold; text-align: center; }
 /* 🦓 [2026-11-24] 주간보고 문제점 표도 같은 규칙 — 머리글 headerTint, 줄은 흰색/zebraB */
 #weekly-report-page thead th { background: #eef6f7; color: #00707d; }
 #weekly-report-page tbody > tr > td { background: #fff; }
