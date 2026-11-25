@@ -145,6 +145,16 @@
         'btn', 'mvd', 'mvdc', 'tvd', 'tpr'
     ];
     var STOP = {}; window.MAIL_ROUTING_STOPWORDS.forEach(function (w) { STOP[norm(w)] = 1; });
+    // [2026-11-25 실측] 전자결재 양식 이름(js/52 APPROVAL_DOC_TYPES — 통째·낱말)도 식별자가 아니다. 새 프로젝트 KONAMI 75" 를
+    //  결재에서 만들며 키워드에 '연구개발과제 발의서' 가 들어가자, 모든 발의서 결재가 그 프로젝트로 가는 판정이 됐다.
+    //  목록을 여기 베끼지 않고 카탈로그에서 읽는다 — 양식이 늘면 저절로 따라온다.
+    try {
+        (window.APPROVAL_DOC_TYPES || []).forEach(function (d) {
+            var f = String((d && d.form) || ''); if (!f) return;
+            STOP[norm(f)] = 1;
+            f.split(/[\s\/&()\[\]]+/).forEach(function (w) { var n = norm(w); if (n.length >= 2) STOP[n] = 1; });
+        });
+    } catch (e) { /* 카탈로그가 없으면 범용어 목록만 */ }
     // [2026-11-23] 우리 회사 이름 — 서명·제목("> KORTEK")·주소에 **모든 메일**에 나온다. 고객/가족 단서로 쓰면
     //  사내 공용 프로젝트(KORTEK>개발업무)가 늘 "다른 고객"으로 같이 걸려 거의 모든 메일이 충돌(대기)이 됐다(실측 60/144).
     window.MAIL_ROUTING_SELF_ORG = window.MAIL_ROUTING_SELF_ORG || ['kortek', '코텍'];
@@ -455,7 +465,8 @@
      *  'konami' 한 단어로 KGP-4(55") 에 들어갔다. 크기 읽기는 js/75 `_approvalSizesIn` 하나(규칙 두 벌 금지), 오차는 0.6(색인은 반올림). */
     function sizeGuard(j, mail) {
         if (!j || j.decision !== 'auto' || !j.target || P.sizeGuard === false) return j;
-        if (j.extra && j.extra.length) return j;   // 여러 곳에 뿌리는 판정(공통 건·형제 모두)은 사람이 정한 규칙이라 크기로 막지 않는다
+        if (/common_customer/.test(j.basis || '')) return j;   // 공통 건(회의록 등)을 고객사 전부에 뿌리는 건 사람이 정한 규칙 — 크기로 막지 않는다
+        //  형제 모두(family_all)는 막는다 — 'AMUSNET 43" 신규' 결재가 55" 형제 3곳에 들어갈 뻔했다(크기가 곧 '이 형제가 아니다'는 단서)
         var f = window._approvalSizesIn; if (typeof f !== 'function') return j;
         var tin = parseFloat(j.target.inch); if (!tin) return j;
         var ss = f(String((mail && mail.subject) || '')) || [];

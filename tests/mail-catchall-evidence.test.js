@@ -22,7 +22,7 @@ ctx._mailEvidenceNoAutoSweep = true;
 ctx._appUserKey = 'tester';   // 없으면 js/74 record() 가 아무것도 안 적는다(첫 실행에서 [4] 첫 항목이 그 덕에 거짓 통과했다)
 ctx._msParseSenderEmail = (s) => { const m = String(s || '').match(/[\w.+-]+@[\w.-]+\.\w+/); return m ? m[0].toLowerCase() : ''; };
 vm.createContext(ctx);
-for (const f of ['61-mail-evidence.js', '74-mail-routing.js', '75-approval-intake.js']) vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'js', f), 'utf8'), ctx, { filename: f });
+for (const f of ['52-approval-doctypes.js', '61-mail-evidence.js', '74-mail-routing.js', '75-approval-intake.js']) vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'js', f), 'utf8'), ctx, { filename: f });
 
 let pass = 0, fail = 0;
 function ok(n, c, d) { if (c) { pass++; console.log('  OK   ' + n); } else { fail++; console.log('  FAIL ' + n + (d !== undefined ? '  — ' + JSON.stringify(d).slice(0, 300) : '')); } }
@@ -96,6 +96,18 @@ j = ctx.mailRouteJudge({ subject: 'UK 견적 의뢰', sender: 'x@lnw.com', body:
 ok('반제품 코드(30xxxx)는 강한 단서가 아니다 — 모델명(SSBTX27)이 이긴다', !!(j.target && j.target.drive_file_id === 'SG'), j);
 j = ctx.mailRouteJudge({ subject: 'KONAMI 55" KGP-4 샘플', sender: 'x@kortek.co.kr', body: '', refs: [] }, C6, null);
 ok('크기가 맞으면 그대로 간다', !!(j.target && j.target.drive_file_id === 'KG'), j);
+
+console.log('\n[7] 결재 양식 이름은 식별자가 아니다 · 형제 모두 배치도 크기로 막는다 (2026-11-25 3차)');
+const KN = { drive_file_id: 'KN', file_name: 'KONAMI_C Curved (3000R)_75.0.json', model: 'C Curved (3000R)', customer: 'KONAMI>C Curved(3000R) EC', inch: '75', keywords: ['C Curved (3000R)', '연구개발과제 발의서', '502635'] };
+const A1 = { drive_file_id: 'A1', file_name: 'AMUSNET_FLAT_55.0.json', model: 'AMUSNET 55FLAT', customer: 'AMUSNET>55FLAT', inch: '55', keywords: ['55FLAT'] };
+const A2 = { drive_file_id: 'A2', file_name: 'AMUSNET_C-R2100_55.0.json', model: 'AMUSNET 55C-R2100', customer: 'AMUSNET>55C-R2100', inch: '55', keywords: ['55C-R2100'] };
+const C7 = [KN, KG, ST, A1, A2];
+j = ctx.mailRouteJudge({ subject: '연구개발과제 발의서 양식 변경 안내', sender: 'x@kortek.co.kr', body: '', refs: [] }, C7, null);
+ok('양식 이름 "연구개발과제 발의서" 로 그 프로젝트에 안 간다', !(j.target && j.target.drive_file_id === 'KN'), j);
+j = ctx.mailRouteJudge({ subject: '[연구개발과제 발의서] KONAMI>75" C Curved(3000R) EC', sender: 'x@kortek.co.kr', body: '', refs: [] }, C7, null);
+ok('제 결재는 그대로 간다(관리번호·모델)', !!(j.target && j.target.drive_file_id === 'KN'), j);
+j = ctx.mailRouteJudge({ subject: '[연구개발과제 발의서] AMUSNET 43" 신규', sender: 'x@kortek.co.kr', body: '', refs: [] }, C7, null);
+ok('43" 결재가 55" 형제 모두에 안 간다', !(j.decision === 'auto' && j.target && /^A/.test(j.target.drive_file_id)), j);
 
 console.log('\n결과: ' + pass + '/' + (pass + fail) + ' 통과');
 process.exit(fail ? 1 : 0);
