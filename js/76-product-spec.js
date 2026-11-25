@@ -39,6 +39,7 @@
     };
     window.PS_AUTO = window.PS_AUTO || {
         hasTouch: ['fn:hasTouch'],
+        refSummary: ['fn:refSummary'],
         docRev: ['fn:docRev'],
         hdrKtkPn: ['meta:KTKPN'],
         issueDate: ['fn:revDate'],
@@ -258,12 +259,26 @@
         return fetch('templates/PRODUCT SPEC_schema.json?v=' + v, { cache: 'no-store' })
             .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
             .then(function (j) {
-                _schema = j; _built = null;
+                _schema = j; _wireRefs(j); _built = null;
                 if (window._docState && window._docState.formId === FORM_ID && window._docRender) window._docRender();
             })
             .catch(function (e) { _schemaErr = (e && e.message) || String(e); });
     };
 
+    // 📑 참고 사양서 묶음에 드는 칸마다 'fn:ref:<칸>' 출처를 단다 — 보통은 맨 끝(앱 값이 먼저), `first` 묶음은 맨 앞
+    var _wireRefs = function (j) {
+        var keys = Object.keys(j.paras || {}).concat(Object.keys(j.header || {}));
+        Object.keys(j.tables || {}).forEach(function (pre) {
+            (j.tables[pre].rows || []).forEach(function (r) { (r.cells || []).forEach(function (c) { if (c.key) keys.push(c.key); }); });
+        });
+        keys.forEach(function (k) {
+            var g = _refGroupOf(k);
+            if (!g) return;
+            var tok = 'fn:ref:' + k, list = window.PS_AUTO[k] = window.PS_AUTO[k] || [];
+            if (list.indexOf(tok) >= 0) return;
+            if (g.first) list.unshift(tok); else list.push(tok);
+        });
+    };
     // 화면 구역 만들기 — 양식 본문 순서(bodyIndex)대로, 그룹 제목으로 나눈다.
     var _built = null;
     var _buildSections = function () {
@@ -296,7 +311,9 @@
         // 맨 앞 — 터치 장 스위치(이게 출력 양식 두 판 중 하나를 고른다)
         out.push({ title: _t('출력 설정', 'Output'), cols: 2, fields: [
             { key: 'hasTouch', label: _t('Touch Controller 장 (YES/NO)', 'Touch Controller chapter (YES/NO)'),
-              from: 'ps:hasTouch', hint: 'YES / NO' }
+              from: 'ps:hasTouch', hint: 'YES / NO' },
+            { key: 'refSummary', label: _t('📑 참고 사양서 (앱에 없는 칸을 가져오는 문서 — 출력엔 안 나감)', '📑 Reference specs (not printed)'),
+              from: 'ps:refSummary', wide: true }
         ] });
         var curFields = null, lastGroup = null;
         var groupTouch = function (g) { return /Touch/i.test(g.title); };
@@ -380,8 +397,11 @@
     // 이 모델 BOM 에서 그 부품 — null = BOM 을 안 받아서 모름 · false = BOM 엔 없음 · {code,name,desc}
     var _bomPart = function (cat) {
         var st = window._bomStore ? window._bomStore() : null;
-        var rows = (st && st.rows) || [];
-        if (!rows.length) return null;
+        return _bomPartIn((st && st.rows) || [], cat);
+    };
+    // 같은 규칙을 **다른 모델·다른 프로젝트의 BOM 행**에도 — 참고 사양서가 같은 보드를 쓰는지 가를 때(📑)
+    var _bomPartIn = function (rows, cat) {
+        if (!rows || !rows.length) return null;
         var rule = (window.PS_BOM_PARTS || {})[cat];
         if (!rule) return null;
         var best = null, bestLv = 99;
@@ -618,6 +638,228 @@
     var _otherRevField = function (n, key) {
         var f = window._docRevisionFields ? window._docRevisionFields(FORM_ID, 'R' + n) : null;
         return f ? f[key] : undefined;
+    };
+
+    // ── 📑 참고 사양서 — 앱에 출처가 없는 칸을 **같은 부품을 쓰는 다른 사양서**에서 (2026-11-25) ────────
+    //   사용자: "남은 빈 칸을 같은 AD 보드·같은 고객의 이전 사양서에서 옮겨 올까요?" → "네, 해줘".
+    //   실측: STELLAR32 세 모델은 전원 핀 표·A/D 핀 표·OSD·VCP 가 **글자까지 같았다** — 그 칸들은 모델이 아니라
+    //   A/D 보드(펌웨어)와 고객이 정한다. 그래서 묶음마다 "무엇이 같아야 옮겨도 되는가"를 데이터로 적는다.
+    //   · 옮기지 않고 **자동값으로** 보여 준다(저장하지 않는다 — 참고 문서가 고쳐지면 따라간다, 사람이 고치면 그 값).
+    //   · 한 묶음(표 하나·묶음 하나)은 **한 문서에서만** 가져온다 — 핀 표 반은 이 문서, 반은 저 문서가 되면 안 된다.
+    //   · 맞는 문서가 여럿이면 가까운 것부터: 같은 모델 다른 리비전 → 같은 프로젝트 다른 모델 → 다른 프로젝트(최근 저장 순).
+    //   · 부품이 같은지는 **BOM 품목 코드**로(없으면 이름) — 그 문서 모델의 BOM 으로 가른다. 모르면 옮기지 않는다.
+    //   ⚠️ 기구 도면(외형·터치 기구)은 모델마다 다르므로 **넣지 않는다**.
+    window.PS_REF_GROUPS = window.PS_REF_GROUPS || [
+        { id: 'pwr', label: _t('전원 커넥터 핀·단자', 'power connector'), match: ['adbd'],
+          keys: [/^pwrTermPn$/, /^pwrpin\./], images: ['img_pwrconn'] },
+        { id: 'cable', label: _t('전원 케이블', 'power cable'), match: ['adbd', 'customer'], keys: [/^pwrCable$/] },
+        { id: 'adp', label: _t('A/D 커넥터 핀 표', 'A/D pinouts'), match: ['adbd'],
+          keys: [/^adH\d+$/, /^adp\d+\./], images: ['img_adbd'] },
+        { id: 'osd', label: 'OSD', match: ['adbd'], keys: [/^osd\./], images: ['img_osdkey', 'img_osdmenu'] },
+        { id: 'vcp', label: 'VCP', match: ['adbd', 'customer'], keys: [/^vcp\./] },
+        { id: 'conv', label: _t('컨버터 커넥터 핀 표', 'converter pinouts'), match: ['conv'],
+          keys: [/^cvi\./, /^cvo\./], images: ['img_conv'] },
+        // 블록도엔 터치 컨트롤러도 그려진다 — 터치 구성까지 같아야('touchKind' = 둘 다 없음이거나 같은 컨트롤러)
+        { id: 'block', label: 'Block Diagram', match: ['adbd', 'conv', 'touchKind'], images: ['img_block'] },
+        { id: 'tcom', label: _t('터치 통신', 'touch communication'), match: ['touch'],
+          keys: [/^tcom\./], images: ['img_touchboard'] },
+        // 실제 EDID(스케일러 펌웨어) — 같은 A/D 보드·같은 패널 해상도면 표준값보다 그 문서 값이 맞다 → 표준값보다 **먼저**
+        { id: 'tim', label: _t('타이밍 표(실제 EDID)', 'timing (EDID)'), match: ['adbd', 'native'], keys: [/^tim\./], first: true }
+    ];
+    window.PS_REF_SCAN = window.PS_REF_SCAN || { maxProjects: 40 };
+    var PS_ID_CATS = { adbd: 'AD BOARD', conv: 'CONVERTER', touch: 'TOUCH CTRL' };
+    var _refGroupOf = function (key) {
+        var gs = window.PS_REF_GROUPS || [];
+        for (var i = 0; i < gs.length; i++) {
+            if ((gs[i].keys || []).some(function (re) { return re.test(key); })) return gs[i];
+        }
+        return null;
+    };
+    var _custKey = function (c) { return _alnum(String(c || '').split('>')[0]); };
+    // 부품의 정체 — {code, name} · false = 그 부품이 없다(BOM 에 없음) · null = 모른다
+    var _identFrom = function (rows, mats, cat, fallbackName) {
+        var bp = _bomPartIn(rows, cat);
+        if (bp === false) return false;
+        if (bp) return { code: bp.code, name: _alnum(bp.name) };
+        var m = (mats || []).filter(function (x) { return x && x.category === cat && !_isNone(x.description || x.ktkPn); })[0];
+        if (m) return { code: String(m.ktkPn || '').trim(), name: _alnum(m.description) };
+        if (fallbackName && !_isNone(fallbackName)) return { code: '', name: _alnum(fallbackName) };
+        return null;
+    };
+    var _sameIdent = function (a, b) {
+        if (!a || !b) return false;
+        if (a.code && b.code) return a.code === b.code;
+        var x = a.name || '', y = b.name || '';
+        var s = x.length < y.length ? x : y, l = x.length < y.length ? y : x;
+        return s.length >= 6 && l.indexOf(s) >= 0;
+    };
+    var _resOf = function (v) { var m = String(v || '').match(/(\d{3,5})\s*[x×X*]\s*(\d{3,5})/); return m ? m[1] + 'x' + m[2] : ''; };
+    // 문서 한 리비전 → 참고 후보 하나. 묶음별로 "칸이 하나라도 있는가"를 미리 세어 둔다(그림은 att)
+    var _refCand = function (o) {
+        var groups = {};
+        (window.PS_REF_GROUPS || []).forEach(function (g) {
+            var has = Object.keys(o.fields || {}).some(function (k) {
+                return (g.keys || []).some(function (re) { return re.test(k); }) && String(o.fields[k] == null ? '' : o.fields[k]).trim() !== '';
+            }) || (g.images || []).some(function (k) { return ((o.att || {})[k] || []).length > 0; });
+            if (has) groups[g.id] = 1;
+        });
+        o.groups = groups;
+        o.native = _resOf((o.fields || {})['tim.r1.c1']);
+        return o;
+    };
+    // 한 프로젝트 데이터(지금 열린 것이든 NAS 에서 읽은 것이든)에서 PRODUCT SPEC 문서들을 꺼낸다
+    var _refExtract = function (td, meta, proj, rank) {
+        var out = [], docs = (td && td.documents) || {};
+        Object.keys(docs).forEach(function (dk) {
+            var m = /^product-spec(?:#(.*))?$/.exec(dk);
+            if (!m) return;
+            var unit = m[1] || '';
+            var revs = docs[dk].revisions || {};
+            var card = (td.projectModels || []).filter(function (x) { return x && (x.unitId || '') === unit; })[0];
+            var bom = ((td.bomByUnit || {})[unit] || {}).rows || [];
+            var parts = (card && card.materials) || [];
+            var plr = (card && card.KTKPN) ? (_plRow({ meta: { KTKPN: card.KTKPN } }) || {}) : {};
+            var ident = {};
+            Object.keys(PS_ID_CATS).forEach(function (w) { ident[w] = _identFrom(bom, parts, PS_ID_CATS[w], plr[LIB[w].pl]); });
+            Object.keys(revs).forEach(function (rk) {
+                if (!/^R\d+$/.test(rk)) return;
+                var r = revs[rk] || {};
+                var c = _refCand({ proj: proj, rank: rank, unit: unit, rev: rk, dk: dk, fields: r.fields || {}, att: r.att || {},
+                                   ident: ident, customer: _custKey(meta && meta.고객사) });
+                if (Object.keys(c.groups).length) out.push(c);
+            });
+        });
+        return out;
+    };
+    // 다른 프로젝트 — 처음 필요할 때 한 번 훑는다(읽기만). 파일별 `updated_at` 이 같으면 다시 안 읽는다.
+    var _refScan = { state: 'idle', docs: [], errs: [], read: 0, cache: {} };
+    var _refStart = function () {
+        if (_refScan.state !== 'idle') return;
+        if (!window.nasAppFile || typeof window._msLoadProjectIndex !== 'function') { _refScan.state = 'done'; return; }
+        _refScan.state = 'loading';
+        var run = _refScan.run = (_refScan.run || 0) + 1;     // 늦게 끝난 옛 훑기가 새 결과를 덮지 않게
+        _refScan.read = 0; _refScan.errs = [];
+        (async function () {
+            var docs = [];
+            try {
+                var list = await window._msLoadProjectIndex();
+                var openId = String(window.currentDriveFileId || '').trim();
+                var open = String(window.currentDriveFileName || '').replace(/\.json$/i, '').trim();
+                var todo = (list || []).filter(function (p) {
+                    if (!p || !p.file_name) return false;
+                    if (openId && String(p.drive_file_id || '').trim() === openId) return false;
+                    return String(p.file_name).replace(/\.json$/i, '').trim() !== open;
+                }).sort(function (a, b) { return String(b.updated_at || '').localeCompare(String(a.updated_at || '')); })
+                  .slice(0, +(window.PS_REF_SCAN || {}).maxProjects || 40);
+                for (var i = 0; i < todo.length; i++) {
+                    if (run !== _refScan.run) return;
+                    var p = todo[i], ck = p.file_name + '|' + (p.updated_at || '');
+                    try {
+                        if (!_refScan.cache[ck]) {
+                            var rel = (p.team ? p.team + '/' : '') + p.file_name;
+                            var d = await window.nasAppFile.get(rel, { json: true });
+                            if (!d && window._storageRelOfId && p.drive_file_id) {
+                                var live = window._storageRelOfId(p.drive_file_id);
+                                if (live && live !== rel) d = await window.nasAppFile.get(live, { json: true });
+                            }
+                            if (!d) throw new Error(_t('읽지 못함', 'unreadable'));
+                            var label = String(p.file_name).replace(/\.json$/i, '');
+                            _refScan.cache[ck] = _refExtract(d.tabData || {}, d.projectMeta || {}, label, 2);
+                        }
+                        _refScan.read++;
+                        docs = docs.concat(_refScan.cache[ck]);
+                    } catch (e) {
+                        _refScan.errs.push(p.file_name + ' — ' + ((e && e.message) || e));
+                    }
+                }
+            } catch (e0) {
+                _refScan.errs.push(_t('프로젝트 목록을 못 읽음: ', 'index unreadable: ') + ((e0 && e0.message) || e0));
+            }
+            if (run !== _refScan.run) return;
+            _refScan.docs = docs;
+            _refScan.state = 'done';
+            if (_refScan.errs.length && window._issueLog) {
+                try { window._issueLog({ domain: 'product-spec', kind: 'ref_scan_partial', result: { errs: _refScan.errs.slice(0, 10) } }); } catch (e1) { /* 기록 실패는 무시 */ }
+            }
+            _refMemo = null;
+            if (window._docState && window._docState.formId === FORM_ID && window._docRender) window._docRender();
+        })();
+    };
+    // 지금 모델의 부품 정체 + 묶음별 고른 참고 문서 — 한 번 그릴 동안 칸이 수백 개라 잠깐 기억한다
+    var _refMemo = null;
+    var _refPlan = function (ctx) {
+        var curDk = FORM_ID + (window.mcActiveUnit ? '#' + window.mcActiveUnit : '');
+        var curRev = window._docActiveRevision ? (window._docActiveRevision(FORM_ID) || 'R1') : 'R1';
+        var st = window._bomStore ? window._bomStore() : null;
+        var sig = [curDk, curRev, _refScan.state, _refScan.docs.length, st && st.fetchedAt, (ctx.meta || {}).고객사].join('|');
+        if (_refMemo && _refMemo.sig === sig && Date.now() - _refMemo.at < 1500) return _refMemo.plan;
+        if (_refScan.state === 'idle') _refStart();
+        var row = _plRow(ctx) || {};
+        var mine = {};
+        Object.keys(PS_ID_CATS).forEach(function (w) {
+            var card = ((window.tabData || {}).projectModels || []).filter(function (m) { return m && m.unitId === (window.mcActiveUnit || ''); })[0];
+            mine[w] = _identFrom((st && st.rows) || [], (card && card.materials) || [], PS_ID_CATS[w], row[LIB[w].pl]);
+        });
+        mine.customer = _custKey(ctx.meta && ctx.meta.고객사);
+        var nat = _nativeRes(ctx);
+        mine.native = nat ? nat.w + 'x' + nat.h : '';
+        // 후보 — 지금 열린 프로젝트(살아 있는 tabData)가 먼저, 지금 보는 문서 자신은 뺀다
+        var here = _refExtract(window.tabData || {}, ctx.meta || {}, _t('이 프로젝트', 'this project'), 1)
+            .filter(function (c) { return !(c.dk === curDk && c.rev === curRev); })
+            .map(function (c) { c.rank = c.dk === curDk ? 0 : 1; return c; });
+        var all = here.concat(_refScan.docs).sort(function (a, b) {
+            return a.rank - b.rank || (parseInt(b.rev.slice(1), 10) - parseInt(a.rev.slice(1), 10));
+        });
+        var plan = { mine: mine, pick: {}, state: _refScan.state, scanned: _refScan.read, errs: _refScan.errs.length };
+        (window.PS_REF_GROUPS || []).forEach(function (g) {
+            if (g.id === 'tcom' && FN.hasTouch(ctx).v !== 'YES') return;
+            var hit = all.filter(function (c) {
+                if (!c.groups[g.id]) return false;
+                if (c.rank === 0) return true;          // 같은 모델의 다른 리비전 — 부품을 물을 것도 없다
+                return (g.match || []).every(function (w) {
+                    if (w === 'customer') return !!(mine.customer && mine.customer === c.customer);
+                    if (w === 'native') return !!(mine.native && mine.native === c.native);
+                    if (w === 'touchKind') return (mine.touch === false && c.ident.touch === false) || _sameIdent(mine.touch, c.ident.touch);
+                    return _sameIdent(mine[w], c.ident[w]);
+                });
+            })[0];
+            if (hit) plan.pick[g.id] = hit;
+        });
+        _refMemo = { sig: sig, at: Date.now(), plan: plan };
+        return plan;
+    };
+    // 🔌 하네스·진단 입구 — 다른 프로젝트 훑기 결과를 갈아 끼우거나(NAS 를 안 읽게) 지금 고른 문서를 본다
+    window._psRef = {
+        set: function (docs) {
+            _refScan.run = (_refScan.run || 0) + 1;
+            _refScan.state = 'done'; _refScan.read = 0; _refScan.errs = [];
+            _refScan.docs = (docs || []).map(function (o) { return _refCand(o); });
+            _refMemo = null;
+        },
+        reset: function () { _refScan.run = (_refScan.run || 0) + 1; _refScan.state = 'idle'; _refScan.docs = []; _refScan.read = 0; _refScan.errs = []; _refMemo = null; },
+        plan: function () { _refMemo = null; return _refPlan(window._dgCollect ? window._dgCollect() : { meta: {} }); },
+        scan: _refScan
+    };
+    // 그림 자리 — 그 그림이 든 묶음에 고른 참고 문서의 첨부(NAS 참조 그대로 — 바이트를 복사하지 않는다)
+    var _refImage = function (ctx, slot) {
+        var g = (window.PS_REF_GROUPS || []).filter(function (x) { return (x.images || []).indexOf(slot) >= 0; })[0];
+        if (!g) return null;
+        var c = _refPlan(ctx).pick[g.id];
+        var list = c && (c.att || {})[slot];
+        return list && list.length ? { list: list, label: _refLabel(c, g) } : null;
+    };
+    var _refLabel = function (c, g, short) {
+        var name = (c.rank <= 1 ? '' : c.proj + ' ') + (c.unit || '') + ' V' + _pad((parseInt(c.rev.slice(1), 10) || 1) - 1);
+        if (short) return '📑 ' + name.trim() + _t(' 사양서', ' spec');
+        var why = c.rank === 0 ? _t('같은 모델 다른 리비전', 'same model, other revision') : (g.match || []).map(function (w) {
+            if (w === 'customer') return _t('같은 고객', 'same customer');
+            if (w === 'native') return _t('같은 해상도', 'same resolution');
+            if (w === 'touchKind') return c.ident.touch === false ? _t('둘 다 터치 없음', 'no touch') : _t('같은 터치', 'same touch');
+            var id = c.ident[w] || {};
+            return _t('같은 ', 'same ') + ({ adbd: 'A/D', conv: 'CONV', touch: 'TOUCH' })[w] + (id.code ? ' ' + id.code : '');
+        }).join('·');
+        return '📑 ' + c.proj + (c.unit ? ' ' + c.unit : '') + ' V' + _pad((parseInt(c.rev.slice(1), 10) || 1) - 1)
+            + _t(' 사양서', ' spec') + ' (' + why + ')';
     };
     var FN = {
         hasTouch: function (ctx) {
@@ -899,6 +1141,28 @@
             var parts = String(v || '').split(/\s*[x×*]\s*/i);
             return { v: parts.length > +a[0] ? parts[+a[0]] : '', src: v ? 'PARTS ▸ TOUCH CTRL' : '' };
         },
+        // 📑 어느 묶음을 어느 문서에서 가져오는가 — 화면 맨 위 한 칸(출력엔 안 나간다)
+        refSummary: function (ctx) {
+            var plan = _refPlan(ctx);
+            var lines = (window.PS_REF_GROUPS || []).filter(function (g) { return plan.pick[g.id]; }).map(function (g) {
+                return g.label + ' ← ' + _refLabel(plan.pick[g.id], g).replace(/^📑 /, '');
+            });
+            var tail = plan.state === 'loading' ? _t(' (다른 프로젝트를 훑는 중…)', ' (scanning…)')
+                : _t(' (다른 프로젝트 ' + plan.scanned + '개 훑음' + (plan.errs ? ', 못 읽음 ' + plan.errs : '') + ')',
+                     ' (' + plan.scanned + ' projects scanned)');
+            if (!lines.length) return { v: '', src: _t('같은 부품을 쓰는 다른 사양서 없음', 'no matching spec') + tail };
+            return { v: lines.join('  │  '), src: _t('📑 앱에 없는 칸은 이 문서들에서 (사람이 고치면 그 값)', '📑 cells the app lacks come from these') + tail };
+        },
+        // 📑 참고 사양서의 같은 칸 — 그 묶음에 고른 문서 하나에서만(칸마다 다른 문서로 새지 않는다)
+        ref: function (ctx, a) {
+            var key = a.join(':'), g = _refGroupOf(key);
+            if (!g) return { v: '', src: '' };
+            var plan = _refPlan(ctx), c = plan.pick[g.id];
+            if (!c) return { v: '', src: plan.state === 'loading' ? _t('📑 다른 사양서를 찾는 중…', '📑 searching other specs…') : '' };
+            var v = c.fields[key];
+            // 칸 아래엔 문서 이름만(핀 표 칸이 좁아 이유까지 적으면 네 줄이 된다) — 이유는 맨 위 '참고 사양서' 칸에
+            return { v: v == null ? '' : String(v), src: _refLabel(c, g, true) };
+        },
         vcpTitle: function (ctx) {
             var c = String((ctx.meta && ctx.meta.고객사) || '').split('>')[0].trim();
             return { v: c ? c + ' VCP Specification' : 'VCP Specification', src: 'Summary ▸ ' + _t('고객사', 'customer') };
@@ -948,8 +1212,12 @@
     };
     // js/67 `_autoOf` 가 'ps:<칸>' 을 이리 보낸다
     window.DOC_AUTO_HOOKS = window.DOC_AUTO_HOOKS || {};
-    window.DOC_AUTO_HOOKS.ps = function (ctx, key) {
+    // 🪶 "앱이 아는 값"이 아닌 출처(데이터) — 표준 타이밍 초안 · 📑 다른 사양서. 불러오기에선 이 둘이 **불러온 값을 못 이긴다**
+    //   (원본 사양서의 실제 EDID·핀 표가 초안이나 다른 제품 문서에 밀려 지워지면 안 된다 — 2026-11-25 에 그렇게 돌고 있던 것을 발견)
+    window.PS_SOFT_SOURCES = window.PS_SOFT_SOURCES || /^fn:(tim|ref):/;
+    window.DOC_AUTO_HOOKS.ps = function (ctx, key, opts) {
         var list = window.PS_AUTO[key] || [];
+        if (opts && opts.hardOnly) list = list.filter(function (t) { return !window.PS_SOFT_SOURCES.test(t); });
         var lastSrc = '';
         for (var i = 0; i < list.length; i++) {
             var r = _resolve(ctx || {}, list[i]) || { v: '', src: '' };
@@ -1027,6 +1295,7 @@
         var images = {};
         Object.keys((_schema && _schema.images) || {}).forEach(function (k) {
             var list = (d.att && d.att[k]) || [];
+            if (!list.length) { var rf = _refImage(ctx, k); if (rf) list = rf.list; }   // 📑 비어 있으면 참고 사양서 그림
             if (list.length) images[k] = list.map(function (a) {
                 var o = { folder: a.folder, name: a.name };
                 ['cx', 'cy', 'ph', 'pv'].forEach(function (x) { if (typeof a[x] === 'number') o[x] = a[x]; });
@@ -1124,8 +1393,9 @@
             if (v == null) return;
             // 빈 칸은 적지 않는다 — 출력은 같고(빈 칸), 화면에 '✏️ 직접 적음' 이 수백 개 붙지 않는다
             if (!String(v).trim()) { if (Object.prototype.hasOwnProperty.call(d.fields, k)) delete d.fields[k]; return; }
-            var auto = window.PS_AUTO[k] ? window.DOC_AUTO_HOOKS.ps(ctx, k).v : '';
+            var auto = window.PS_AUTO[k] ? window.DOC_AUTO_HOOKS.ps(ctx, k, { hardOnly: true }).v : '';
             // 앱이 아는 칸은 앱 값을 둔다(앱 값이 비었을 때만 불러온 값) — "앱 정보 자동채우기" 가 이긴다
+            //   (표준 타이밍 초안·📑 다른 사양서는 '앱이 아는 값'이 아니다 → 불러온 값이 이긴다, PS_SOFT_SOURCES)
             if (auto) {
                 if (String(auto) !== String(v) && Object.prototype.hasOwnProperty.call(d.fields, k)) delete d.fields[k];
                 kept++;
@@ -1171,11 +1441,25 @@
         get: function () {
             var all = _buildSections();
             var touch = _touchOn();
+            var ctx = null, att = null;
             return all.filter(function (s) {
                 if (s.__touch && !touch) return false;
                 if (s.__when === 'base' && touch) return false;
                 if (s.__when === 'touch' && !touch) return false;
                 return true;
+            }).map(function (s) {
+                // 📑 그림이 비어 있고 참고 사양서에 그 그림이 있으면 — 무엇이 들어가는지 안내에 적는다(화면엔 안 그린다)
+                if (s.kind !== 'attach' || !_schema) return s;
+                att = att || ((window._docDataOf ? window._docDataOf(FORM_ID) : {}).att || {});
+                if ((att[s.key] || []).length) return s;
+                ctx = ctx || (window._dgCollect ? window._dgCollect() : { meta: {} });
+                var rf = _refImage(ctx, s.key);
+                if (!rf) return s;
+                var c = {};
+                for (var p in s) c[p] = s[p];
+                c.hint = '📑 ' + _t('비워 두면 원본저장에 ', 'If left empty, the saved document uses ') + rf.label.replace(/^📑 /, '')
+                    + _t(' 의 그림이 들어갑니다 (', '’s picture (') + rf.list[0].name + ').';
+                return c;
             });
         }
     });

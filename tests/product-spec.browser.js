@@ -28,6 +28,7 @@ window.__psTest = async function (opt) {
         window.showToast = function (m, k) { toasts.push([k, m]); };
         window.markUnsavedChanges = function () {};
         HTMLAnchorElement.prototype.click = function () { downloads.push(this.download); };
+        if (window._psRef) window._psRef.set([]);        // 📑 다른 프로젝트 훑기는 하네스에서 안 돈다(NAS 를 안 읽는다)
         window.projectMeta = { 고객사: 'LNW>TESTPROJ', 인치: '32', KTKPN: '999001', KTK모델명: 'KTS999TEST01', 모델명: 'TESTPROJ' };
         window.tabData = { mcUnits: ['LOWER', 'UPPER'], documents: {},
             projectModels: [{ unitId: 'LOWER', KTKPN: '999001', KTK모델명: 'KTS999TEST01', 고객모델명: 'CUST-TEST',
@@ -145,6 +146,85 @@ window.__psTest = async function (opt) {
               && chk('adc.r1.c3', 'YEON-HO') === '' && chk('adc.r2.c3', 'XX') === 'BOM: CT',
               'BOM 대조 경고 (' + chk('adc.r1.c2', 'ABC200-05') + ' / ' + chk('adc.r2.c3', 'XX') + ')');
         delete dX['adc.r1.c0']; delete dX['adc.r2.c0'];
+        // 📑 참고 사양서(2026-11-25) — 앱에 없는 칸을 같은 A/D 보드·같은 고객의 다른 사양서에서. 묶음 하나는 문서 하나에서만.
+        //   UPPER(이 프로젝트 다른 모델) = 같은 A/D 보드(777010)·다른 컨버터(777029) · 다른 프로젝트 둘(같은 AD·고객 다름 / 같음)
+        window.tabData.bomByUnit.UPPER = { rows: [
+            { _level: 1, IDNRK: '777010', OJTXP: 'PBA-AD>VIDEO,ADB-TEST,R1,V00', WGBEZ60: 'BD 반제품/PBA' },
+            { _level: 1, IDNRK: '777029', OJTXP: 'PBA-CNV>LEDRV,CONV-OTHER,R0', WGBEZ60: 'BD 반제품/PBA' }] };
+        window.tabData.documents['product-spec#UPPER'] = { revisions: { R1: { fields: {
+            adH1: 'J1 : 4 Pin External Power', 'adp1.r1.c1': 'GND', 'osd.r1.c1': 'MENU', pwrTermPn: 'TERM-UP',
+            'cvi.r1.c1': 'VIN-UP', 'tim.r1.c1': '1920x1080', 'tim.r3.c1': '148.35' },
+            att: { img_adbd: [{ folder: 'DOCUMENT/X/PRODUCT SPEC/attach', name: 'up_adbd.png', cx: 100, cy: 50 }],
+                   img_conv: [{ folder: 'DOCUMENT/X/PRODUCT SPEC/attach', name: 'up_conv.png' }] } } } };
+        var adOther = { adbd: { code: '777010', name: 'ADBTEST' }, conv: { code: '777099', name: '' }, touch: false };
+        window._psRef.set([
+            // 고객이 다른 문서가 **더 앞에** 서게(최근 리비전) — 고객 조건을 빼면 이게 집힌다
+            { proj: 'OTHER_A', rank: 2, unit: '', rev: 'R3', dk: 'product-spec', customer: 'ABC', ident: adOther,
+              fields: { 'vcp.r1.c1': 'VCP-ABC', 'adp2.r1.c1': 'FROM-A' }, att: {} },
+            { proj: 'OTHER_L', rank: 2, unit: 'MVD', rev: 'R2', dk: 'product-spec#MVD', customer: 'LNW', ident: adOther,
+              fields: { 'vcp.r1.c1': 'VCP-LNW', 'cvi.r1.c1': 'VIN-L' }, att: {} }]);
+        var bs1 = window.tabData.briefSpec;
+        window.tabData.briefSpec = bs1.concat([{ sub: 'Native Resolution', modelA: '1920 x 1080' }]);
+        var cR = window._dgCollect(), HR = window.DOC_AUTO_HOOKS.ps;
+        var r1 = HR(cR, 'adp1.r1.c1');
+        check(r1.v === 'GND' && r1.src === '📑 UPPER V00 사양서'
+              && /A\/D 커넥터 핀 표 ← 이 프로젝트 UPPER V00 사양서 \(같은 A\/D 777010\)/.test(HR(cR, 'refSummary').v),
+              '같은 A/D 보드 다른 모델의 핀 표 + 칸 출처(짧게) + 맨 위 요약에 이유 (' + r1.v + ' / ' + r1.src + ')');
+        check(HR(cR, 'adH1').v === 'J1 : 4 Pin External Power' && HR(cR, 'osd.r1.c1').v === 'MENU' && HR(cR, 'pwrTermPn').v === 'TERM-UP',
+              '커넥터 제목·OSD·단자 PN 도 같은 문서에서');
+        check(HR(cR, 'adp2.r1.c1').v === '', '한 묶음은 한 문서에서만 — 고른 문서(UPPER)에 없는 칸을 다른 문서로 채우지 않는다 (' + HR(cR, 'adp2.r1.c1').v + ')');
+        check(HR(cR, 'cvi.r1.c1').v === '', '컨버터가 다르면 컨버터 핀 표는 안 옮긴다 (' + HR(cR, 'cvi.r1.c1').v + ')');
+        check(HR(cR, 'vcp.r1.c1').v === 'VCP-LNW' && /OTHER_L MVD V01/.test(HR(cR, 'vcp.r1.c1').src),
+              'VCP 는 같은 A/D 보드 + **같은 고객** 문서에서 (' + HR(cR, 'vcp.r1.c1').v + ')');
+        check(HR(cR, 'tim.r3.c1').v === '148.35' && /📑/.test(HR(cR, 'tim.r3.c1').src) && HR(cR, 'tim.r4.c1').v === '1920',
+              '같은 A/D·같은 해상도면 타이밍은 그 문서 값이 표준보다 먼저, 빈 칸은 표준 (' + HR(cR, 'tim.r3.c1').v + ')');
+        check(HR(cR, 'adp1.r1.c1', { hardOnly: true }).v === '' && HR(cR, 'tim.r3.c1', { hardOnly: true }).v === '',
+              '불러오기 판정(hardOnly)에선 다른 사양서·표준 타이밍이 "앱 값"이 아니다');
+        var pR = window._psPayload();
+        check(pR.images.img_adbd && pR.images.img_adbd[0].name === 'up_adbd.png' && pR.images.img_adbd[0].cx === 100 && !pR.images.img_conv,
+              '그림도 같은 묶음 문서에서(컨버터 그림은 안 옴)');
+        check(pR.values['adp1.r1.c1'] === 'GND' && /A\/D 커넥터 핀 표 ← 이 프로젝트 UPPER/.test(HR(cR, 'refSummary').v),
+              '원본저장에 실림 + 맨 위 요약 칸 (' + HR(cR, 'refSummary').v + ')');
+        // 블록도는 터치 구성까지 같아야 — 둘 다 터치 없음이면 오고, 참고 모델에만 터치가 있으면 안 온다
+        window.tabData.documents['product-spec#UPPER'].revisions.R1.att.img_block = [{ folder: 'DOCUMENT/X/PRODUCT SPEC/attach', name: 'up_block.png' }];
+        window.tabData.bomByUnit.UPPER.rows[1].IDNRK = '777020';           // 블록도는 컨버터도 같아야 — 이 확인 동안만
+        window._psRef.set(window._psRef.scan.docs.slice());
+        var hasBlk = !!(window._psPayload().images.img_block || [])[0];
+        window.tabData.bomByUnit.UPPER.rows.push({ _level: 1, IDNRK: '777030', OJTXP: 'PBA-T>TOUCH,TCTRL-TEST,R0', WGBEZ60: 'BD 반제품/PBA' });
+        window._psRef.set(window._psRef.scan.docs.slice());
+        var noBlk = !window._psPayload().images.img_block;
+        check(hasBlk && noBlk, '블록도 — 둘 다 터치 없음이면 옮기고, 참고 모델에만 터치가 있으면 안 옮긴다 (' + hasBlk + ', ' + noBlk + ')');
+        window.tabData.bomByUnit.UPPER.rows.pop();
+        window.tabData.bomByUnit.UPPER.rows[1].IDNRK = '777029';
+        delete window.tabData.documents['product-spec#UPPER'].revisions.R1.att.img_block;
+        window._psRef.set(window._psRef.scan.docs.slice());
+        var hintSec = f.sections.filter(function (s) { return s.key === 'img_adbd'; })[0];
+        check(hintSec && /up_adbd\.png/.test(hintSec.hint), '그림 칸 안내에 들어갈 그림을 적는다');
+        window._docDataOf('product-spec').fields['adp1.r1.c1'] = 'MINE';
+        check(window._psPayload().values['adp1.r1.c1'] === 'MINE', '사람이 적은 값이 이긴다');
+        delete window._docDataOf('product-spec').fields['adp1.r1.c1'];
+        window.tabData.bomByUnit.UPPER.rows[0].IDNRK = '777013';            // UPPER 의 A/D 보드가 다르면
+        window._psRef.set([]);
+        check(window.DOC_AUTO_HOOKS.ps(window._dgCollect(), 'adp1.r1.c1').v === '', 'A/D 보드가 다르면 안 옮긴다');
+        // 같은 모델의 다른 리비전 — 부품을 물을 것 없이 그 문서에서(지금 보는 리비전 자신은 빼고).
+        //   A/D 보드를 **아무 데서도 모르게** 해도(BOM·주요자재·Project list 에서 뺌) 같은 모델이면 가져온다
+        var rv = window._docDataOf('product-spec');                     // 지금 R1
+        rv.fields['adp3.r1.c1'] = 'R1-OWN';
+        window.tabData.documents['product-spec#LOWER'].revisions.R2 = { fields: { 'tim.r0.c1': 'x' } };
+        window._docState.revision = 'R2';
+        var adRow = window.tabData.bomByUnit.LOWER.rows.splice(1, 1)[0];
+        var mAd = window.tabData.projectModels[0].materials;
+        window.tabData.projectModels[0].materials = mAd.filter(function (m) { return m.category !== 'AD BOARD'; });
+        var plAd = window._plData.rows[0].adbd; delete window._plData.rows[0].adbd;
+        var cRv = window._dgCollect();
+        check(window.DOC_AUTO_HOOKS.ps(cRv, 'adp3.r1.c1').v === 'R1-OWN', '같은 모델 다른 리비전(R1)에서 — 부품을 몰라도 (' + window.DOC_AUTO_HOOKS.ps(cRv, 'adp3.r1.c1').v + ')');
+        window.tabData.bomByUnit.LOWER.rows.splice(1, 0, adRow);
+        window.tabData.projectModels[0].materials = mAd; window._plData.rows[0].adbd = plAd;
+        delete window.tabData.documents['product-spec#LOWER'].revisions.R2;
+        window._docState.revision = 'R1';
+        delete rv.fields['adp3.r1.c1'];
+        delete window.tabData.documents['product-spec#UPPER'];
+        window.tabData.briefSpec = bs1;
         delete window.tabData.bomByUnit;
         check(pL.values['blu.r2.c3'] === '70', '보이는 이름으로 못 찾으면 주요자재로 — 패널 LED 전류 Typ (' + pL.values['blu.r2.c3'] + ')');
         check(pL.values.convIn === '11111WR-12A', '컨버터 입력 커넥터 모델명 (' + pL.values.convIn + ')');
@@ -210,6 +290,9 @@ window.__psTest = async function (opt) {
         try { var rr = await saved.fetch('tests/_tmp_ps_parse.json', { cache: 'no-store' }); if (rr.ok) parsedText = await rr.text(); } catch (e0) { /* 없음 */ }
         if (parsedText) {
             var j = JSON.parse(parsedText);
+            // 표준 타이밍이 **있는** 상태로 불러온다 — 그래야 "불러온 실제 EDID 가 표준 초안에 지지 않는가"를 본다
+            var natJ = String(j.values['tim.r1.c1'] || '').match(/(\d{3,5})\s*[x×X]\s*(\d{3,5})/);
+            if (natJ) window.tabData.briefSpec = window.tabData.briefSpec.concat([{ sub: 'Native Resolution', modelA: natJ[1] + ' x ' + natJ[2] }]);
             window.fetch = function (u, o) {
                 if (String(u).indexOf('/doc/product-spec-parse') >= 0) return Promise.resolve(new Response(parsedText, { status: 200 }));
                 if (String(u).indexOf('/doc/product-spec-docx') >= 0) { sent = JSON.parse(o.body); return Promise.resolve(new Response(new Blob([new Uint8Array(1024)]), { status: 200 })); }
@@ -222,8 +305,10 @@ window.__psTest = async function (opt) {
                   '첨부 이름에 모델·리비전이 들어가야 (' + uploads[0] + ')');
             var ctx = window._dgCollect(), p2 = window._psPayload(), bad = 0;
             Object.keys(j.values).forEach(function (k) {
-                var auto = window.PS_AUTO[k] ? window.DOC_AUTO_HOOKS.ps(ctx, k).v : '';
-                var exp = auto || (String(j.values[k]).trim() ? j.values[k] : (p2.values[k] === '' ? '' : j.values[k]));
+                // 앱이 **아는** 값(hardOnly)만 불러온 값을 이긴다 — 표준 타이밍·다른 사양서는 불러온 값에 진다
+                var auto = window.PS_AUTO[k] ? window.DOC_AUTO_HOOKS.ps(ctx, k, { hardOnly: true }).v : '';
+                if (!auto && !String(j.values[k]).trim()) return;       // 원본이 비운 칸 — 초안(표준 타이밍)이 채워도 된다
+                var exp = auto || j.values[k];
                 if (p2.values[k] !== exp && !(String(exp).trim() === '' && String(p2.values[k] || '').trim() === '')) { bad++; if (bad < 4) log.push('✗ 값 ' + k); }
             });
             check(bad === 0, '불러온 값/앱 값이 원본저장에 그대로 실려야 (어긋남 ' + bad + ')');
@@ -243,6 +328,7 @@ window.__psTest = async function (opt) {
         window.fetch = saved.fetch; window.confirm = saved.confirm; window.showToast = saved.toast;
         window.markUnsavedChanges = saved.dirty; HTMLAnchorElement.prototype.click = saved.click;
         window.projectMeta = saved.pm; window.tabData = saved.td; window.mcActiveUnit = saved.unit; window._plData = saved.pl;
+        if (window._psRef) window._psRef.reset();
     }
     return ok + ' 통과 / ' + fail + ' 실패' + (log.length ? '\n' + log.join('\n') : '');
 };
