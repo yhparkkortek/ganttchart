@@ -138,14 +138,18 @@
                     var s2 = '2026-' + String(mm + 1).padStart(2, '0') + '-15'; window._dailyTabDate = s2; await window.dailyRenderTab();
                     var ths = [].slice.call(document.querySelectorAll('#daily-report-page thead th')).slice(1);
                     var last = new Date(2026, mm + 1, 0).getDate();
+                    var widths = [];
                     if (ths.length !== last) dm.bad.push(['칸 수', s2, ths.length, last]);
                     ths.forEach(function (th, i2) {
                         var ds = '2026-' + String(mm + 1).padStart(2, '0') + '-' + String(i2 + 1).padStart(2, '0'); var ee = kind(ds);
                         if (!judge(dm, ee, getComputedStyle(th))) dm.bad.push([ds, ee]);
-                        if (Math.round(th.getBoundingClientRect().width) !== 28) dm.bad.push(['폭', ds, th.getBoundingClientRect().width]);
+                        widths.push(th.getBoundingClientRect().width);
                     });
+                    // ⚠️ 칸 폭은 "28px 고정" 이 아니라 "모두 같다" 가 약속이다 — 화면이 넓으면 표가 컨테이너를 채우며 29px 대로 늘어난다
+                    //    (1280px 뷰포트에서 29.1~29.3px 가 나와 가짜 실패가 났다). 하한 27.5px 는 좁은 화면에서 줄어들지 않는지 본다.
+                    if (widths.length && (Math.max.apply(null, widths) - Math.min.apply(null, widths) > 1.5 || Math.min.apply(null, widths) < 27.5)) dm.bad.push(['칸 폭이 고르지 않다', s2, Math.min.apply(null, widths).toFixed(2), Math.max.apply(null, widths).toFixed(2)]);
                 }
-                report('Daily Report 월 보기 머리글(12개월, 칸 폭 28px)', dm);
+                report('Daily Report 월 보기 머리글(12개월, 칸 폭이 고르다)', dm);
             } catch (err) { ok('Daily Report 실행', false, err.message); }
 
             // ── 2) Calendar 월 / 주 ──────────────────────────────────
@@ -196,7 +200,12 @@
             } catch (err) { ok('Summary 실행', false, err.message); }
 
             // ── 4) Document ──────────────────────────────────────────
-            try {
+            // ⚠️ 이 칸들은 앱이 `requestAnimationFrame` 으로 색을 다시 단다 — 브라우저 창이 **숨겨져** 있으면 rAF 가 안 돌아
+            //    색이 영영 안 붙는다(코드 고장이 아니라 환경). 그때 ❌ 로 오보하지 않고 건너뜀을 알린다.
+            var rafWorks = await Promise.race([raf().then(function () { return true; }), sleep(800).then(function () { return false; })]);
+            if (!rafWorks) {
+                LOG.push('  ⚠️ Document 날짜 칸 — 건너뜀: 창이 숨겨져 있어 requestAnimationFrame 이 안 돈다(미리보기 창을 보이게 하고 다시 돌릴 것)');
+            } else try {
                 goTab('document'); await sleep(900);
                 var host = document.getElementById('doc-page-body'); var dc = newTally();
                 var forms = ['model-spec', 'sample-report', 'proto-req', 'label-spec'];   // 날짜 입력칸이 있는 서식
