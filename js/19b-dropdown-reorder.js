@@ -87,7 +87,14 @@
                     var before = (e.clientY - rect.top) < rect.height / 2;
                     pop.insertBefore(dragEl, before ? el : el.nextSibling);   // 걸친 항목의 위/아래로 바로 옮긴다(자리표시자 없이)
                 });
-                el.addEventListener('drop', function (e) { e.preventDefault(); });
+                // 놓는 순간에도 같은 계산을 한다 — 마우스를 빠르게 휙 옮겨 놓으면 **마지막 자리에서 dragover 가 한 번도 안 뜰 수 있어**
+                //    (실제 프로젝트에서 TOUCH CTRL 을 맨 위로 끌었는데 두 칸만 올라갔다) 놓은 자리가 안 먹었다.
+                el.addEventListener('drop', function (e) {
+                    e.preventDefault();
+                    if (!dragEl || dragEl === el) return;
+                    var rect = el.getBoundingClientRect();
+                    pop.insertBefore(dragEl, (e.clientY - rect.top) < rect.height / 2 ? el : el.nextSibling);
+                });
             });
         },
 
