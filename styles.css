@@ -2669,6 +2669,9 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
 #tab-summary input.date-day-wk { color: #555 !important; }
 #tab-summary input.date-day-hol { color: #d32f2f !important; font-weight: bold; }
 #tab-summary input.date-day-sat { color: #1e6fe8 !important; font-weight: bold; }
+#doc-page-body input.date-day-wk { color: #555 !important; }
+#doc-page-body input.date-day-hol { color: #d32f2f !important; font-weight: bold; }
+#doc-page-body input.date-day-sat { color: #1e6fe8 !important; font-weight: bold; }
 /* 🦓 JIRA 연결 이슈·전체 검색 표 — tr 에(마우스 올림 inline 색이 이기게) */
 tr.jira-zebra-b { background: #e8f2f3; }
 /* ⭕ [2026-11-24 "도표 모서리 R 전부"] .concept-table 과 같은 6px.

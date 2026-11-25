@@ -7097,6 +7097,29 @@
             return r;
         };
     })();
+    // 🎨 [2026-11-25] 날짜 칸 글자색 — 일요일·공휴일=빨강, 토요일=파랑, 평일=회색(다른 페이지와 같은 규칙, 색은 styles.css/js/21).
+    //   날짜 칸은 구역마다(칸·출고 이력·마일스톤…) 여러 곳에서 그려지므로 그리는 코드를 고치지 않고,
+    //   페이지 본문이 다시 그려질 때마다(MutationObserver) + 값이 바뀔 때(input/change) 클래스만 다시 단다. 클래스 변경은 childList 가 아니라 루프가 없다.
+    var _dateCols = ['date-day-hol', 'date-day-sat', 'date-day-wk'];
+    var _colorizeDates = function () {
+        var host = document.getElementById('doc-page-body'); if (!host || !window._dateDayCls) return;
+        host.querySelectorAll('input[type="date"]').forEach(function (inp) {
+            var c = window._dateDayCls(inp.value);
+            _dateCols.forEach(function (x) { if (x !== c) inp.classList.remove(x); });
+            if (c && !inp.classList.contains(c)) inp.classList.add(c);
+        });
+    };
+    window._docColorizeDates = _colorizeDates;
+    (function () {
+        var host = document.getElementById('doc-page-body'), pend = false;
+        var later = function () { if (pend) return; pend = true; requestAnimationFrame(function () { pend = false; try { _colorizeDates(); } catch (e) { /* 색만 */ } }); };
+        ['input', 'change'].forEach(function (ev) { document.addEventListener(ev, function (e) { if (e.target && e.target.closest && e.target.closest('#doc-page-body')) later(); }, true); });
+        var hook = function () {
+            var h = document.getElementById('doc-page-body'); if (!h || h._dateObs) return;
+            h._dateObs = new MutationObserver(later); h._dateObs.observe(h, { childList: true, subtree: true }); later();
+        };
+        if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', hook); else hook();
+    })();
     var boot = function () {
         if (!document.getElementById('doc-page-body')) return;
         try { window._docRender(); } catch (e) { /* 〃 */ }
