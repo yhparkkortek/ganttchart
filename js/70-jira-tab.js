@@ -283,7 +283,7 @@
         if (!anchor || !anchor.parentNode || !window._hdrFindWidget) return;
         // 🔍 [2026-11-24 "검색 UI 를 헤더로"] 칸 대신 🔍 버튼(js/22b) — 오른쪽 끝의 🔍(JIRA 전체 검색)와
         //    헷갈리지 않게 **상태 글 바로 뒤(왼쪽)**에 두고 말풍선으로 가른다.
-        var w = window._hdrFindWidget({ inputId: 'jira-find-input', countId: 'jira-find-count',
+        var w = window._hdrFindWidget({ inputId: 'jira-find-input', countId: 'jira-find-count', dates: true,
             ko: '🔍 연결 이슈에서 찾기', en: '🔍 Find in linked issues',
             titleKo: '연결 이슈에서 찾기 (받아 둔 목록만 — JIRA 전체는 오른쪽 🔍)', titleEn: 'Find in linked issues (loaded list only — whole JIRA: 🔍 on the right)',
             inputTitle: T('이미 불러온 연결 이슈만 거릅니다(여러 낱말 가능). JIRA 전체는 오른쪽 🔍 전체 검색.',

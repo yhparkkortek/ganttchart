@@ -1108,9 +1108,9 @@ window.TBL_SEARCH_TABLES = [
       ko: '🔍 검색 — 항목·값·Note…', en: '🔍 Search — item, value, note…' },
     // 🔔 [2026-11-24 사용자 요청] Alarm / Notice — 입력칸이 아니라 **글자 칸** 표라 `text:true`(칸 글자로 찾는다).
     //    두 표가 한 탭 안에 헤더를 하나씩 따로 가져서 `hdrId` 로 자기 헤더를 집는다(안 주면 둘 다 Alarm 헤더에 붙는다).
-    { key: 'alarm', tbodyId: 'alarm-table-body', hdrId: 'alarm-header-box', text: true,
+    { key: 'alarm', tbodyId: 'alarm-table-body', hdrId: 'alarm-header-box', text: true, dates: true,
       ko: '🔍 검색 — 업무명·담당자·수신인·메일…', en: '🔍 Search — task, owner, recipient, mail…' },
-    { key: 'notice', tbodyId: 'notice-table-body', hdrId: 'notice-header-box', text: true,
+    { key: 'notice', tbodyId: 'notice-table-body', hdrId: 'notice-header-box', text: true, dates: true,
       ko: '🔍 검색 — 제목·내용·기준일…', en: '🔍 Search — title, body, date…' }
 ];
 (function () {
@@ -1170,7 +1170,7 @@ window.TBL_SEARCH_TABLES = [
         var hdr = cfg.hdrId ? document.getElementById(cfg.hdrId) : (wrapEl ? wrapEl.querySelector('.concept-header-box') : null);
         if (!tbody || !hdr || !window._hdrFindWidget) return false;
         var w = window._hdrFindWidget({ id: cfg.key + '-search-bar', inputId: cfg.key + '-search-input', countId: cfg.key + '-search-count',
-            ko: cfg.ko, en: cfg.en,
+            ko: cfg.ko, en: cfg.en, dates: !!cfg.dates,
             inputTitle: _en() ? 'Several words OK — a row matches when all words appear in it' : '여러 낱말 가능 — 한 행에 낱말이 모두 있으면 걸립니다' });
         window._hdrFindMount(hdr, w.el);
         var inp = w.input;

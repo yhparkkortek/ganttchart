@@ -545,7 +545,7 @@ function _calEnsureSearchBar() {
     const hdr = tab ? tab.querySelector('.concept-header-box') : null;
     if (!hdr || !window._hdrFindWidget) return;
     const en = window._currentLang === 'en';
-    const w = window._hdrFindWidget({ inputId: 'cal-search-input', countId: 'cal-search-count',
+    const w = window._hdrFindWidget({ inputId: 'cal-search-input', countId: 'cal-search-count', dates: true,
         ko: '🔍 찾기 — 업무·내용·상태…', en: '🔍 Find — task, content, status…',
         inputTitle: en ? 'Several words OK — an event matches when all words appear in it' : '여러 낱말 가능 — 한 일정에 낱말이 모두 있으면 걸립니다' });
     const grp = hdr.querySelector(':scope > .btn-group');

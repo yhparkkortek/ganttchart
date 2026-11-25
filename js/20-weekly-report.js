@@ -498,7 +498,7 @@
         const hdr = tab ? tab.querySelector('.concept-header-box') : null;
         if (!hdr || !window._hdrFindWidget) return;
         const en = window._currentLang === 'en';
-        const w = window._hdrFindWidget({ inputId: 'wr-search-input', countId: 'wr-search-count',
+        const w = window._hdrFindWidget({ inputId: 'wr-search-input', countId: 'wr-search-count', dates: true,
             ko: '🔍 찾기 — 업무·내용·담당자…', en: '🔍 Find — task, content, owner…',
             inputTitle: en ? 'Screen only — the PPT export still includes everything' : '화면만 거릅니다 — 📊 PPT 출력은 전부 나갑니다' });
         const grp = hdr.querySelector(':scope > .btn-group');
