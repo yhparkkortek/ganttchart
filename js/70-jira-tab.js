@@ -494,7 +494,7 @@
         // 🔽 [2026-11-12 3차, 사용자 요청] 각 열 머리글에 정렬(클릭)·필터(🔽) — headerCell() 한
         //    곳에서 공통으로 그린다(COLUMNS 레지스트리, 위 "헤더 정렬·필터" 절). 정렬은 여기서
         //    다시 안 한다 — merged는 renderFilteredSortedTable이 이미 정렬해서 넘긴다.
-        var html = '<table class="concept-table" style="width:100%; table-layout:fixed; border-collapse:separate; border-spacing:0; font-size:12.5px;">'
+        var html = '<table class="concept-table ui-hover-rows" style="width:100%; table-layout:fixed; border-collapse:separate; border-spacing:0; font-size:12.5px;">'
             + '<thead><tr style="background:#eef6f7;">'
             + '<th style="padding:6px 8px; text-align:center; width:4%; background:#eef6f7; border-bottom:1px solid #cfe3e5;">' + T('No.', 'No.') + '</th>'
             // ⚠️ [2026-11-24] 보고자 열을 넣으며 수정일을 10% 로 줄였더니 '2026-11-19 16:42' 가 두 줄로 접혀
@@ -513,7 +513,7 @@
                 var c = statusColor(it.status);
                 var metaTxt = metaCellText(it);
                 // 🦓 [2026-11-24] 다른 페이지와 같은 흰색 + 팔레트 제브라(tr 에 — hover 의 inline 색이 이기게)
-                return '<tr' + (i % 2 ? ' class="jira-zebra-b"' : '') + ' onclick="window._jiraOpenIssueModal(\'' + esc(it.key) + '\')" style="cursor:pointer; border-bottom:1px solid #f0f0f0;" onmouseover="this.style.background=\'#fafcfc\'" onmouseout="this.style.background=\'\'">'
+                return '<tr' + (i % 2 ? ' class="jira-zebra-b"' : '') + ' onclick="window._jiraOpenIssueModal(\'' + esc(it.key) + '\')" style="cursor:pointer; border-bottom:1px solid #f0f0f0;">'
                     + '<td style="padding:6px 8px; text-align:center; color:#999;">' + (i + 1) + '</td>'
                     + '<td style="padding:6px 8px; font-weight:bold; color:#00707d; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">' + esc(it.key) + '</td>'
                     + '<td style="padding:6px 8px;">' + esc(it.summary) + '</td>'
@@ -1009,7 +1009,7 @@
                             : '<span style="font-size:10.5px; color:#999;">' + T('본문·댓글', 'body/comments') + '</span>')
                         + '</td>';
                 }
-                return '<tr' + (vi % 2 ? ' class="jira-zebra-b"' : '') + ' onclick="window._jiraOpenIssueModal(\'' + esc(it.key) + '\')" style="cursor:pointer; border-bottom:1px solid #f0f0f0;" onmouseover="this.style.background=\'#fafcfc\'" onmouseout="this.style.background=\'\'">'
+                return '<tr' + (vi % 2 ? ' class="jira-zebra-b"' : '') + ' onclick="window._jiraOpenIssueModal(\'' + esc(it.key) + '\')" style="cursor:pointer; border-bottom:1px solid #f0f0f0;">'
                     + matchCell
                     + '<td style="' + td + ' color:#888;">' + esc(proj) + '</td>'
                     + '<td style="' + td + ' font-weight:bold; color:#00707d;">' + esc(it.key) + '</td>'
@@ -1029,7 +1029,7 @@
         var whatNote = (_searchMode === 'text' && _searchNote) ? '<div style="font-size:11px; color:#00707d; margin:6px 0 0;">' + esc(_searchNote) + '</div>' : '';
         box.innerHTML = whatNote + '<div style="font-size:11px; color:#888; margin:6px 0;">' + esc(countNote + teamNote) + '</div>'
             + filterBarHtml('search')
-            + '<table class="concept-table jira-search-table" style="width:100%; table-layout:fixed; border-collapse:separate; border-spacing:0; font-size:12.5px;">'
+            + '<table class="concept-table jira-search-table ui-hover-rows" style="width:100%; table-layout:fixed; border-collapse:separate; border-spacing:0; font-size:12.5px;">'
             + head + '<tbody>' + bodyRows + '</tbody></table>';
         var ths = box.querySelectorAll('thead th');
         for (var i = 0; i < ths.length; i++) { ths[i].style.position = 'sticky'; ths[i].style.top = '0'; ths[i].style.zIndex = '2'; }

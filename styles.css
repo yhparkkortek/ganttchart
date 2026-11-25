@@ -72,6 +72,8 @@ a[onclick]:not([href]) { cursor: pointer; text-decoration: underline; }
 thead th { text-align: center; }
 /* ▦ [2026-11-25] 표 칸 선 한 벌 — .concept-table 이 아닌 표(Notice·예약 규칙·Daily)도 같은 테마 선(1px). 색은 js/21 이 --ui-cell-line 으로. */
 .ui-line-tbl th, .ui-line-tbl td { border-color: var(--ui-cell-line, #cfe3e5) !important; }
+/* ▤ [2026-11-25] 누르면 열리는 행의 hover 한 벌 — 테마 연한 색(Project list 행 hover 와 같은 gen.bg). 칸(td)에 칠해 제브라 위로 보이게. */
+.ui-hover-rows > tbody > tr:hover > td { background-color: var(--modal-hdr-bg, #e0f5f7) !important; }
 
 /* ───── 1. head 메인 스타일시트 (:root 변수 등) (원본 줄 31~1085) ───── */
     :root {

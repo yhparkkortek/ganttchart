@@ -1901,7 +1901,7 @@ ${question}
             var bg = i % 2 === 0 ? '#fff' : '#f7f9fc';
             var mnEsc = matnr.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
             if (isClickable) {
-                html += '<tr style="background:' + bg + '; cursor:pointer;" onclick="window._sapSelectMaterial(\'' + mnEsc + '\')" onmouseover="this.style.background=\'#d4eaf8\'" onmouseout="this.style.background=\'' + bg + '\'">';
+                html += '<tr style="background:' + bg + '; cursor:pointer;" onclick="window._sapSelectMaterial(\'' + mnEsc + '\')" onmouseover="this.style.background=\'var(--modal-hdr-bg, #e0f5f7)\'" onmouseout="this.style.background=\'' + bg + '\'">';
             } else {
                 html += '<tr style="background:' + bg + ';">';
             }
@@ -2007,7 +2007,7 @@ ${question}
                 var bg = i % 2 === 0 ? '#fff' : '#f7f9fc';
                 var mnEsc = matnr.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
                 allHtml += isClickable
-                    ? '<tr style="background:' + bg + ';cursor:pointer;" onclick="window._sapSelectMaterial(\'' + mnEsc + '\')" onmouseover="this.style.background=\'#d4eaf8\'" onmouseout="this.style.background=\'' + bg + '\'">'
+                    ? '<tr style="background:' + bg + ';cursor:pointer;" onclick="window._sapSelectMaterial(\'' + mnEsc + '\')" onmouseover="this.style.background=\'var(--modal-hdr-bg, #e0f5f7)\'" onmouseout="this.style.background=\'' + bg + '\'">'
                     : '<tr style="background:' + bg + ';">';
                 cells.forEach(function(cell, ci) {
                     var cv = (cell || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');

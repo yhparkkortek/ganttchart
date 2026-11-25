@@ -317,7 +317,6 @@ window.renderAlarmTab = async function() {
     window._alarmLastCbIdx = null;
     tbody.innerHTML = items.map((item, idx) => `
         <tr class="${idx % 2 === 1 ? 'mc-zebra-b' : 'mc-zebra-a'}" style="cursor:pointer; border-bottom:1px solid #cfe3e5;"
-            onmouseover="this.style.background='#d3ecef'" onmouseout="this.style.background=''"
             title="${_isEn ? 'Double-click to jump to this task in the Gantt chart' : '더블클릭하면 Gantt chart의 해당 업무로 이동합니다'}"
             onclick="window._alarmRowClick(${idx})" ondblclick="window._alarmRowDblClick(${idx}, ${item.rowIdx})">
             <td style="padding:6px 6px; text-align:center;" onclick="event.stopPropagation()">
