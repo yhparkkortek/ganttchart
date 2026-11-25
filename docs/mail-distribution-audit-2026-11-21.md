@@ -506,3 +506,11 @@ AI 분석 실패로 업무 내용(task)이 없는 줄은 넣을 게 없어 건�
 - 실측: UL 'Draft report' 메일이 미분류로 간 건 ① UL 프로젝트 번호(4792432549)가 STELLAR32 키워드에 없었고 ② 같은 발신자의 앞 메일이 11-23 옛 규칙('kortek' 낱말)으로 **KORTEK_개발업무**에 자동 배치돼 발신자·스레드 근거가 잡무를 가리켰다. → STELLAR32 메일키워드에 번호 추가(사람 지정) · **잡무 프로젝트(MAIL_ROUTING_CATCHALL)로 간 자동 배치는 스레드 근거에서, 발신자 근거에서는 사람 배치까지 뺀다**(js/74 `threadTarget`·js/61 `mailEvidenceFor`, 판정은 js/74 `_mailRouteIsCatchAllRecord` 한 곳, RULE_V 2026-11-25a). 검증 `node tests/mail-catchall-evidence.test.js` 12/12 + 돌연변이.
 - 사내 목록(js/49)에는 있고 앱엔 없는 프로젝트(UNIDESA 14 BTN)의 미분류 메일 — 보관함 새 프로젝트 제안은 '대기' 카드만 보므로 버튼이 없었다 → 미분류 줄에 ➕(`_msQueueNewProject`, js/15b, AI 0회, 첫 저장 뒤 `mailRouteRejudgeUnmatched`). ⚠️ 화면은 미확인.
 - 코드가 어디에도 없는 메일(EMI TAPE 133391 — 29개 프로젝트 BOM·파일 전체 0건)은 미분류가 정상이다.
+
+### 8-y (2026-11-25) 범용어 3차 · 크기 가드 · 미분류를 보관함으로 합침
+
+- 판정기(js/74) 고친 것 — 모두 실데이터 대기 카드·미분류 메일 재판정에서 나왔다:
+  - 제목의 크기가 자동 대상 크기와 하나도 안 맞으면 대기(`size_mismatch`) — js/75 에만 있던 가드를 판정기에(공통 건만 예외). 'KONAMI>75" C Curved' 결재가 55" KGP-4 로 갈 판정이었다.
+  - 강한 숫자 단서는 제품 관리번호(5xxxxx)·고객 PN(7자리+)만(`strongNumRe`) — 반제품 코드 302601·303033 이 SSBT 견적을 OBSIDIAN27 DB 로 끌었다.
+  - 범용어 추가: 형태(`ccurved`)·결재 양식 이름(js/52 카탈로그에서 읽음 — 새 프로젝트 키워드 '연구개발과제 발의서')·모델명 조각(`button`·`deck` — 광고 메일 7건이 UNIDESA 로)·PN 꼬리(`alt3`·`var2`)·'범용어/우리 회사+숫자'(`kortek2`) 는 배우지도 않는다.
+- **미분류 → 업무 보관함**(사용자 결정): 후보 0개 + AI 업무 추출 성공 메일은 보관함 '대기' 카드(후보 없음, `ambiguousReason:'no_project'`)로 간다. 입구는 큐 저장 `_msSaveQueueToStorage` 한 곳(`_msUnmatchedToInbox`, js/15b), 쌓여 있던 미분류는 앱을 열고 15초 뒤 한 번. AI 분석 실패 건만 미분류에 남는다. 끄기 `gantt_unmatched_to_inbox_off`. 검증 `node tests/unmatched-to-inbox.test.js` 13/13(진짜 15b, 가짜는 저장소·DOM·TaskInbox 배열).

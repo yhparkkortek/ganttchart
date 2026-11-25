@@ -60,6 +60,57 @@ window._msSaveQueueToStorage = function() {
     try {
         localStorage.setItem(MS_QUEUE_STORAGE_KEY, window._msSlimQueue(window._msResults || []).json);
     } catch(e) { console.warn('큐 저장 실패:', e); }
+    if (window._msUnmatchedToInboxSoon) window._msUnmatchedToInboxSoon();
+};
+
+// 📥 [2026-11-25 사용자 결정 "미분류를 보관함으로 합쳐줘"] 어느 프로젝트에도 걸리지 않은(후보 0개) 메일도
+//    업무 보관함의 '대기' 카드로 보낸다 — 예전엔 이 PC 브라우저 안의 '미분류' 목록(ms_pending_queue)에만 남아
+//    ① 사람이 두 곳을 봐야 했고 ② 다른 PC·팀원에게 안 보였고 ③ 재판정·새 프로젝트 버튼을 두 벌 만들어야 했다.
+//    보관함엔 후보 없는 대기 카드(사유 "매칭된 프로젝트가 없습니다" · [➕ 새 Proj 생성] · [📤 다른 Proj] · 🗑)가 이미 있다.
+//    입구는 큐 저장(_msSaveQueueToStorage) **한 곳** — 자동 수집·수동 분석·재분석 어느 길로 들어와도 저장은 여기를 지난다.
+//    · AI 분석에 실패한 건(task 없음)은 카드로 만들 업무가 없어 미분류에 남긴다(🔄 재분석이 거기 있다).
+//    · 옮긴 건 r.project 에 표시를 남겨 미분류 목록·재판정에서 빠진다 — 보관함에서 지워도 다시 안 들어간다.
+window.MS_UNMATCHED_TO_INBOX = window.MS_UNMATCHED_TO_INBOX || { enabled: true, offKey: 'gantt_unmatched_to_inbox_off', delayMs: 2500 };
+window._msUnmatchedToInbox = function() {
+    const P = window.MS_UNMATCHED_TO_INBOX;
+    if (!P.enabled || localStorage.getItem(P.offKey) === '1') return 0;
+    if (!window.TaskInbox || !Array.isArray(window._msResults)) return 0;
+    const rows = window._msResults.filter(function(r) { return r && !r.project && !r.registered && r.task; });
+    if (!rows.length) return 0;
+    const _en = window._currentLang === 'en';
+    let n = 0;
+    rows.forEach(function(r) {
+        const mailLike = { key: r.key || '', fileName: r.fileName || '' };
+        if (!window._msMailAlreadyInInbox(mailLike)) {
+            const mailRawObj = { subject: r.subject, sender: r.sender, to: r.to, cc: r.cc, date: r.date,
+                body2000: r.body || r.body2000 || '', fileName: r.fileName, key: r.key || '', refs: r.refs || [] };
+            window.TaskInbox.add(r.task, {
+                source: _en ? '📭 Unclassified (no project)' : '📭 미분류(프로젝트 없음)',
+                mailRaw: mailRawObj,
+                matchedProject: { status: 'ambiguous', candidates: [], extraCandidates: [], confidence: '',
+                    matchBasis: r.matchReason || (_en ? 'No project matched' : '어느 프로젝트에도 걸리지 않음'),
+                    ambiguousReason: 'no_project' },
+                alarmWorthy: false
+            });
+            n++;
+        }
+        r.project = _en ? '📥 Task Inbox (no project)' : '📥 보관함(프로젝트 없음)';
+    });
+    try { localStorage.setItem(MS_QUEUE_STORAGE_KEY, window._msSlimQueue(window._msResults).json); } catch (e) { /* 다음 저장 때 */ }
+    if (n) {
+        console.info('[미분류→보관함] ' + n + '건을 업무 보관함 대기 카드로 옮겼습니다');
+        if (typeof window.renderTaskInbox === 'function') { try { window.renderTaskInbox(); } catch (e) { /* 화면 없음 */ } }
+        if (window.TaskInbox.syncNow) { try { window.TaskInbox.syncNow(); } catch (e) { /* 다음 동기화 */ } }
+    }
+    if (typeof msRenderList === 'function') { try { msRenderList(window._msResults); } catch (e) { /* 화면 없음 */ } }
+    if (window._msRefreshQueueBadges) window._msRefreshQueueBadges();
+    return n;
+};
+let _msU2iTimer = null;
+window._msUnmatchedToInboxSoon = function() {
+    if (_msU2iTimer) clearTimeout(_msU2iTimer);
+    _msU2iTimer = setTimeout(function() { _msU2iTimer = null; try { window._msUnmatchedToInbox(); } catch (e) { console.warn('[미분류→보관함] 실패:', e.message); } },
+        (window.MS_UNMATCHED_TO_INBOX && window.MS_UNMATCHED_TO_INBOX.delayMs) || 2500);
 };
 
 window._msLoadQueueFromStorage = function() {
@@ -70,6 +121,8 @@ window._msLoadQueueFromStorage = function() {
         if (Array.isArray(saved) && saved.length) {
             window._msResults = saved;
             if (typeof msRenderList === 'function') msRenderList(window._msResults);
+            // 📥 쌓여 있던 미분류도 보관함으로 — 보관함이 NAS 에서 들어올 시간을 준다(중복 검사가 보관함 목록을 본다)
+            setTimeout(function() { try { window._msUnmatchedToInbox && window._msUnmatchedToInbox(); } catch (e) { console.warn('[미분류→보관함] 실패:', e.message); } }, 15000);
         }
     } catch(e) { console.warn('큐 복원 실패:', e); }
 };
@@ -1796,6 +1849,10 @@ window._msBuildQueueSummaryHtml = function(type, rows) {
         reasonHtml = reasonTop.length
             ? `<div style="margin-top:6px;"><b>사유 상위:</b><br>${reasonTop.map(e => chip(e[0], e[1], 'reason')).join('')}</div>`
             : '';
+        // 📥 [2026-11-25] 후보 0개 메일은 이제 업무 보관함 대기 카드로 간다 — 여기 남는 건 AI 분석에 실패한 건뿐
+        reasonHtml += `<div style="margin-top:6px;color:#1971c2;">📥 ${window._currentLang === 'en'
+            ? 'Mails with no matching project now go to the Task Inbox as pending cards — only failed AI analyses stay here (🔄 re-analyze).'
+            : '어느 프로젝트에도 안 걸린 메일은 이제 업무 보관함의 대기 카드로 갑니다 — 여기엔 AI 분석에 실패한 건만 남습니다(🔄 재분석).'}</div>`;
     }
 
     let filterHtml = '';
