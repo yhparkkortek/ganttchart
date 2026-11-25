@@ -33,7 +33,7 @@
     var BTN = 'white-space:nowrap; height:31px; box-sizing:border-box; padding:0 12px; display:inline-flex; align-items:center;'
             + ' background:#e0f5f7; color:#00707d; border:none;'
             + ' border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s;'
-            + ' margin-right:4px; order:99;';
+            + ' margin-left:6px; order:99;';   // 🎨 [2026-11-25] 앞 버튼 묶음과 6px 띄우고(전엔 0px 로 붙었다) 오른쪽 끝은 다른 버튼과 맞춘다(전엔 4px 안쪽)
 
     function _render() {
         (window.PAGE_NAS_FOLDERS || []).forEach(function (p) {
