@@ -472,3 +472,59 @@ Summary처럼 블록이 여러 개인 페이지를 **시트 하나**로 낸다(�
 예전엔 📄 를 썼는데 **거의 흰색이라 밝은 배경에서 잘 안 보인다**(사용자 지적). 앱 전체에서
 📜 로 바꿨다(22개 파일 87군데). 아이콘으로 무엇을 가려내는 코드는 없다(표시 전용)라 안전했다 —
 새로 붙이는 문서 버튼도 📜 를 쓸 것.
+
+## 🎨 날짜 글자색 기준 — 일·공휴일 빨강 / 토 파랑 / 평일 회색 (2026-11-25)
+
+**사용자 결정:** 날짜가 보이는 페이지는 전부 같은 규칙으로 칠한다. 평일과 구분이 안 된다는 지적이 있어
+빨강·파랑은 **볼드**, 평일은 보통 굵기의 회색으로 정했다.
+
+| 구분 | 색 | 굵기 | 비고 |
+|---|---|---|---|
+| 일요일 · 공휴일 | `#d32f2f` | 볼드 | **토요일이 공휴일이어도 빨강**(`window.isHoliday`) |
+| 토요일 | `#1e6fe8` | 볼드 | |
+| 평일 | `#555` | 보통 | 원래 색이 따로 있는 칸(Daily 하루 보기 라벨 `#444`)은 **그대로 둔다** |
+
+- **Calendar 만 일요일 빨강이 `#e03131`** — 달력에 원래 있던 색을 그대로 뒀다(`.cal-weekend-sun`). 새로 만드는 곳은 `#d32f2f`.
+- **판정은 `window._dateDayCls(문자열)` 한 곳**(js/04a). `YYYY-MM-DD` 로 시작하는 글자를 받아
+  `'date-day-hol'` / `'date-day-sat'` / `'date-day-wk'` 를 돌려주고, 날짜가 아니면 `''`. 새 페이지는 **이 함수만 부르고** 요일 계산을 따로 만들지 않는다
+  (Daily 월 보기·Calendar 는 같은 규칙을 제 코드로 한 번 더 계산한다 — 두 곳을 고칠 일이 생기면 같이).
+
+### ⚠️ 색은 클래스로, 그리고 **두 곳에 같이** 적는다
+팔레트 테마(js/21 `_cpApplyLive`)가 `!important` 규칙으로 글자색을 덮어쓰므로 **인라인 `color` 로는 안 먹는다**.
+- `styles.css` — 팔레트 미적용 기본값
+- `js/21-color-palette.js` `_cpApplyLive` — 라이브(테마 바꿀 때)
+
+하나만 고치면 "기본 테마에서만 색이 안 바뀐다". 규칙은 **페이지 범위를 붙여** 좁게 쓴다
+(`#tab-alarm td.date-day-hol`, `#doc-page-body input.date-day-sat`, `#weekly-report-page .date-day-hol` …) — 다른 페이지 글자를 건드리지 않게.
+
+### 페이지별 적용 방식
+| 페이지 | 칠하는 곳 | 방식 | 파일 |
+|---|---|---|---|
+| Daily Report 하루 보기 | 헤더 날짜 라벨 `#daily-day-label` | 라벨에 `date-day-hol/sat` 클래스(평일은 원래 색) | js/59 (**CRLF**) |
+| Daily Report 월 보기 | 일자 머리글 `th` | `daily-mdate daily-mdate-hol/sat/wk`, 칸 폭 28px 고정(`table-layout:fixed`) | js/59 |
+| Calendar 월·주 | 날짜 숫자 `.cal-day-num` | `.cal-weekend-sun/sat` — **두 보기가 `calBuildDayCell` 한 곳을 공유**해 따로 안 고쳤다 | js/24 |
+| Weekly Report | 업무 카드 제목·문제점 표(첫 칸·추진일정)·타임라인 | **화면 전용** `wrDateSpan(ts)` 가 일/토/공휴일만 `<span class="date-day-…">` 로 감싼다 | js/20 (**CRLF**) |
+| Summary | 마일스톤 계획·실적 날짜 입력칸 | `_sumColorizeDates` 가 입력칸 클래스를 다시 단다 + `input/change` 위임 + `populateTabData` 감싸기 | js/23 |
+| Project Review | 표 날짜 열·근거 사실 목록 날짜 제목 | `dateCls()` → `ps-date-hol/sat/wk` | js/62 |
+| JIRA | 연결 이슈 표·전체 검색 표의 "수정일" | `td` 에 `_dateDayCls` 결과 | js/70 |
+| Alarm | "완료 예정일" | `td` 에 `_dateDayCls` 결과 | js/22c |
+| Notice | "기준일" | `td` 클래스 + 지난 날짜는 회색 대신 `opacity:.6` | js/22b |
+| Document | `input[type=date]` 전부 | 그리는 코드를 안 고치고 **MutationObserver + input/change** 로 클래스만 다시 단다(`_docColorizeDates`) | js/67 |
+
+**날짜가 없어서 적용하지 않은 페이지:** Address Book(9열, 날짜 값 0건) · Customer SPEC(열 NO/TYPE/TYPE2/Description/Note) · Project list(91열, 날짜 열 없음 —
+도면 리비전 팝업 안의 자유 형식 날짜는 쓰는 사람마다 모양이 달라 일부러 뺐다). 변경 이력의 "구간 삭제" 기간 칸은 도구 입력칸이라 대상 아님.
+**날짜 없는 페이지는 사용자에게 묻지 않고 "날짜 없음" 으로 보고한다**(2026-11-25 사용자 지시).
+
+### ⚠️ 놓치기 쉬운 함정
+- **`t.text` 같은 "AI·PPT·검색이 읽는 글"에는 태그를 섞지 않는다.** Weekly Report 는 그래서 `wrName`/`wrS`/`wrE` 를 따로 들고 화면에 그릴 때만 span 으로 감싼다.
+  문제점 표 첫 칸을 처음엔 `t.text`(평문)로 그려 날짜가 안 칠해졌다(`taskHtml` 로 해결) — **같은 날짜가 한 화면에 여러 곳에 나오면 전부 찾을 것.**
+- **날짜 칸이 코드로 채워지는 곳(프로젝트 불러오기·마법사·달력 선택)은 입력 이벤트가 안 난다.** Summary 는 `populateTabData`·탭 진입 때도 다시 칠하고, Document 는 DOM 변화를 감시한다.
+- **Calendar 월 보기는 앞뒤 달까지 이어서 그린다** — 칸의 날짜를 "표시 월 + 숫자"로 추정하면 틀린다. 칸의 `onclick` 에 든 `YYYY-MM-DD` 를 읽을 것.
+- Weekly Report 맨 위 **주 범위 라벨(월~일)** 은 칠하지 않는다(항상 월요일~일요일이라 의미가 없다).
+- **오늘 칸(`.cal-today`)** 은 자체 강조색이 있어 규칙에서 빠진다.
+
+### 검증 (2026-11-25)
+전 페이지를 합성 날짜(공휴일이 평일에 걸린 10/9·12/25 포함)로 돌려 **불일치 0건**: Daily 하루 92일·월 365칸, Calendar 월 496일·주 398일, Summary 18칸×6라운드,
+Document 실제 서식 4종, Weekly 카드·표·타임라인 14업무, Project Review 18일. ⚠️ **JIRA·Alarm·Notice 는 데이터를 넣어 그리는 입구가 모듈 안에 있어 직접 못 불렀다** —
+같은 범위 안에 92일치 칸을 만들어 팔레트 CSS 가 먹는지만 확인했고(간접), 각 화면 코드가 클래스를 붙이는 것은 소스로 확인했다. **실제 프로젝트·NAS·JIRA 데이터로는 확인 못 했다.**
+검증 스크립트는 파일로 남기지 않았다(하네스 없음) — 같은 검증을 또 만들게 되면 `tests/` 에 남길 것.
