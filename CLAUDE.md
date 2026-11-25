@@ -753,6 +753,7 @@ Telegram 알람 + 주간 업무 보고 + 캘린더 뷰를 하나의 페이지에
 
 ## 작업 팁
 
+- **(2026-11-25) `tests/document-page.browser.js` 118/118** — 원래 4건 실패(89/93)는 하네스가 앱 변경을 못 따라간 것이었다: ① DR/DVR PPT 는 11-19 부터 백엔드 `/doc/stage-dr-pptx`(원본 양식)가 먼저라 `PptxGenJS.writeFile` 덫에 안 닿았다 — 이제 백엔드를 **가짜로** 막고 원본 양식·404 폴백 두 길을 다 본다(옛 하네스는 진짜 백엔드를 불러 브라우저가 .pptx 를 진짜로 내려받았다) ② 11-17 부터 제품구분자는 **모델 카드가 쓰는 것만** 남아(`_mcPruneOrphanUnits`) 카드 없는 `mcUnits` 는 그릴 때 사라진다 — 하네스에 카드를 둔다. 그 예외로 G·H 25건이 아예 안 돌고 있었다.
 - **(2026-11-25) `node tests/edid-parse.test.js`** 40/40 — EDID 판독(기본·CTA·입력 모양 5가지·체크섬)과 js/69 `resKeyOf` 맞물림. 돌연변이(RB 를 블랭킹 폭만으로) → 38/40.
 - **(2026-11-24) 🏭 KTK PN_모델명 SAP 찾기**(js/28 `_sapPnFind`) — **새 프로젝트 마법사 4단계와 Summary 모델 카드 두 곳뿐**(사용자 결정: Project list·Document·Customer SPEC·M.C Table 에 붙였던 것은 "원하는 기능이 아니다"로 되돌렸다 — 다시 넓히기 전에 물을 것). 6자리면 `/sap-material-rows`, 글자면 `/sap-material-pattern`(*대문자*, 띄어 쓴 낱말은 `*` 로, 0건이면 원래 글자로 한 번 더, `📝 내역으로` 는 6자리가 섞여도 내역 검색), 결과는 사람이 골라 `코드_내역`으로 넣는다(1건이어도 자동 안 넣음), SAP 은 읽기만. 검증 headless 크롬 `tests/sap-pn-find.html` 20/20(가짜는 SAP fetch 하나).
 - **(2026-11-24) 🔍 찾기 UI 는 전부 헤더의 🔍 버튼 하나**(js/22b `_hdrFindWidget` + `_hdrFindMount`) — 누르면 아래 작은 상자(position:fixed, 헤더 폭을 안 먹음)에 칸·개수(·▲▼), 찾는 중이면 버튼 글자가 `🔍 3 / 12`(색은 JS 로 안 칠함). 표 위 줄 검색칸은 없앴다. 헤더 넘침 점검은 headless 크롬으로 `tests/hdr-layout.html`(13탭×1366/1920, 넘침 0·두 줄 0 실측), 위젯 자체는 `tests/hdr-find-widget.html` 14/14.

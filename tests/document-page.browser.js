@@ -360,15 +360,38 @@
             ok('조직도에 멤버가 보인다', b2.indexOf('기구자') >= 0 && b2.indexOf('영업담당') >= 0);
             ok('단계 칩 4개', [].slice.call(document.getElementById('doc-page-body').querySelectorAll('button'))
                 .filter(function (b) { return /DR|DVR|PRA/.test(b.textContent); }).length === 4);
-            if (realPW) {
-                PptxGenJS.prototype.writeFile = async function (o) {
-                    var b = await this.write({ outputType: 'arraybuffer' });
-                    wroteP = { name: o.fileName, bytes: b.byteLength };
-                    return o.fileName;
-                };
+            // 📊 PPT 는 두 길이다(2026-11-19~) — ① 백엔드 `/doc/stage-dr-pptx` 가 원본 양식에 값만 채움(기본)
+            //    ② 백엔드가 없거나 재시작 전(404)이면 pptxgenjs 로 새로 조립(폴백). 둘 다 본다.
+            //    ⚠️ 백엔드는 **가짜**로 막는다 — 진짜로 부르면 이 PC 백엔드 상태에 따라 결과가 갈리고(옛 하네스가 그래서
+            //       ②만 기다리다 실패했다) 브라우저가 진짜 .pptx 를 내려받는다.
+            var drReqs = [], drClicks = [], drMode = 'ok', fetchBeforeDr = window.fetch, realClick = HTMLAnchorElement.prototype.click;
+            window.fetch = async function (url, init) {
+                if (String(url).indexOf('/doc/stage-dr-pptx') < 0) return fetchBeforeDr.apply(window, arguments);
+                drReqs.push(JSON.parse((init && init.body) || '{}'));
+                if (drMode === '404') return { ok: false, status: 404, json: async function () { throw new Error('html'); } };
+                return { ok: true, status: 200, blob: async function () { return new Blob(['PK-fake'], { type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation' }); } };
+            };
+            HTMLAnchorElement.prototype.click = function () { drClicks.push(this.download); };
+            try {
                 await window._docExport('pptx');
-                ok('PPT 가 만들어진다', !!wroteP && wroteP.bytes > 20000, JSON.stringify(wroteP));
-                ok('PPT 이름에 단계가 들어간다', /Proto DR/.test((wroteP || {}).name || ''), (wroteP || {}).name);
+                var dq = drReqs[0] || {}, df = dq.fields || {};
+                ok('① 원본 양식: 백엔드에 한 번 보낸다', drReqs.length === 1, String(drReqs.length));
+                ok('① 보낸 값에 단계가 들어간다', /Proto DR/.test(JSON.stringify(df)), JSON.stringify(df).slice(0, 200));
+                ok('① 받은 파일을 그 이름으로 내려받는다', drClicks.length === 1 && /Proto DR.*\.pptx$/.test(drClicks[0] || ''), JSON.stringify(drClicks));
+                if (realPW) {
+                    PptxGenJS.prototype.writeFile = async function (o) {
+                        var b = await this.write({ outputType: 'arraybuffer' });
+                        wroteP = { name: o.fileName, bytes: b.byteLength };
+                        return o.fileName;
+                    };
+                    drMode = '404'; drClicks.length = 0;
+                    await window._docExport('pptx');
+                    ok('② 백엔드 404 면 새로 조립한 PPT 가 만들어진다', !!wroteP && wroteP.bytes > 20000, JSON.stringify(wroteP));
+                    ok('② PPT 이름에 단계가 들어간다', /Proto DR/.test((wroteP || {}).name || ''), (wroteP || {}).name);
+                    ok('② 폴백일 땐 원본 양식 파일을 내려받지 않는다', drClicks.length === 0, JSON.stringify(drClicks));
+                }
+            } finally {
+                window.fetch = fetchBeforeDr; HTMLAnchorElement.prototype.click = realClick;
             }
             var aoaDr = window._docToAoa('stage-dr');
             ok('DR 도 엑셀이 나온다(서식에서 바로)', aoaDr.length > 15, String(aoaDr.length));
@@ -435,6 +458,12 @@
             ok('모델을 하나도 안 늘린 프로젝트는 모델 바가 안 보인다',
                !document.getElementById('doc-header-tools').querySelector('.unit-cycle-btn[onclick*="docCycleUnit"]'));
             window.tabData.mcUnits = ['MVD', 'TVD'];
+            // ⚠️ 2026-11-17 부터 제품구분자는 **Summary 모델 카드가 쓰는 것만** 남는다 — 그리기(populateTabData)마다
+            //    `_mcPruneOrphanUnits`(js/22g)가 카드 없는 이름을 목록에서 뺀다. 카드 없이 mcUnits 만 넣으면
+            //    전환하자마자 TVD 가 사라진다(이 하네스가 그걸로 실패하고 있었다) → 실제 프로젝트처럼 카드를 둔다.
+            window.tabData.projectModels = [
+                { unitId: 'MVD', materials: (window.tabData.projectModels[0] || {}).materials || [] },
+                { unitId: 'TVD', materials: [] }];
             window.mcActiveUnit = 'MVD';
             window._docRender(); await sleep(30);
             var unitBtn = document.getElementById('doc-header-tools').querySelector('.unit-cycle-btn[onclick*="docCycleUnit"]');
@@ -469,6 +498,7 @@
             window.mcActiveUnit = '';
             window._docSetField('sample-report', '제 목', '모델분리 전 제목');
             window.tabData.mcUnits.push('BRANDNEW');
+            window.tabData.projectModels.push({ unitId: 'BRANDNEW', materials: [] });   // 카드 없으면 그릴 때 빠진다(위 G 주석)
             window.mcActiveUnit = 'BRANDNEW';
             var q4 = function (k) { return document.querySelector('#doc-page-body input[data-doc-key="' + k + '"]'); };
             window._docPick('sample-report'); await sleep(30);
