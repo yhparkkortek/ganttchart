@@ -535,7 +535,8 @@ window._calSearchKeep = function (ev) {
     if (!toks.length) return true;
     const hay = [ev.name, ev.content, ev.status, ev.assignee, ev.gwCalendar, ev.gwLocation]
         .map(function (v) { return v == null ? '' : String(v); }).join(' \u0001 ');
-    return window._searchMatchAll(hay, toks);
+    // 📅 [2026-11-25] 일정 기간도 넘긴다 — 날짜·기간 낱말이 그 기간과 겹치면 걸린다(js/04a)
+    return window._searchMatchAll(hay, toks, window._searchSpan ? window._searchSpan(ev.start, ev.end) : null);
 };
 function _calEnsureSearchBar() {
     if (document.getElementById('cal-search-input')) return;

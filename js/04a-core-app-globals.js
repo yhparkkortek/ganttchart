@@ -254,6 +254,8 @@ ${mailText}`;
      *  그래야 띄어쓰기가 든 말("LNW K43", "Harness 300mm")도 한 덩어리로 찾는다. 쉼표가 없으면 예전처럼 띄어쓰기. */
     window._searchTokens = function (q) {
         var s = String(q == null ? '' : q).trim().toLowerCase();
+        // 📅 [2026-11-25] "2026-11-01 ~ 2026-11-20" · "11월 25일" 은 띄어 써도 한 날짜/기간이다(쪼개기 전에 붙인다)
+        s = s.replace(/\s*~\s*/g, '~').replace(/(\d{1,2})월\s+(\d{1,2})일/g, '$1월$2일');
         var parts = /[,，;]/.test(s) ? s.split(/[,，;]/) : s.split(/\s+/);
         return parts.map(function (p) { return p.trim(); }).filter(Boolean);
     };
@@ -311,10 +313,138 @@ ${mailText}`;
     };
     /** 검색어가 걸리나 — 지금 모드대로(AND=전부 / OR=하나라도, `_searchMode`). tokens 가 비면 true.
      *  ⚠️ 이름은 옛날 그대로(호출지 30곳) — 거르기는 전부 이 함수를 지난다. */
-    window._searchMatchAll = function (hay, tokens) {
+    //    dates(선택): 글로 안 싣는 날짜 [{from,to}] — 날짜를 글로 넣으면 "2026" 안의 "02" 처럼 숫자 낱말이 걸려서 따로 받는다(`_searchSpan`).
+    window._searchMatchAll = function (hay, tokens, dates) {
         if (!tokens || !tokens.length) return true;
-        var low = String(hay == null ? '' : hay).toLowerCase(), norm = window._searchNorm(low);
-        return window._searchCombine(tokens, function (t) { return window._searchHasToken(low, t, norm); });
+        var low = String(hay == null ? '' : hay).toLowerCase(), norm = window._searchNorm(low), hd = null;
+        return window._searchCombine(tokens, function (t) {
+            if (window._searchHasToken(low, t, norm)) return true;
+            // 📅 [2026-11-25] 날짜·기간 낱말이면 글에 적힌 날짜(들)와 겹치는지 본다(글자로 맞추는 것에 더한다 — 넓히기만)
+            var r = window._searchDateRange(t);
+            if (!r) return false;
+            if (hd === null) hd = window._searchHayDates(low).concat(dates || []);
+            return hd.some(function (d) { return d.from <= r.to + _SD_DAY - 1 && d.to + _SD_DAY - 1 >= r.from; });
+        });
+    };
+
+    // 📅 [2026-11-25 사용자 요청 "다른 페이지 찾기에도 달력 기간 검색"] 날짜 낱말 규칙 한 벌 — 간트(js/26)도 이걸 쓴다.
+    //    받는 모양: 오늘·어제·내일 / 2026-11-25 · 2026.11.25 · 26-11-25 · 20261125 / 11/25 · 11-25 · 11/25'26 /
+    //    11월25일 / 2026-11 · 11월(그 달 전체) / **기간 A~B**(한쪽을 비우면 열린 기간, 거꾸로 적어도 받는다). 연도가 없으면 올해.
+    //    숫자 하나("32")는 날짜로 읽지 않는다. 못 읽으면 null.
+    var _SD_DAY = 86400000;
+    function _sdDay(y, m, d) {
+        var dt = new Date(y, m - 1, d);
+        if (dt.getFullYear() !== y || dt.getMonth() !== m - 1 || dt.getDate() !== d) return null;
+        return dt.getTime();
+    }
+    window._searchDateRange = function (t) {
+        t = String(t || '').trim().toLowerCase();
+        if (!t) return null;
+        if (t.indexOf('~') >= 0) {
+            var pp = t.split('~');
+            if (pp.length !== 2 || (!pp[0].trim() && !pp[1].trim())) return null;
+            var a = pp[0].trim() ? window._searchDateRange(pp[0]) : { from: -Infinity, to: -Infinity };
+            var b = pp[1].trim() ? window._searchDateRange(pp[1]) : { from: Infinity, to: Infinity };
+            if (!a || !b) return null;
+            var lo = a.from, hi = b.to;
+            if (hi < lo) { lo = b.from; hi = a.to; }
+            return { from: lo, to: hi };
+        }
+        var now = new Date(); now.setHours(0, 0, 0, 0);
+        var Y = now.getFullYear(), m, s, e;
+        var rel = { '오늘': 0, 'today': 0, '어제': -1, 'yesterday': -1, '내일': 1, 'tomorrow': 1 };
+        if (Object.prototype.hasOwnProperty.call(rel, t)) {
+            s = new Date(now.getFullYear(), now.getMonth(), now.getDate() + rel[t]).getTime();
+            return { from: s, to: s };
+        }
+        if ((m = t.match(/^(\d{4}|\d{2})[-/.](\d{1,2})[-/.](\d{1,2})$/)) || (m = t.match(/^(20\d{2})(\d{2})(\d{2})$/))) {
+            var y = parseInt(m[1], 10); if (y < 100) y += 2000;
+            s = _sdDay(y, parseInt(m[2], 10), parseInt(m[3], 10));
+            return s == null ? null : { from: s, to: s };
+        }
+        if ((m = t.match(/^(\d{1,2})[/-](\d{1,2})(?:'(\d{2}))?$/)) || (m = t.match(/^(\d{1,2})월(\d{1,2})일?$/))) {
+            s = _sdDay(m[3] ? 2000 + parseInt(m[3], 10) : Y, parseInt(m[1], 10), parseInt(m[2], 10));
+            return s == null ? null : { from: s, to: s };
+        }
+        if ((m = t.match(/^(\d{4})[-/.](\d{1,2})$/)) || (m = t.match(/^()(\d{1,2})월$/))) {
+            var yy = m[1] ? parseInt(m[1], 10) : Y, mm = parseInt(m[2], 10);
+            if (mm < 1 || mm > 12) return null;
+            s = new Date(yy, mm - 1, 1).getTime(); e = new Date(yy, mm, 0).getTime();
+            return { from: s, to: e };
+        }
+        return null;
+    };
+    /** 글 속에 적힌 날짜들 → [{from,to}]. 연도가 있는 모양만 읽는다(2026-11-25 · 2026.11.25 · 2026/11/25 · 2026-11-25T… ·
+     *  11/25'26 · 2026년 11월 25일). "A~B" 로 붙어 있으면 기간 하나로 본다. "1/2" 같은 비율은 날짜로 안 읽는다. */
+    var _SD_HAY = /(^|[^\d])(?:(\d{4})[-./](\d{1,2})[-./](\d{1,2})|(\d{1,2})\/(\d{1,2})'(\d{2})|(\d{4})년\s*(\d{1,2})월\s*(\d{1,2})일)(?!\d)/g;
+    window._searchHayDates = function (low) {
+        var out = [], m, prevEnd = -1;
+        _SD_HAY.lastIndex = 0;
+        while ((m = _SD_HAY.exec(low))) {
+            var at = m.index + m[1].length, ts;
+            if (m[2]) ts = _sdDay(+m[2], +m[3], +m[4]);
+            else if (m[5]) ts = _sdDay(2000 + (+m[7]), +m[5], +m[6]);
+            else ts = _sdDay(+m[8], +m[9], +m[10]);
+            if (ts != null) {
+                var last = out[out.length - 1];
+                if (last && last.open && /^\s*~\s*$/.test(low.slice(prevEnd, at))) { last.to = Math.max(last.from, ts); last.from = Math.min(last.from, ts); last.open = false; }
+                else out.push({ from: ts, to: ts, open: true });
+                prevEnd = _SD_HAY.lastIndex;
+            }
+            if (m[0].length === m[1].length) _SD_HAY.lastIndex++;
+        }
+        return out;
+    };
+    /** 기간 → `_searchMatchAll` 셋째 인자 [{from,to}](하루 단위로 내림). 숫자(ts)·글 둘 다 받는다. 못 읽으면 []. */
+    window._searchSpan = function (s, e) {
+        var f = function (v) {
+            if (v == null || v === '') return null;
+            var d = new Date(typeof v === 'number' ? v : String(v)); if (isNaN(d.getTime())) return null;
+            d.setHours(0, 0, 0, 0); return d.getTime();
+        };
+        var a = f(s), b = f(e); if (a == null) a = b; if (b == null) b = a;
+        if (a == null) return [];
+        return [{ from: Math.min(a, b), to: Math.max(a, b) }];
+    };
+    // 📅 달력으로 날짜/기간 고르기 버튼 — 앱 공용 달력(showGenericCalendar, js/04i). 고른 값을 forId 칸에 넣고
+    //    그 칸의 검색을 다시 돌린다(run 이 있으면 그 함수, 없으면 input 이벤트 — AND/OR 버튼과 같은 방식).
+    //    기간 버튼은 달력을 두 번 띄운다(시작 → 끝). 끝을 안 고르고 닫으면 칸에 "A~"(그날 이후 전부)가 남는다.
+    window._searchCalBtnsHtml = function (forId, style, run) {
+        var en = window._currentLang === 'en';
+        var attrs = ' data-for="' + (forId || '') + '"' + (run ? ' data-run="' + run + '"' : '') +
+            ' onchange="window._searchCalPicked(this)" style="' + (style || '') + '"';
+        return '<button type="button" class="search-cal-btn" data-range="0"' + attrs +
+                ' onclick="event.stopPropagation(); window._searchCalOpen(this)" title="' + (en ? 'Pick a date from calendar' : '달력에서 날짜 골라 찾기') + '">📅</button>' +
+               '<button type="button" class="search-cal-btn" data-range="1"' + attrs +
+                ' onclick="event.stopPropagation(); window._searchCalOpen(this)" title="' + (en ? 'Pick a period (start → end) from calendar' : '달력에서 기간 골라 찾기 (시작 → 끝)') + '">📅~📅</button>';
+    };
+    window._searchCalOpen = function (btn) {
+        btn.removeAttribute('data-start'); btn.value = '';
+        if (window.showGenericCalendar) window.showGenericCalendar(btn);
+        if (btn.getAttribute('data-range') === '1' && window.showToast) window.showToast(window._currentLang === 'en' ? 'Pick the START date' : '시작 날짜를 고르세요', 'info');
+    };
+    window._searchCalPicked = function (btn) {
+        var v = btn.value; if (!v) return;
+        var inp = document.getElementById(btn.getAttribute('data-for') || '');
+        if (!inp) return;
+        var run = function () {
+            var fn = btn.getAttribute('data-run');
+            if (fn && typeof window[fn] === 'function') { try { window[fn](); } catch (e) { console.warn('[search-cal]', fn, e); } }
+            else inp.dispatchEvent(new Event('input', { bubbles: true }));
+        };
+        if (btn.getAttribute('data-range') !== '1') { inp.value = v; run(); return; }
+        var a = btn.getAttribute('data-start');
+        if (!a) {
+            btn.setAttribute('data-start', v); inp.value = v + '~';
+            setTimeout(function () {   // 달력이 이 change 뒤에 스스로 닫히므로 한 틱 뒤에 다시 연다
+                if (window.showGenericCalendar) window.showGenericCalendar(btn);
+                if (window.showToast) window.showToast(window._currentLang === 'en' ? 'Now pick the END date' : '이제 끝 날짜를 고르세요', 'info');
+            }, 0);
+            return;
+        }
+        btn.removeAttribute('data-start');
+        var b = v; if (b < a) { var x = a; a = b; b = x; }
+        inp.value = a + '~' + b; run();
     };
     /** 낱말이 하나라도 들어 있나 — 걸린 칸/글자 강조용. */
     window._searchMatchAny = function (text, tokens) {

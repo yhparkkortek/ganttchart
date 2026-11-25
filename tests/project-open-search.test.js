@@ -503,4 +503,23 @@ const reset = window._driveModalSearchState.q === '';
       .forEach(([q, want, label]) => { const got = hit(q); const ok = got === want; ok ? pass++ : fail++; console.log((ok ? 'ok  ' : 'FAIL') + ' [Gantt 날짜] ' + label + ' → ' + got + (ok ? '' : ' (기대 ' + want + ')')); });
   }
 }
+// 📅 [2026-11-25] 다른 페이지 찾기의 날짜·기간 — js/04a 공용 규칙(_searchMatchAll 이 글 속 날짜와 넘겨준 기간을 본다)
+{
+  const W = { _currentLang: 'ko' }; new Function('window', helpers)(W);
+  const ts = (y, m, d) => new Date(y, m - 1, d).getTime();
+  const tk = q => W._searchTokens(q);
+  const M = (hay, q, dates) => W._searchMatchAll(hay, tk(q), dates);
+  chk(JSON.stringify(tk('2026-11-01 ~ 2026-11-20, LNW')) === JSON.stringify(['2026-11-01~2026-11-20', 'lnw']), '[날짜 공용] "A ~ B" 는 띄어 써도 한 낱말');
+  chk(JSON.stringify(tk('11월 25일 회의')) === JSON.stringify(['11월25일', '회의']), '[날짜 공용] "11월 25일" 은 한 낱말');
+  chk(M('수정일 2026-11-20T09:10:00', '2026-11-15~2026-11-25'), '[날짜 공용] 글 속 ISO 날짜가 기간 안이면 걸림(JIRA 수정일)');
+  chk(!M('수정일 2026-11-20T09:10:00', '2026-11-21~2026-11-25'), '[날짜 공용] 기간 밖이면 안 걸림');
+  chk(M("시작 11/25'26", '2026-11-25'), "[날짜 공용] 간트 모양 11/25'26 도 날짜로 읽음");
+  chk(M('2026-11-01~2026-11-30 출장', '2026-11-10'), '[날짜 공용] 글 속 기간 "A~B" 는 한 기간(사이 날짜도 걸림)');
+  chk(!M('비율 1/2 · 수량 2026', '2026-01-02'), '[날짜 공용] 연도 없는 1/2·숫자만은 날짜로 안 읽음');
+  chk(M('EDID 검토', '2026-11-12', W._searchSpan(ts(2026, 11, 10), ts(2026, 11, 14))), '[날짜 공용] 넘겨준 기간(달력 일정)과 겹치면 걸림');
+  chk(!M('EDID 검토', '02', W._searchSpan(ts(2026, 11, 10), ts(2026, 11, 14))), '[날짜 공용] 기간을 글로 안 넣으니 "02" 가 연도에 안 걸림');
+  chk(M('EDID 검토', 'edid, 2026-11', W._searchSpan(ts(2026, 11, 10), ts(2026, 11, 14))), '[날짜 공용] 낱말+월 AND');
+  chk(M('EDID', '2026-11-12~', W._searchSpan(ts(2026, 11, 20), null)) && !M('EDID', '~2026-11-12', W._searchSpan(ts(2026, 11, 20), null)), '[날짜 공용] 열린 기간');
+  chk(W._searchDateRange('32') === null && W._searchDateRange('2026-02-30') === null, '[날짜 공용] 숫자 하나·없는 날짜는 날짜 아님');
+}
 console.log(`\n${pass}/${pass + fail}`); process.exit(fail ? 1 : 0);

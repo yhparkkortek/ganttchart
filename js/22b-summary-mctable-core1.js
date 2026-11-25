@@ -1393,6 +1393,8 @@ window._hdrFindWidget = function (o) {
         +   '<input id="' + o.inputId + '" type="search" autocomplete="off" style="width:' + (o.width || 230) + 'px; height:28px; box-sizing:border-box; padding:0 10px; border:1px solid #ccc; border-radius:14px; font-size:12px; outline:none;">'
         // 🔍 [2026-11-25] AND/OR 전환(js/04a, 앱 전체 한 값) — 바꾸면 이 칸의 검색이 다시 돈다
         +   window._searchModeBtnHtml(o.inputId, navBtn + ' font-weight:bold; min-width:42px;')
+        // 📅 [2026-11-25] 달력으로 날짜·기간 골라 찾기(js/04a) — 글에 적힌 날짜와 겹치는 줄이 걸린다
+        +   (window._searchCalBtnsHtml ? window._searchCalBtnsHtml(o.inputId, navBtn) : '')
         +   (o.nav ? '<button type="button" id="' + o.nav.prevId + '" style="' + navBtn + '">▲</button><button type="button" id="' + o.nav.nextId + '" style="' + navBtn + '">▼</button>' : '')
         +   '<span id="' + o.countId + '" style="font-size:12px; color:#888; white-space:nowrap; min-width:36px;"></span>'
         +   '<button type="button" class="hdr-find-x" title="' + (en ? 'Close (search stays on)' : '닫기 (찾기는 유지)') + '" style="border:none; background:none; color:#888; cursor:pointer; font-size:14px; padding:0 4px;">✕</button>'

@@ -432,7 +432,9 @@
         const _wrToks = window._wrSearchToks();
         const _wrTotal = data.thisList.length + data.nextList.length;
         if (_wrToks.length) {
-            const keep = function (t) { return window._searchMatchAll(window._wrItemHay(t), _wrToks); };
+            // 📅 [2026-11-25] 업무 기간도 넘긴다 — 날짜·기간 낱말이 그 기간과 겹치면 걸린다(js/04a)
+            const keep = function (t) { return window._searchMatchAll(window._wrItemHay(t), _wrToks,
+                (t && t.row && window._searchSpan) ? window._searchSpan(t.row._calcStartTs, t.row._calcPlanTs) : null); };
             data.thisList = data.thisList.filter(keep);
             data.nextList = data.nextList.filter(keep);
         }

@@ -465,6 +465,7 @@
         return dt.getTime();
     }
     function _gsDateRange(t) {
+        if (window._searchDateRange) return window._searchDateRange(t);   // 📅 [2026-11-25] 규칙은 js/04a 한 벌(아래는 옛 폴백)
         t = String(t || '').trim().toLowerCase();
         // 🗓 [2026-11-25 사용자 요청 "달력에서 기간도 골라 찾기"] "A~B" = A 부터 B 까지(양 끝 포함).
         //    한쪽을 비우면 열린 기간("2026-11-01~" = 그 뒤 전부, "~2026-11-20" = 그 전 전부). 각 끝은 위 모양 그대로(월도 된다).
