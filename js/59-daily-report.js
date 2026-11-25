@@ -3372,7 +3372,7 @@
                     var off = offDay(d);
                     var wd = new Date(d + 'T00:00:00').getDay();
                     var hol = (wd === 0) || !!(window.isHoliday && window.isHoliday(d));
-                    var dcls = hol ? 'daily-mdate daily-mdate-hol' : (wd === 6 ? 'daily-mdate daily-mdate-sat' : 'daily-mdate');
+                    var dcls = hol ? 'daily-mdate daily-mdate-hol' : (wd === 6 ? 'daily-mdate daily-mdate-sat' : 'daily-mdate daily-mdate-wk');
                     return '<th class="' + dcls + '" style="padding:4px 2px; border:1px solid #cfe3e5; font-size:10.5px; font-weight:bold; text-align:center;">' + (+d.slice(8)) + '</th>';
                 }).join('');
             var trs = peopleM.map(function (p, pi) {
@@ -3388,7 +3388,7 @@
             box.innerHTML =
                 '<div style="margin-bottom:9px; font-size:12.5px; color:#555;">' + esc(T('월 보기 — 칸을 누르면 그 날로 갑니다.',
                     'Month view — click a cell to open that day.')) + '</div>' +
-                '<div style="overflow-x:auto;"><table style="border-collapse:collapse;"><thead><tr style="background:#eef6f7;">' + th + '</tr></thead>' +
+                '<div style="overflow-x:auto;"><table style="border-collapse:collapse; table-layout:fixed; width:' + (84 + daysM.length * 28) + 'px;"><colgroup><col style="width:84px;">' + daysM.map(function () { return '<col style="width:28px;">'; }).join('') + '</colgroup><thead><tr style="background:#eef6f7;">' + th + '</tr></thead>' +
                 '<tbody>' + (trs || '<tr><td style="padding:24px 10px; text-align:center; color:#999; font-size:12.5px;">' + esc(T('이 달에 작성된 보고가 없습니다.', 'No reports this month.')) + '</td></tr>') + '</tbody></table></div>';
             return;
         }

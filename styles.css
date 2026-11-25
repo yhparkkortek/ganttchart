@@ -2648,8 +2648,9 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
 #daily-report-page tr.daily-mrow-b > td:not(.daily-mcell-has) { background: #e8f2f3; }
 #daily-report-page td.daily-mcell-has { background: #eaf6ec; }
 #daily-report-page table th.daily-mdate { font-weight: bold; text-align: center; }
+#daily-report-page table th.daily-mdate-wk { color: #555 !important; font-weight: normal; }
 #daily-report-page table th.daily-mdate-hol { color: #d32f2f !important; }
-#daily-report-page table th.daily-mdate-sat { color: #1565c0 !important; }
+#daily-report-page table th.daily-mdate-sat { color: #1e6fe8 !important; }
 /* 🦓 [2026-11-24] 주간보고 문제점 표도 같은 규칙 — 머리글 headerTint, 줄은 흰색/zebraB */
 #weekly-report-page thead th { background: #eef6f7; color: #00707d; }
 #weekly-report-page tbody > tr > td { background: #fff; }
