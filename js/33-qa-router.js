@@ -277,7 +277,7 @@
             var val = p / u;
             return val % 1 === 0 ? val.toLocaleString('ko-KR') : val.toLocaleString('ko-KR', { maximumFractionDigits: 2 });
         };
-        var _thS = 'padding:5px 8px; text-align:left; border-bottom:1px solid #cdd7e3; white-space:nowrap; position:sticky; top:0; background:#eef3fa;';
+        var _thS = 'padding:5px 8px; text-align:center; border-bottom:1px solid #cdd7e3; white-space:nowrap; position:sticky; top:0; background:#eef3fa;';
         var _tdS = 'padding:5px 8px; border-bottom:1px solid #eef0f3;';
         var tbl = '<div style="max-height:300px; overflow-x:auto; overflow-y:auto; border:1px solid #dde4ec; border-radius:5px;">'
             + '<table style="border-collapse:collapse; font-size:12px; white-space:nowrap;">'
@@ -285,7 +285,7 @@
             + '<th style="' + _thS + '">' + T('자재번호', 'Material No.') + '</th>'
             + '<th style="' + _thS + '">' + T('자재내역', 'Description') + '</th>'
             + '<th style="' + _thS + '">' + T('자재내역2', 'Description 2') + '</th>'
-            + '<th style="' + _thS + ' text-align:right;">' + T('단가(KRW)', 'Unit Price') + '</th>'
+            + '<th style="' + _thS + ' text-align:center;">' + T('단가(KRW)', 'Unit Price') + '</th>'
             + '<th style="' + _thS + '">' + T('자재상태', 'Status') + '</th>'
             + '<th style="' + _thS + '">' + T('제조사', 'Manufacturer') + '</th>'
             + '<th style="' + _thS + '">' + T('담당자', 'Person') + '</th>'

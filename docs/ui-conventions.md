@@ -688,6 +688,10 @@ Sample Report **원본저장** 구간이 옛 `/doc/docx` 한 길만 기대해서
 | 주소록·Alarm·BOM·Customer SPEC·M.C·Summary·간트·Daily | 이미 가운데 | — |
 
 예외(그대로 둔 것): PARTS 비교표 첫 열 `Comparison table`(왼쪽 항목 이름 열 — PARTS 표는 손대지 않기로 함) · Document 지원 해상도 표 `RESOLUTION`(Document 표 보류).
-남은 것: **모달 안 표**(AI 문답 결과 표·자재 보관함·기안 미리보기·Project list 도면 이력/점검·결재 고르기·명단 알림 상태 등)는 왼쪽이 섞여 있다 — 페이지 표만 맞췄다.
+**모달 안 표도 맞췄다(같은 날 2차)** — 원인은 styles.css 전역 `th, td { text-align:left }` 기본이었다: 정렬을 안 적은 표 머리글은 전부 왼쪽이 된다.
+- styles.css `thead th { text-align:center }` 한 줄 — `<thead>` 안만(왼쪽 항목 이름 열로 쓰는 `tbody` 의 th 는 그대로). 인라인·클래스로 정한 정렬이 이긴다(PARTS 첫 열 `!important`·Document 해상도 표 인라인 left 는 그래서 그대로).
+- 인라인으로 `left`/`right` 를 적어 둔 머리글 40줄 → `center`: AI 문답 결과 표(js/04g 마크다운 표·BOM 표, js/04h 행 클릭 칩 표 `_qaBuildRowChipTable`·SAP 옵션·구매오더 품목·문서 목록, js/33 자재 목록 — 단가 머리글의 right 포함), 팔레트 미리보기(js/21), 이슈 리포트(js/31), 자재 보관함(js/35), 백로그 정리(js/44, 메일 수 right 포함), 기안 미리보기(js/47), Project list 도면 이력·점검(js/55), 명단 알림 상태(js/59), Document 결재 고르기·불러오기 비교(js/67), 지원 해상도 팝업(js/69).
+- 머리글 칸이 `<thead>` 없이 첫 `<tr>` 에 바로 있는 표(Project list 도면 표 등)는 전역 규칙이 안 닿는다 — 그래서 인라인으로 고쳤다. 새 표는 `<thead>` 를 쓰면 저절로 가운데.
+- 검증: 실제 앱에서 팔레트 미리보기 표·AI 답변 마크다운 표(`_mdToHtml`)·칩 표 4종(approval·goodsreceipt·gwmail·bompart)을 그려 머리글이 전부 `center` 인 것. 이슈 리포트·자재 보관함은 데이터가 없어 표가 안 떠서 코드만.
 
 검증: 고친 뒤 실제 화면에서 Project list `th` 28개·JIRA 10개가 전부 `center`, Notice·예약 규칙 `제목` 칸 `center`. Project Review 표는 AI 요약을 만들어야 나타나서 화면으로는 못 봤다(문법 검사만).

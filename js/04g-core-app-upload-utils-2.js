@@ -1610,7 +1610,7 @@ ${question}
             });
             return max <= 14;
         });
-        var thS = 'padding:4px 7px; text-align:left; border-bottom:1px solid #cdd7e3; background:#eef3fa; position:sticky; top:0; font-weight:bold; white-space:nowrap;';
+        var thS = 'padding:4px 7px; text-align:center; border-bottom:1px solid #cdd7e3; background:#eef3fa; position:sticky; top:0; font-weight:bold; white-space:nowrap;';
         var tdS = 'padding:4px 7px; border-bottom:1px solid #eef0f3; vertical-align:top; word-break:break-word;';
         var html = '<div style="overflow:auto; max-height:420px; margin:6px 0; border:1px solid #dde4ec; border-radius:5px;">'
             + '<table style="border-collapse:collapse; font-size:11.5px; width:100%;"><thead><tr>'
@@ -1890,7 +1890,7 @@ ${question}
             + '<table style="border-collapse:collapse; font-size:11.5px; white-space:nowrap;">'
             + '<thead><tr style="background:#eef3fa;">';
         headers.forEach(function(h) {
-            html += '<th style="padding:4px 7px; text-align:left; border-bottom:1px solid #cdd7e3; position:sticky; top:0; background:#eef3fa;">'
+            html += '<th style="padding:4px 7px; text-align:center; border-bottom:1px solid #cdd7e3; position:sticky; top:0; background:#eef3fa;">'
                 + (h || '').replace(/&/g, '&amp;').replace(/</g, '&lt;') + '</th>';
         });
         html += '</tr></thead><tbody>';
@@ -1991,7 +1991,7 @@ ${question}
                 + '<table style="border-collapse:collapse;font-size:11.5px;white-space:nowrap;">'
                 + '<thead><tr style="background:#eef3fa;">';
             headers.forEach(function(h) {
-                allHtml += '<th style="padding:4px 8px;text-align:left;border-bottom:1px solid #cdd7e3;position:sticky;top:0;background:#eef3fa;">'
+                allHtml += '<th style="padding:4px 8px;text-align:center;border-bottom:1px solid #cdd7e3;position:sticky;top:0;background:#eef3fa;">'
                     + (h || '').replace(/&/g, '&amp;').replace(/</g, '&lt;') + '</th>';
             });
             allHtml += '</tr></thead><tbody>';

@@ -346,7 +346,7 @@
                 '<button onclick="window._issueRptResolve(' + i + ')" style="font-size:11px; padding:2px 8px; border:1px solid #a8dab8; background:#e6f6ea; color:#1f7a3d; border-radius:5px; cursor:pointer;">' + esc(t('해결됨', 'Resolved')) + '</button></td></tr>' +
                 '<tr id="issue-rpt-detail-' + i + '" style="display:none;"><td></td><td colspan="4" style="padding:6px 6px 12px; background:#fafafa; font-size:11.5px;"></td></tr>';
         }).join('');
-        body.innerHTML = head + '<table style="width:100%; border-collapse:collapse; font-size:12.5px;"><thead><tr style="text-align:left; color:#7a5210; background:#fff8e6;">' +
+        body.innerHTML = head + '<table style="width:100%; border-collapse:collapse; font-size:12.5px;"><thead><tr style="text-align:center; color:#7a5210; background:#fff8e6;">' +
             '<th style="padding:6px;">#</th><th style="padding:6px;">' + esc(t('건수/사용자', 'Count/Users')) + '</th><th style="padding:6px;">' + esc(t('시그니처', 'Signature')) + '</th><th style="padding:6px;">' + esc(t('추정 층', 'Layer')) + '</th><th></th></tr></thead><tbody>' + rows + '</tbody></table>';
     }
     window._issueRptDetail = function (i) {
@@ -539,7 +539,7 @@
                 '<td style="padding:6px; white-space:nowrap;"><select onchange="window._issueLearnSetStatus(' + i + ', this.value)" style="font-size:11px; padding:2px 4px;">' + opts + '</select> ' +
                 (c.group !== 'route' ? '<button id="issue-learn-infer-' + i + '" onclick="window._issueLearnInfer(' + i + ')" style="font-size:11px; padding:2px 8px; border:1px solid #a5c8f0; background:#e7f3ff; color:#1971c2; border-radius:5px; cursor:pointer;">' + esc(t('🤖 AI 추론', '🤖 Infer')) + '</button>' : '') + '</td></tr>';
         }).join('');
-        body.innerHTML = head + '<table style="width:100%; border-collapse:collapse; font-size:12.5px;"><thead><tr style="text-align:left; color:#7a5210; background:#fff8e6;">' +
+        body.innerHTML = head + '<table style="width:100%; border-collapse:collapse; font-size:12.5px;"><thead><tr style="text-align:center; color:#7a5210; background:#fff8e6;">' +
             '<th style="padding:6px;">#</th><th style="padding:6px;">' + esc(t('수요', 'Demand')) + '</th><th style="padding:6px;">' + esc(t('요청 · 추론', 'Requests · inference')) + '</th><th style="padding:6px;">' + esc(t('판정', 'Verdict')) + '</th><th style="padding:6px;">' + esc(t('상태', 'Status')) + '</th></tr></thead><tbody>' + rows + '</tbody></table>';
     }
     window._issueRptView = function (v) { _state.view = v; render(); };
@@ -634,7 +634,7 @@
             '<br>' + esc(t('총 ', 'Total ')) + '<b>' + p.rows.length + '</b>' + esc(t('건 (새로 바뀌는 항목 ', ' (changes ')) + '<b>' + newCnt + '</b>' + esc(t('건)', ')')) +
             '<br><span style="color:#888;">' + esc(t('반영하면 Drive의 _resolved.json / sap_learning.json에 저장되고, 이후 같은 시그니처가 다시 오면 재발로 표시됩니다.',
                 'Applying saves to _resolved.json / sap_learning.json on Drive; later hits on the same signature show up as recurrences.')) + '</span></div>';
-        html += '<table style="width:100%; border-collapse:collapse; font-size:12px;"><thead><tr style="text-align:left; color:#7a5210; background:#fff8e6;">' +
+        html += '<table style="width:100%; border-collapse:collapse; font-size:12px;"><thead><tr style="text-align:center; color:#7a5210; background:#fff8e6;">' +
             '<th style="padding:5px;">' + esc(t('구분', 'Type')) + '</th><th style="padding:5px;">' + esc(t('대상', 'Target')) + '</th>' +
             '<th style="padding:5px;">' + esc(t('변경', 'Change')) + '</th><th style="padding:5px;">' + esc(t('사유/커밋', 'Reason/commit')) + '</th></tr></thead><tbody>' +
             p.rows.map(function (r) {

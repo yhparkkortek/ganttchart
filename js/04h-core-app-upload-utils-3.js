@@ -1132,8 +1132,8 @@
                     <table style="width:100%; border-collapse:collapse; table-layout:fixed;">
                         <colgroup><col style="width:55%"><col style="width:45%"></colgroup>
                         <thead><tr style="background:#e9ecef;">
-                            <th style="${tdSt} font-weight:600; color:#555; text-align:left;">${_en ? 'Option' : '항목'}</th>
-                            <th style="${tdSt} font-weight:600; color:#555; text-align:left;">${_en ? 'Value' : '선택'}</th>
+                            <th style="${tdSt} font-weight:600; color:#555; text-align:center;">${_en ? 'Option' : '항목'}</th>
+                            <th style="${tdSt} font-weight:600; color:#555; text-align:center;">${_en ? 'Value' : '선택'}</th>
                         </tr></thead>
                         <tbody>${rows}</tbody>
                     </table>
@@ -1292,7 +1292,7 @@
         const esc = function (v) { return (v == null ? '' : String(v)).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); };
         const tableId = 'qarows_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
         window._qaRowChipStore[tableId] = rows;
-        const thS = 'box-sizing:border-box; padding:4px 7px; text-align:left; border-bottom:1px solid #cdd7e3; white-space:nowrap; position:sticky; top:0; background:#eef3fa;';
+        const thS = 'box-sizing:border-box; padding:4px 7px; text-align:center; border-bottom:1px solid #cdd7e3; white-space:nowrap; position:sticky; top:0; background:#eef3fa;';
         // ⚠️ 너비를 주려면 `table-layout:fixed` 가 **반드시** 같이 있어야 한다 —
         //    없으면 브라우저가 내용에 맞춰 열을 다시 벌려 nowrap 글자가 옆 칸을 덮는다
         //    (알람 도표에서 먼저 겪은 것과 같은 함정, docs/handoff-zmm009-table-alarm-ui.md).
@@ -1596,7 +1596,7 @@
                 '<span id="pof-' + id + '-projmsg-' + i + '" style="font-size:10px; color:#888;"></span>' +
                 '</div>';
             // 품목 테이블: 임시코드·프로젝트코드·목적·요청사유 모두 품목별 — 1행 변경 시 이후 행 자동 전파
-            const thSt = 'padding:3px 4px; border:1px solid #c5cef5; background:#dde3f8; color:#2c5fa8; font-size:10px; font-weight:bold; text-align:left; white-space:nowrap;';
+            const thSt = 'padding:3px 4px; border:1px solid #c5cef5; background:#dde3f8; color:#2c5fa8; font-size:10px; font-weight:bold; text-align:center; white-space:nowrap;';
             const tdSt = 'padding:2px 3px; border:1px solid #d5daf0; vertical-align:middle;';
             const selRSt = 'width:100%; font-size:10.5px; padding:2px 3px; border:1px solid #ccc; border-radius:3px; background:#fff;';
             const inpRSt = 'width:100%; font-size:10.5px; padding:2px 4px; border:1px solid #ccc; border-radius:3px; box-sizing:border-box;';
@@ -3440,7 +3440,7 @@ ${docsJson}`;
                 var t = '<div style="max-height:300px; overflow:auto; border:1px solid #ddd; border-radius:4px;">'
                     + '<table style="width:100%; border-collapse:collapse; font-size:12px;"><thead><tr style="background:#eef3fa;">';
                 codes.forEach(function (c) {
-                    t += '<th style="padding:5px 8px; text-align:left; border-bottom:1px solid #cdd7e3; white-space:nowrap; position:sticky; top:0; background:#eef3fa;">'
+                    t += '<th style="padding:5px 8px; text-align:center; border-bottom:1px solid #cdd7e3; white-space:nowrap; position:sticky; top:0; background:#eef3fa;">'
                         + esc(lbl(c)) + '</th>';
                 });
                 t += '</tr></thead><tbody>';
@@ -7523,9 +7523,9 @@ ${docsJson}`;
                     tbl += '<div style="max-height:280px; overflow-y:auto; border:1px solid #ddd; border-radius:4px;">'
                         + '<table style="width:100%; border-collapse:collapse; font-size:12px;">'
                         + '<thead><tr style="background:#f0f4ff; position:sticky; top:0;">'
-                        + '<th style="padding:4px 8px; border-bottom:1px solid #ccc; text-align:left;">' + window._t('자재번호', 'Material') + '</th>'
+                        + '<th style="padding:4px 8px; border-bottom:1px solid #ccc; text-align:center;">' + window._t('자재번호', 'Material') + '</th>'
                         + '<th style="padding:4px 8px; border-bottom:1px solid #ccc; text-align:center;">' + window._t('문서', 'Doc') + '</th>'
-                        + '<th style="padding:4px 8px; border-bottom:1px solid #ccc; text-align:left;">' + window._t('문서번호', 'Doc No.') + '</th>'
+                        + '<th style="padding:4px 8px; border-bottom:1px solid #ccc; text-align:center;">' + window._t('문서번호', 'Doc No.') + '</th>'
                         + '<th style="padding:4px 8px; border-bottom:1px solid #ccc; text-align:center; width:62px;">' + window._t('열기', 'Open') + '</th>'
                         + '</tr></thead><tbody>';
                     rows.forEach(function(r) {

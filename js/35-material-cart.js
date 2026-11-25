@@ -392,11 +392,11 @@
             + '<table style="width:100%; table-layout:fixed; border-collapse:collapse; font-size:12px;">'
             + '<colgroup><col style="width:90px;"><col><col style="width:62px;"><col style="width:52px;"><col style="width:36%;"><col style="width:28px;"></colgroup>'
             + '<thead><tr style="background:#eef3fa;">'
-            + '<th style="padding:5px 6px; text-align:left; border-bottom:1px solid #cdd7e3;">' + T('자재번호', 'Material') + '</th>'
-            + '<th style="padding:5px 6px; text-align:left; border-bottom:1px solid #cdd7e3;">' + T('자재내역', 'Description') + '</th>'
+            + '<th style="padding:5px 6px; text-align:center; border-bottom:1px solid #cdd7e3;">' + T('자재번호', 'Material') + '</th>'
+            + '<th style="padding:5px 6px; text-align:center; border-bottom:1px solid #cdd7e3;">' + T('자재내역', 'Description') + '</th>'
             + '<th style="padding:5px 6px; border-bottom:1px solid #cdd7e3;">' + T('수량', 'Qty') + '</th>'
             + '<th style="padding:5px 6px; border-bottom:1px solid #cdd7e3;">' + T('단위', 'Unit') + '</th>'
-            + '<th style="padding:5px 6px; text-align:left; border-bottom:1px solid #cdd7e3;">' + T('사유(텍스트) *', 'Reason (text) *') + '</th>'
+            + '<th style="padding:5px 6px; text-align:center; border-bottom:1px solid #cdd7e3;">' + T('사유(텍스트) *', 'Reason (text) *') + '</th>'
             + '<th style="padding:5px 2px; border-bottom:1px solid #cdd7e3;"></th>'
             + '</tr></thead><tbody>';
         list.forEach(function (it, i) {

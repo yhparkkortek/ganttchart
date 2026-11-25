@@ -584,14 +584,14 @@ function _bcRender(ctx) {
         + (ctx.ai ? ' · AI applied' : ' · ⚠️ AI failed, rules only')));
 
     var html = '<table style="width:100%; border-collapse:collapse; font-size:12px; background:#fff;">'
-        + '<thead><tr style="background:#f1f3f5; text-align:left;">'
+        + '<thead><tr style="background:#f1f3f5; text-align:center;">'
         // 💡 [2026-10-21] 헤더 체크박스로 전체 선택/해제 — 줄이 수십 개라 하나씩 누르면 못 쓴다.
         //    일부만 선택된 상태는 indeterminate(―)로 보여준다.
         + '<th style="padding:6px 8px; width:34px;"><input type="checkbox" id="bc-chk-all" title="'
         + _t('전체 선택 / 해제', 'Select / clear all') + '" style="cursor:pointer;"></th>'
         + '<th style="padding:6px 8px;">' + _t('고객사', 'Customer') + '</th>'
         + '<th style="padding:6px 8px;">' + _t('제품/모델명', 'Product / model') + '</th>'
-        + '<th style="padding:6px 8px; width:60px; text-align:right;">' + _t('메일', 'Mails') + '</th>'
+        + '<th style="padding:6px 8px; width:60px; text-align:center;">' + _t('메일', 'Mails') + '</th>'
         + '<th style="padding:6px 8px; width:44px;">' + _t('확신', 'Conf.') + '</th>'
         + '<th style="padding:6px 8px;">' + _t('근거 / 포함된 군집', 'Reason / clusters') + '</th>'
         + '</tr></thead><tbody>';

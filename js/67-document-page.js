@@ -6258,10 +6258,10 @@
                          'No matching documents.')) + '</div>';
         }
         h += '<table style="border-collapse:collapse; width:100%; font-size:11.5px;"><tr>'
-              + '<th style="border:1px solid #cfe3e5; padding:4px; background:#eef6f7; text-align:left;">' + _esc(_t('문서번호', 'No.')) + '</th>'
-              + '<th style="border:1px solid #cfe3e5; padding:4px; background:#eef6f7; text-align:left;">' + _esc(_t('기안 일자', 'Date')) + '</th>'
-              + '<th style="border:1px solid #cfe3e5; padding:4px; background:#eef6f7; text-align:left;">' + _esc(_t('기안자', 'Drafter')) + '</th>'
-              + '<th style="border:1px solid #cfe3e5; padding:4px; background:#eef6f7; text-align:left;">' + _esc(_t('제목', 'Title')) + '</th></tr>';
+              + '<th style="border:1px solid #cfe3e5; padding:4px; background:#eef6f7; text-align:center;">' + _esc(_t('문서번호', 'No.')) + '</th>'
+              + '<th style="border:1px solid #cfe3e5; padding:4px; background:#eef6f7; text-align:center;">' + _esc(_t('기안 일자', 'Date')) + '</th>'
+              + '<th style="border:1px solid #cfe3e5; padding:4px; background:#eef6f7; text-align:center;">' + _esc(_t('기안자', 'Drafter')) + '</th>'
+              + '<th style="border:1px solid #cfe3e5; padding:4px; background:#eef6f7; text-align:center;">' + _esc(_t('제목', 'Title')) + '</th></tr>';
         p.docs.forEach(function (d, i) {
             h += '<tr onclick="window._docGwChoose(' + i + ')" style="cursor:pointer;"'
                + ' onmouseover="this.style.background=\'#eef6f7\';" onmouseout="this.style.background=\'\';">'
@@ -6447,9 +6447,9 @@
                         'Checked fields will be filled.')) + '</div>'
               + '<table style="border-collapse:collapse; width:100%; font-size:11.5px;"><tr>'
               + '<th style="border:1px solid #e9ecef; padding:4px; width:26px;"></th>'
-              + '<th style="border:1px solid #e9ecef; padding:4px; text-align:left;">' + _esc(_t('칸', 'Field')) + '</th>'
-              + '<th style="border:1px solid #e9ecef; padding:4px; text-align:left;">' + _esc(_t('지금', 'Now')) + '</th>'
-              + '<th style="border:1px solid #e9ecef; padding:4px; text-align:left;">' + _esc(_t('문서에서', 'From file')) + '</th></tr>';
+              + '<th style="border:1px solid #e9ecef; padding:4px; text-align:center;">' + _esc(_t('칸', 'Field')) + '</th>'
+              + '<th style="border:1px solid #e9ecef; padding:4px; text-align:center;">' + _esc(_t('지금', 'Now')) + '</th>'
+              + '<th style="border:1px solid #e9ecef; padding:4px; text-align:center;">' + _esc(_t('문서에서', 'From file')) + '</th></tr>';
         p.hits.forEach(function (x, i) {
             h += '<tr><td style="border:1px solid #e9ecef; padding:3px; text-align:center;">'
                + '<input type="checkbox" id="docimp-c-' + i + '" checked></td>'

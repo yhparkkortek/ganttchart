@@ -3027,7 +3027,7 @@
             '<div style="margin-bottom:6px; color:#555;">' + pcLine + '</div>' +
             '<table style="border-collapse:collapse; font-size:11.5px; width:100%;"><thead><tr style="background:#f4f6f8;">' +
             [['채널', 'Channel'], ['지금 상태', 'State'], ['마지막 발송', 'Last sent'], ['마지막 확인', 'Last check'], ['설정', 'Config']].map(function (h) {
-                return '<th style="padding:4px 6px; border:1px solid #e3e6ea; color:#2c5f8a; text-align:left;">' + esc(T(h[0], h[1])) + '</th>';
+                return '<th style="padding:4px 6px; border:1px solid #e3e6ea; color:#2c5f8a; text-align:center;">' + esc(T(h[0], h[1])) + '</th>';
             }).join('') + '</tr></thead><tbody>' + rows + '</tbody></table>';
     };
 

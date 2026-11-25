@@ -3039,10 +3039,10 @@
         var revHtml = revs.length
             ? '<table style="width:100%; font-size:11.5px; border-collapse:collapse; table-layout:fixed;">'
               + '<tr style="background:#f1f3f5; position:sticky; top:0;">'
-              + '<th style="text-align:left; padding:5px 6px; width:56px;">REV</th>'
-              + '<th style="text-align:left; padding:5px 6px;">' + _t('변경 내용', 'Description') + '</th>'
-              + '<th style="text-align:left; padding:5px 6px; width:96px;">' + _t('작성자', 'Drawn by') + '</th>'
-              + '<th style="text-align:left; padding:5px 6px; width:84px;">' + _t('일자', 'Date') + '</th></tr>'
+              + '<th style="text-align:center; padding:5px 6px; width:56px;">REV</th>'
+              + '<th style="text-align:center; padding:5px 6px;">' + _t('변경 내용', 'Description') + '</th>'
+              + '<th style="text-align:center; padding:5px 6px; width:96px;">' + _t('작성자', 'Drawn by') + '</th>'
+              + '<th style="text-align:center; padding:5px 6px; width:84px;">' + _t('일자', 'Date') + '</th></tr>'
               + revs.map(function (x) {
                   var kind = matchKind(x.rev), st = HIT[kind];
                   return '<tr style="border-bottom:1px solid #f1f3f5;' + (st ? ' background:' + st.bg + ';' : '') + '">'
@@ -3060,7 +3060,7 @@
             //    칸 폭은 머리글 수로 고르게 나누고, 넘치는 글자는 **줄을 바꾼다**(잘라내면 PN 을 못 읽는다).
             ? '<table style="width:100%; font-size:11px; border-collapse:collapse; table-layout:fixed;">'
               + '<tr style="background:#f1f3f5;">' + mat.headers.map(function (h) {
-                  return '<th style="text-align:left; padding:4px 5px; overflow-wrap:anywhere; word-break:break-word;">' + _esc(h) + '</th>';
+                  return '<th style="text-align:center; padding:4px 5px; overflow-wrap:anywhere; word-break:break-word;">' + _esc(h) + '</th>';
               }).join('') + '</tr>'
               + mat.rows.map(function (row) {
                   var kind = matchKind(row[0]), st = HIT[kind];
@@ -3803,11 +3803,11 @@
             //  docs/doc-store.md 경고와 같은 원칙). isOpenProject 는 위에서 이미 계산해 뒀다.
             body += '<table style="width:100%; border-collapse:collapse; table-layout:fixed; font-size:11.5px;">'
                  + '<colgroup><col style="width:38px"><col style="width:150px"><col style="width:26%"><col style="width:62px"><col></colgroup>'
-                 + '<tr style="background:#f1f6f7;"><th style="padding:5px 6px; text-align:left; border-bottom:1px solid #d7e4e6;">No</th>'
-                 + '<th style="padding:5px 6px; text-align:left; border-bottom:1px solid #d7e4e6;">' + _t('항목', 'Field') + '</th>'
-                 + '<th style="padding:5px 6px; text-align:left; border-bottom:1px solid #d7e4e6;">Project list</th>'
+                 + '<tr style="background:#f1f6f7;"><th style="padding:5px 6px; text-align:center; border-bottom:1px solid #d7e4e6;">No</th>'
+                 + '<th style="padding:5px 6px; text-align:center; border-bottom:1px solid #d7e4e6;">' + _t('항목', 'Field') + '</th>'
+                 + '<th style="padding:5px 6px; text-align:center; border-bottom:1px solid #d7e4e6;">Project list</th>'
                  + '<th style="padding:5px 6px; text-align:center; border-bottom:1px solid #d7e4e6;">' + _t('변경', 'Apply') + '</th>'
-                 + '<th style="padding:5px 6px; text-align:left; border-bottom:1px solid #d7e4e6;">' + _t('프로젝트 파일', 'Project file') + '</th></tr>'
+                 + '<th style="padding:5px 6px; text-align:center; border-bottom:1px solid #d7e4e6;">' + _t('프로젝트 파일', 'Project file') + '</th></tr>'
                  + mism.map(function (m) {
                      return m.diffs.map(function (df, di) {
                          var plCell, fileCell, arrowsCell;

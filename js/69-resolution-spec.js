@@ -444,7 +444,7 @@
         var h = '<table style="border-collapse:collapse; width:100%; font-size:11.5px;">'
               + '<thead><tr>'
               + '<th style="position:sticky; top:0; z-index:2; border:1px solid #cfe3e5; padding:5px; background:#eef6f7; width:44px;">NO</th>'
-              + '<th style="position:sticky; top:0; z-index:2; border:1px solid #cfe3e5; padding:5px; background:#eef6f7; text-align:left;">RESOLUTION</th>'
+              + '<th style="position:sticky; top:0; z-index:2; border:1px solid #cfe3e5; padding:5px; background:#eef6f7; text-align:center;">RESOLUTION</th>'
               + ports.map(function (p) {
                   return '<th title="' + _esc((window._currentLang === 'en' && p.titleEn) || p.title || p.label) + '" style="position:sticky; top:0; z-index:2;'
                        + ' border:1px solid #cfe3e5; padding:5px; background:#eef6f7; width:62px;">' + _esc(p.label) + '</th>';

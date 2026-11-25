@@ -809,7 +809,7 @@
                [_t('넣을 값', 'Value'), ''],
                [_t('출처', 'Source'), ''],
                [_t('원본 기안 값', 'Source doc'), '']].map(function (c) {
-                return '<th style="background:#e7f3ff; border:1px solid #e9ecef; padding:4px 6px; text-align:left;'
+                return '<th style="background:#e7f3ff; border:1px solid #e9ecef; padding:4px 6px; text-align:center;'
                      + ' white-space:nowrap;' + c[1] + '">' + _esc(c[0]) + '</th>';
             }).join('') + '</tr></thead><tbody>';
 
