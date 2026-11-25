@@ -1583,6 +1583,8 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                     background: transparent !important;
                     text-align: center !important;
                 }
+                /* ↔ [2026-11-25] 이메일은 긴 글이라 왼쪽(표 본문 정렬 규칙: 글=왼쪽 · 숫자=오른쪽 · 짧은 값=가운데) */
+                #tab-address .concept-table td input.u-input[data-field="email"] { text-align: left !important; }
                 /* 🩹 인쇄 사본(#tab-print-area)에는 위 #tab-address 선택자가 적용 안 되므로 인쇄 전용으로 재선언 */
                 @media print {
                     body.printing-tab-address #tab-print-area input.u-input {

@@ -3478,7 +3478,7 @@
             var dbl = ' ondblclick="window._dailyRowDbl(\'' + esc(String(p.key || '')) + '\')"'
                     + ' title="' + esc(T('더블클릭하면 내 보고 쓰기가 열립니다', 'Double-click to open your report')) + '"';
             var nameTd = function (span) {
-                return '<td rowspan="' + span + '" style="' + td + ' white-space:nowrap; font-weight:bold;">' +
+                return '<td rowspan="' + span + '" style="' + td + ' white-space:nowrap; font-weight:bold; text-align:center;">' +
                        esc(p.name || p.key) + '</td>';
             };
             if (!d) {
@@ -3503,7 +3503,7 @@
             var span = items.length + (hasEtc ? 1 : 0);
             if (!span) {   // 일 종류만 적고 넘어간 날(휴가 등)
                 return '<tr' + zc + ' style="cursor:pointer;"' + dbl + '>' + nameTd(1) +
-                       '<td style="' + td + ' white-space:nowrap;">' + esc(typeTxt) + '</td>' +
+                       '<td style="' + td + ' white-space:nowrap; text-align:center;">' + esc(typeTxt) + '</td>' +
                        '<td style="' + td + '" colspan="' + (DAY_COLS.length - 2) + '">-</td></tr>';
             }
 
@@ -3512,7 +3512,7 @@
                 var pj = String((it && it.project) || '').replace(/\.json$/i, '');
                 var fs = filesOf(d, it.name);
                 out.push('<tr' + zc + ' style="cursor:pointer;"' + dbl + '>' +
-                    (n === 0 ? nameTd(span) + '<td rowspan="' + span + '" style="' + td + ' white-space:nowrap;">' + esc(typeTxt) + '</td>' : '') +
+                    (n === 0 ? nameTd(span) + '<td rowspan="' + span + '" style="' + td + ' white-space:nowrap; text-align:center;">' + esc(typeTxt) + '</td>' : '') +
                     '<td class="daily-cat-cell" style="' + td + '">' + esc(it.cat || '-') + '</td>' +
                     '<td style="' + td + '"><b>' + esc(it.name) + '</b>' +
                       (it.mailRaw
@@ -3534,7 +3534,7 @@
             });
             if (hasEtc) {
                 out.push('<tr' + zc + ' style="cursor:pointer;"' + dbl + '>' +
-                    (items.length ? '' : nameTd(span) + '<td rowspan="' + span + '" style="' + td + ' white-space:nowrap;">' + esc(typeTxt) + '</td>') +
+                    (items.length ? '' : nameTd(span) + '<td rowspan="' + span + '" style="' + td + ' white-space:nowrap; text-align:center;">' + esc(typeTxt) + '</td>') +
                     '<td class="daily-cat-cell" style="' + td + '">-</td>' +
                     '<td style="' + td + ' color:#888;">' + esc(T('(기타)', '(other)')) + '</td>' +
                     '<td style="' + td + ' white-space:pre-line;" colspan="' + window.DAILY_FIELDS.length + '">' + esc(etcTxt || '-') + '</td>' +

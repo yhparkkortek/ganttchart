@@ -326,12 +326,12 @@ window.renderAlarmTab = async function() {
                      style="cursor:pointer; width:14px; height:14px; display:block; margin:0 auto;">
             </td>
             <td style="padding:6px 6px; text-align:center; font-size:11.5px; color:#888; font-weight:bold;">${idx + 1}</td>
-            <td style="padding:7px 10px; text-align:center; font-size:12px; ${_ell}" title="${_esc(item.taskName)}">${item.taskName}</td>
+            <td style="padding:7px 10px; text-align:left; font-size:12px; ${_ell}" title="${_esc(item.taskName)}">${item.taskName}</td>
             <td style="padding:7px 10px; text-align:center; font-size:11.5px; ${_ell}">${(item.status && _isEn ? (_statusEn[item.status] || item.status) : item.status) || '-'}</td>
             <td style="padding:7px 10px; text-align:center; font-size:11.5px; ${_ell}">${nameCell(item.assignee)}</td>
-            <td style="padding:7px 10px; text-align:center; font-size:11px; color:#555; ${_ell}">${emailCell2(item.assigneeEmail, item.missingPeople, item.blockedByDomain, exclFor(item, item.assignee))}</td>
+            <td style="padding:7px 10px; text-align:left; font-size:11px; color:#555; ${_ell}">${emailCell2(item.assigneeEmail, item.missingPeople, item.blockedByDomain, exclFor(item, item.assignee))}</td>
             <td style="padding:7px 10px; text-align:center; font-size:11.5px; ${_ell}">${nameCell(item.receiverStr)}</td>
-            <td style="padding:7px 10px; text-align:center; font-size:11px; color:#555; ${_ell}">${emailCell2(item.receiverEmail, item.missingPeople, item.blockedByDomain, exclFor(item, item.receiverStr))}</td>
+            <td style="padding:7px 10px; text-align:left; font-size:11px; color:#555; ${_ell}">${emailCell2(item.receiverEmail, item.missingPeople, item.blockedByDomain, exclFor(item, item.receiverStr))}</td>
             <td class="${window._dateDayCls(item.dueStr)}" style="padding:7px 10px; text-align:center; font-size:11.5px; white-space:nowrap;">${item.dueStr}</td>
             <td style="padding:7px 10px; text-align:center;">${dDayLabel(item.diffDays)}</td>
             <td style="padding:7px 10px; text-align:center; font-size:11.5px;">${sentStatus(item.sentLog, item.diffDays, item.sentHidden, idx)}</td>
