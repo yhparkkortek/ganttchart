@@ -1228,7 +1228,21 @@ window._mailHeaderAddrs = function(mr) {
     const raw = [mr.sender, mr.from, mr.to, mr.cc].map(v => Array.isArray(v) ? v.join(',') : String(v || '')).join(',');
     const found = raw.match(/[A-Za-z0-9._%+'-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g) || [];
     const out = [...new Set(found.map(e => e.toLowerCase()))];
-    return out.length ? out : null;
+    if (!out.length) return null;
+    // 👥 [2026-11-25 사용자 요청] 그룹 주소(예 개발3팀@…)로 온 메일 — 그 그룹의 팀원도 헤더에 있는 것으로 본다.
+    //    그룹은 주소록에서 **이름 = 부서**인 행이다(js/59 DAILY_ROSTER_SRC.isGroupRow 와 같은 규칙, 실측 2026-11-05).
+    //    구성원 = 같은 부서(dept)의 사람 행. 주소록에 없는 메일링 리스트는 못 펼친다(그 안의 사람은 그대로 제외).
+    const book = (window.tabData || {}).addressBook || [];
+    const isGroup = p => { const n = String((p && p.name) || '').trim(), d = String((p && p.dept) || '').trim(); return !!n && !!d && n === d; };
+    const groupDepts = new Set(book.filter(p => isGroup(p) && out.indexOf(String(p.email || '').trim().toLowerCase()) !== -1)
+                                   .map(p => String(p.dept).trim()));
+    if (groupDepts.size) {
+        book.forEach(p => {
+            const em = String((p && p.email) || '').trim().toLowerCase();
+            if (em && !isGroup(p) && groupDepts.has(String(p.dept || '').trim()) && out.indexOf(em) === -1) out.push(em);
+        });
+    }
+    return out;
 };
 
 // 💡 Summary 프로젝트 멤버(담당자 10종 + 멤버-3)를 참조인 후보로 변환 — 이메일은 주소록 기준

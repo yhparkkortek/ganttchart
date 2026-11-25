@@ -2772,7 +2772,7 @@ def _lookup_email(address_book: list, name: str) -> str:
 _MAIL_ADDR_RE = re.compile(r"[A-Za-z0-9._%+'-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
 
 
-def _mail_header_addrs(mr):
+def _mail_header_addrs(mr, address_book=None):
     # 📨 [2026-11-25] 메일 원문(row._mailRaw)의 보낸사람·받는사람·참조 주소(소문자). 하나도 없으면 None(= 대조 안 함).
     #    js/22b `_mailHeaderAddrs` 의 사본 — 한쪽만 고치면 화면 알람과 예약 발송이 갈린다.
     if not isinstance(mr, dict):
@@ -2782,7 +2782,23 @@ def _mail_header_addrs(mr):
         v = mr.get(k)
         parts.append(','.join(map(str, v)) if isinstance(v, list) else str(v or ''))
     out = list(dict.fromkeys(e.lower() for e in _MAIL_ADDR_RE.findall(','.join(parts))))
-    return out or None
+    if not out:
+        return None
+    # 👥 [2026-11-25] 그룹 주소(주소록에서 이름 = 부서인 행)로 온 메일 — 같은 부서 사람도 헤더에 있는 것으로 본다(js/22b 와 같은 규칙)
+    book = [p for p in (address_book or []) if isinstance(p, dict)]
+
+    def is_group(p):
+        n, d = str(p.get('name') or '').strip(), str(p.get('dept') or '').strip()
+        return bool(n) and bool(d) and n == d
+
+    depts = {str(p.get('dept')).strip() for p in book
+             if is_group(p) and str(p.get('email') or '').strip().lower() in out}
+    if depts:
+        for p in book:
+            em = str(p.get('email') or '').strip().lower()
+            if em and not is_group(p) and str(p.get('dept') or '').strip() in depts and em not in out:
+                out.append(em)
+    return out
 
 
 _ALARM_EXCLUDE_REASONS = ('ambiguous', 'email-not-in-book', 'not-in-mail-headers')
@@ -2894,7 +2910,7 @@ def _build_alarm_task_snapshot(project_data: dict, row_idx: int):
     receiver_names = _addr_split_names(receiver_raw)
     all_people     = list(dict.fromkeys([n for n in (sender_names + receiver_names) if n]))
 
-    hdr = _mail_header_addrs(row_obj.get('_mailRaw'))   # 📨 메일에서 온 업무면 그 메일의 헤더 주소만 인정
+    hdr = _mail_header_addrs(row_obj.get('_mailRaw'), address_book)   # 📨 메일에서 온 업무면 그 메일의 헤더 주소만 인정
 
     def row_email(n):
         return _addr_resolve_for_row(address_book, n, hdr)['email']

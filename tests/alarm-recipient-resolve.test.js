@@ -142,6 +142,16 @@ const run = contents => { setRows(contents); return window.collectAlarmItems(); 
     const [it4] = run([{ c: '[검토요청][이서연→최유나] 2026-11-20', mailRaw: { sender: 'sy.lee@kortek.co.kr', to: 'team@kortek.co.kr' } }]);
     ok(!it4.allowedPeople.includes('최유나') && it4.excludedPeople.some(x => x.name === '최유나'), '이메일 없는 사람은 헤더 대조 불가 → 제외');
     ok(window._mailHeaderAddrs({ to: ['a@x.com', 'B@Y.co.kr'] }).join(',') === 'a@x.com,b@y.co.kr', '배열 헤더도 읽는다');
+    // 👥 그룹 주소로 온 메일 — 주소록에서 이름 = 부서인 행이 그룹, 같은 부서 사람은 받는다
+    window.tabData.addressBook.push({ name: '개발3팀', dept: '개발3팀', email: 'dev3@kortek.co.kr' });
+    const g = { sender: 'Cust <cust@customer.com>', to: '개발3팀 <DEV3@kortek.co.kr>' };
+    const [g1] = run([{ c: '[문의][이서연→박지훈] 2026-11-20', mailRaw: g }]);
+    ok(g1.toEmail.split(',').sort().join(',') === 'andy.park@kortek.co.kr,sy.lee@kortek.co.kr', '그룹 주소로 온 메일 — 그 팀원은 받는다 (toEmail=' + g1.toEmail + ')');
+    const [g2] = run([{ c: '[문의][이서연→정다은] 2026-11-20', mailRaw: g }]);
+    ok(!g2.toEmail.includes('ada@') && g2.excludedPeople.some(x => x.name === '정다은' && x.reason === 'not-in-mail-headers'), '다른 부서 사람은 그대로 제외 (toEmail=' + g2.toEmail + ')');
+    const [g3] = run([{ c: '[문의][이서연→박지훈] 2026-11-20', mailRaw: { sender: 'cust@customer.com', to: 'list@kortek.co.kr' } }]);
+    ok(g3.toEmail === '', '주소록에 없는 메일링 리스트는 펼치지 않는다 (toEmail=' + g3.toEmail + ')');
+    window.tabData.addressBook.pop();
 }
 // 6) 해석기 직접 — 공개 계약
 {

@@ -122,5 +122,20 @@ out = fire('[샘플요청][Andy→이서연] 2026-11-20', {'sender': '', 'to': '
 ok('헤더 글자가 비면 대조 안 함', 'andy.park@kortek.co.kr' in (SENT_MAIL[0] if SENT_MAIL else ''), SENT_MAIL)
 ok('배열 헤더도 읽는다', B._mail_header_addrs({'to': ['a@x.com', 'B@Y.co.kr']}) == ['a@x.com', 'b@y.co.kr'])
 
+print('4) 👥 그룹 주소로 온 메일')
+for p in BOOK:
+    if p['name'] in ('박지훈', '이서연'):
+        p['dept'] = '개발3팀'
+BOOK.append({'name': '개발3팀', 'dept': '개발3팀', 'email': 'dev3@kortek.co.kr'})
+G = {'sender': 'Cust <cust@customer.com>', 'to': '개발3팀 <DEV3@kortek.co.kr>'}
+out = fire('[문의][이서연→박지훈] 2026-11-20', G)
+ok('그룹 주소로 온 메일 — 그 팀원은 받는다', SENT_MAIL and sorted(SENT_MAIL[0].split(',')) == ['andy.park@kortek.co.kr', 'sy.lee@kortek.co.kr'], SENT_MAIL)
+ok('그룹 팀원 텔레그램도 간다', '333' in SENT_TG and '444' in SENT_TG, SENT_TG)
+out = fire('[문의][이서연→정다은] 2026-11-20', G)
+ok('다른 부서 사람은 그대로 제외', SENT_MAIL == ['sy.lee@kortek.co.kr'] and any('정다은' in x for x in out.get('excluded', [])), (SENT_MAIL, out))
+out = fire('[문의][이서연→박지훈] 2026-11-20', {'sender': 'cust@customer.com', 'to': 'list@kortek.co.kr'})
+ok('주소록에 없는 메일링 리스트는 펼치지 않는다', SENT_MAIL == [], SENT_MAIL)
+BOOK.pop()
+
 print('%s 예약 알람 수신자 해석 %d/%d' % ('✅' if not FAIL[0] else '❌', PASS[0], PASS[0] + FAIL[0]))
 sys.exit(1 if FAIL[0] else 0)
