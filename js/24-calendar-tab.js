@@ -472,9 +472,10 @@ function calBuildDayCell(cellDate, eventsByDay, todayKey, selectedEvent, opts) {
     let cls = 'cal-day-cell';
     if (opts.otherMonth) cls += ' cal-other-month';
     if (key === todayKey) cls += ' cal-today';
-    if (dow === 0) cls += ' cal-weekend-sun';
-    if (dow === 6) cls += ' cal-weekend-sat';
-    if (dow !== 0 && dow !== 6 && window.isHoliday && window.isHoliday(key)) cls += ' cal-weekend-sun';
+    // 🎨 [2026-11-25] 날짜 글자색 — 일요일·공휴일(토요일 공휴일 포함)=빨강, 토요일=파랑, 평일=회색(Daily Report 월 보기와 같은 규칙)
+    const isHol = !!(window.isHoliday && window.isHoliday(key));
+    if (dow === 0 || isHol) cls += ' cal-weekend-sun';
+    else if (dow === 6) cls += ' cal-weekend-sat';
     if (opts.tall) cls += ' cal-day-cell-tall';
 
     const chipCount = dayEvents.length;

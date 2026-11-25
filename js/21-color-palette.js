@@ -321,8 +321,8 @@ window._cpApplyLive = function(hex, skipSave) {
         // 💡 [2026-08-30 추가] 요일 헤더 토요일 글자/토요일 날짜 숫자 색, 달력 표 바깥 테두리가 옛 고정
         // 파랑(#1971c2/#cfe3e5)이라 테마가 안 먹혔음 — 일요일 빨강은 관례대로 고정 유지하고, 토요일과
         // 테두리만 테마색을 따르도록 편입.
-        + '.cal-weekday-row > div:last-child { color: ' + gen.darkText + ' !important; }\n'
-        + '.cal-day-cell.cal-weekend-sat .cal-day-num { color: ' + gen.darkText + ' !important; }\n'
+        + '.cal-weekday-row > div:last-child { color: #1e6fe8 !important; }\n'
+        + '.cal-day-cell.cal-weekend-sat:not(.cal-today) .cal-day-num { color: #1e6fe8 !important; }\n'
         + '.cal-grid-wrap { border-color: ' + gen.border + ' !important; }\n'
         // 🐛 [2026-08-30 버그 수정] "달력 년월 표시/요일 셀/도표 색상이 계속 회색으로 박혀서 테마가
         // 안 바뀐다"는 반복된 지적 — 원인은 그동안 "파란색만"/"이번주·이번달만" 같은 좁은 범위로만
@@ -337,7 +337,7 @@ window._cpApplyLive = function(hex, skipSave) {
         // "이 rule이 이겨야 하는" :first-child(일요일 빨강, 아래 static 규칙엔 !important가 없음)
         // 보다 이 규칙이 우선해버려 일요일까지 테마색으로 덮어써 버린다 — 월~금(5칸)만 콕 집어서
         // 적용해 일요일 빨강/토요일 테마색(위에서 이미 처리) 둘 다 안전하게 유지한다.
-        + '.cal-weekday-row > div:not(:first-child):not(:last-child) { color: ' + gen.darkText + ' !important; }\n'
+        + '.cal-weekday-row > div:not(:first-child):not(:last-child) { color: #555 !important; }\n'
         + '.cal-day-cell { border-color: ' + gen.border + ' !important; }\n'
         // 🦓 [2026-11-24] 다른 표와 같은 흰색 + 팔레트 제브라 — 주(週) 단위로 번갈아(styles.css 와 같은 선택자)
         + window._calZebraSel() + ' { background: ' + gen.zebraB + '; }\n'
