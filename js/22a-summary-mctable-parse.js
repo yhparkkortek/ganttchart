@@ -748,23 +748,10 @@ window.checkAndSendAlarms = async function(isManual) {
     const pm      = window.projectMeta || {};
     const today   = new Date(); today.setHours(0,0,0,0);
 
-    // 프로젝트 전체 멤버 이메일 수집
-    const allEmails = [
-        pm.프로젝트담당자이메일, pm.기구담당자이메일,
-        pm.HW담당자이메일, pm.FW담당자이메일,
-        pm.TSP담당자이메일, pm.LCM담당자이메일,
-        pm.Slimming담당자이메일, pm.Cutting담당자이메일,
-        pm.Module담당자이메일, pm.Tooling담당자이메일,
-    ].filter(e => e && e.includes('@')).join(',');
-
-    if (!allEmails) {
-        if (isManual) {
-            const _m = window._t('Summary 탭에 이메일 주소를 입력해 주세요.', 'Please enter an email address in the Summary tab.');
-            if (window.bmAlertModal) window.bmAlertModal(_m);
-            else alert(_m);
-        }
-        return;
-    }
+    // 🔔 [2026-11-25 사용자 결정] 업무 수신자(발신인·수신인)를 주소록에서 못 찾았을 때 "프로젝트 전체 멤버"
+    //    (Summary 담당자 이메일, 도메인 게이트도 안 거쳤다)에게 대신 보내던 것을 끈다. 못 찾은 업무는
+    //    건너뛰고 알람 탭에 ⚠ 로 남는다. (예전엔 Summary 이메일이 비면 업무 수신자가 있어도 전부 막혔다)
+    let skippedNoRecipient = 0;
 
     // 📌 알람 대상 행 + 완료일 수집
     //    (구버전은 존재하지 않는 '#gantt-body'/'data-col' 셀렉터를 써서 항상 0건이었음 —
@@ -804,8 +791,13 @@ window.checkAndSendAlarms = async function(isManual) {
   <p style="color:#888; font-size:12px;">본 메일은 Gantt Chart 알람 시스템에서 자동 발송되었습니다.</p>
 </div>`;
 
-        // 담당자/수신인 이메일이 매칭돼 있으면 그쪽으로, 없으면 프로젝트 전체 멤버에게 발송
-        const to     = item.toEmail || allEmails;
+        // 담당자/수신인 이메일이 매칭된 업무만 발송 — 못 찾으면 건너뜀(발송 기록도 안 남겨 고치면 다음 체크에 나간다)
+        if (!item.toEmail) {
+            skippedNoRecipient++;
+            console.warn(`[알람] 수신자 없음 — 건너뜀: ${item.taskName}`, item.excludedPeople || [], item.missingPeople || []);
+            continue;
+        }
+        const to     = item.toEmail;
         const result = await sendAlarmMail(to, subject, body, item.ccMails);
         if (result.ok) {
             // 지나쳐온 단계(7/3/1)를 전부 '발송됨'으로 마킹 — 다음 체크에서 또 안 걸리도록
@@ -836,7 +828,8 @@ window.checkAndSendAlarms = async function(isManual) {
     }
 
     if (isManual) {
-        const msg = sentCount > 0 ? `${sentCount}건의 알람 메일을 발송했습니다.` : '발송할 알람이 없습니다. (이미 발송됐거나 해당 없음)';
+        const msg = (sentCount > 0 ? `${sentCount}건의 알람 메일을 발송했습니다.` : '발송할 알람이 없습니다. (이미 발송됐거나 해당 없음)')
+            + (skippedNoRecipient > 0 ? `\n\n⚠ 발신인·수신인을 주소록에서 찾지 못한 ${skippedNoRecipient}건은 보내지 않았습니다 — 알람 탭의 ⚠ 표시를 확인해 주세요.` : '');
         if (window.bmAlertModal) window.bmAlertModal(msg); else alert(msg);
     } else if (sentCount > 0) {
         console.log(`[알람] 자동 발송 ${sentCount}건 완료`);

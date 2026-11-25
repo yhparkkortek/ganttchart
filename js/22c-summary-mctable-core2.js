@@ -896,9 +896,24 @@ window.sendSingleAlarm = async function(sendAll) {
      .filter(window._isAlarmDomainAllowed); // 🌐 외부 도메인 차단
 
     // 일반 모드: 발신인 + 수신인만
+    // 🔔 [2026-11-25 사용자 결정] 업무 수신자를 못 찾았을 때 프로젝트 전원에게 대신 보내던 것을 끈다 —
+    //    동명이인·외부인 이름만 있는 업무가 팀 전체 메일이 됐다. 못 찾으면 안 보내고 이유를 말한다.
     const allEmails = sendAll
         ? [...new Set(allMemberEmails)].join(',')
-        : item.toEmail || [...new Set(allMemberEmails)].join(',');
+        : (item.toEmail || '');
+
+    if (!allEmails && !sendAll) {
+        const _excl = (item.excludedPeople || []).map(window._addrResolveReasonText);
+        const _miss = (item.missingPeople || []);
+        const _m = window._t('이 업무의 발신인·수신인을 주소록에서 정확히 한 사람으로 찾지 못해 보내지 않았습니다.',
+                             'No sender/receiver of this task matched exactly one person in the Address Book — not sent.')
+            + (_excl.length ? '\n\n' + _excl.join('\n') : '')
+            + (_miss.length ? '\n\n' + window._t('주소록에 없음/이메일 없음: ', 'Not in Address Book / no email: ') + _miss.join(', ') : '')
+            + '\n\n' + window._t('업무 상세내용의 [발신자→수신자] 이름이나 주소록(Address Book)을 고쳐 주세요.',
+                                 'Fix the [sender→receiver] names in the task details or the Address Book.');
+        if (window.bmAlertModal) window.bmAlertModal(_m); else alert(_m);
+        return;
+    }
 
     if (!allEmails) {
         const _noEmailMsg = window._t('Summary 탭에 이메일 주소를 먼저 입력해 주세요.', 'Please enter an email address in the Summary tab first.');

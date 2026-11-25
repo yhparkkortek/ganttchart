@@ -131,5 +131,32 @@ const run = contents => { setRows(contents); return window.collectAlarmItems(); 
     }
 }
 
-console.log((fail ? '❌' : '✅') + ' 알람 수신자 해석 ' + pass + '/' + (pass + fail));
-process.exit(fail ? 1 : 0);
+// 7) 진짜 checkAndSendAlarms — 업무 수신자를 못 찾으면 프로젝트 전원에게 대신 보내지 않는다(2026-11-25 사용자 결정)
+//    가짜는 fetch 하나(/health 는 ok, /send-mail 은 기록만 — 실제로 나가지 않는다)
+(async function () {
+    eval(slice(s22a, 'const MAIL_SERVER', '// 💡 [멀티시트]'));
+    const sent = [];
+    global.fetch = async (url, opt) => {
+        if (/\/health$/.test(url)) return { json: async () => ({ ok: true }) };
+        if (/\/send-mail$/.test(url)) { sent.push(JSON.parse(opt.body).to); return { json: async () => ({ ok: true }) }; }
+        throw new Error('예상 못 한 요청 ' + url);
+    };
+    let alertMsg = '';
+    window.bmAlertModal = m => { alertMsg = m; };
+    window.projectMeta = { 프로젝트담당자이메일: 'pm.all@kortek.co.kr', HW담당자이메일: 'hw.all@kortek.co.kr' };
+    setRows(['[샘플발송][Taylor Kim→Morgan Lee] 2026-11-20', '[검토요청][이서연→김민수] 2026-11-20']);
+    Object.keys(store).forEach(k => delete store[k]);
+    await window.checkAndSendAlarms(true);
+    ok(!sent.some(t => /pm\.all|hw\.all/.test(t)), '수신자 못 찾은 업무가 프로젝트 전원에게 가지 않는다 (sent=' + JSON.stringify(sent) + ')');
+    ok(sent.length === 1 && sent[0] === 'sy.lee@kortek.co.kr', '수신자 있는 업무만 발송');
+    ok(/찾지 못한 1건/.test(alertMsg), '건너뛴 건수를 알린다 (' + alertMsg.replace(/\n/g, ' ') + ')');
+    ok(!Object.keys(store).some(k => /_1_.*d$/.test(k)), '건너뛴 업무는 발송 기록을 안 남긴다(고치면 다음 체크에 나간다)');
+    window.projectMeta = {};
+    sent.length = 0;
+    Object.keys(store).forEach(k => delete store[k]);
+    await window.checkAndSendAlarms(true);
+    ok(sent.length === 1, 'Summary 담당자 이메일이 비어도 업무 수신자가 있으면 보낸다 (sent=' + sent.length + ')');
+
+    console.log((fail ? '❌' : '✅') + ' 알람 수신자 해석 ' + pass + '/' + (pass + fail));
+    process.exit(fail ? 1 : 0);
+})().catch(e => { console.log('❌ 예외', e); process.exit(1); });
