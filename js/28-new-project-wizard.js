@@ -31,6 +31,12 @@ let _status  = '';   // 완료 시 설정할 완료여부 값 (''=DV, 'MP(EC)'=�
 //    앱 전역에서 실제로 쓰는 언어 상태(window._currentLang)를 그대로 참조하도록 수정.
 const _en = function() { return window._currentLang === 'en'; };
 const _t  = function(ko, en) { return _en() ? en : ko; };
+// 🐛 [2026-11-25 사용자 제보 "그룹웨어에서 개발 일정을 가져오면 버그 발생"] input의 value="..." 에
+//    고객사>프로젝트명(그룹웨어 기안 문서의 프로젝트명 등 외부 글자) 을 **이스케이프 없이** 그대로
+//    넣고 있었다 — 그 값에 인치 표시(예: 32")처럼 큰따옴표가 하나라도 섞이면 거기서 속성이
+//    끊겨 뒤의 attribute 글자(oninput="..." style="...">)가 그대로 화면에 글자로 보였다(실측
+//    스크린샷). 이 파일의 모든 value="' + X + '" 자리에 적용 — X 는 전부 외부에서 온 글자다.
+const _esc = function(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
 
 // ─── 모달 DOM 생성 (최초 1회) ─────────────────────────────────────────
 function _ensureModal() {
@@ -134,7 +140,7 @@ function _renderStep1(body) {
         '</select>' +
         // 직접 입력 칸 — 드롭다운에서 "직접 입력"을 고를 때만 보인다
         '<div id="npw-custom-wrap" style="display:' + (customVal ? 'flex' : 'none') + '; gap:6px; margin-top:8px;">' +
-        '<input id="npw-custom-input" type="text" placeholder="' + _t('예: PDU, SBD', 'e.g. PDU, SBD') + '" value="' + customVal + '" ' +
+        '<input id="npw-custom-input" type="text" placeholder="' + _t('예: PDU, SBD', 'e.g. PDU, SBD') + '" value="' + _esc(customVal) + '" ' +
         'onkeydown="if(event.key===\'Enter\'){event.preventDefault();window._npwUnitAddCustom();}" ' +
         'style="flex:1; min-width:0; box-sizing:border-box; padding:7px 10px; font-size:13px; border:1px solid #ced4da; border-radius:6px;">' +
         '<button type="button" onclick="window._npwUnitAddCustom()" style="flex-shrink:0; padding:0 14px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer;">' +
@@ -257,7 +263,7 @@ function _renderStep3(body) {
         //    입력**할 수 있다. <select>로 막으면 새 거래처를 등록할 방법이 사라진다.
         //    목록은 window.getCustomerOptions()(js/04a CUSTOMER_CATALOG + 기존 프로젝트 + 주소록) —
         //    기존 자동완성(_npwCustAC)이 쓰던 주소록 출처도 그 안에 합쳐져 있어 빠지는 게 없다.
-        '<input id="npw-customer" type="text" list="customer-options" placeholder="' + _t('고객사>프로젝트명 (예: LNW>STELLAR32)', 'Customer>Project (e.g. LNW>STELLAR32)') + '" value="' + val + '" autocomplete="off" oninput="window._npwCustPicked(this, event)" ' +
+        '<input id="npw-customer" type="text" list="customer-options" placeholder="' + _t('고객사>프로젝트명 (예: LNW>STELLAR32)', 'Customer>Project (e.g. LNW>STELLAR32)') + '" value="' + _esc(val) + '" autocomplete="off" oninput="window._npwCustPicked(this, event)" ' +
         'style="width:100%; box-sizing:border-box; padding:10px 14px; font-size:15px; border:1.5px solid #a5c8f0; border-radius:8px;">' +
         '<div style="font-size:11px; color:#aaa; margin-top:6px;">' +
         _t('▾ 를 누르면 등록된 고객사 목록이 나옵니다. 목록에 없으면 그냥 입력하세요. 고른 뒤 <b>&gt;프로젝트명</b>을 이어 적어주세요.',
@@ -345,7 +351,7 @@ function _renderStep4(body) {
     //    한 칸으로 옮겼다(js/04k `_draftRequiredMissing` 주석 참고).
     body.innerHTML = '<div style="font-size:13px; font-weight:bold; color:#333; margin-bottom:12px;">고객 모델명' +
         ' <span style="font-weight:normal; font-size:11px; color:#888;">(' + _t('선택', 'optional') + ')</span></div>' +
-        '<input id="npw-model" type="text" placeholder="' + _t('예: STELLAR32, KV-43XH8596', 'e.g. STELLAR32, KV-43XH8596') + '" value="' + model + '" ' +
+        '<input id="npw-model" type="text" placeholder="' + _t('예: STELLAR32, KV-43XH8596', 'e.g. STELLAR32, KV-43XH8596') + '" value="' + _esc(model) + '" ' +
         'style="width:100%; box-sizing:border-box; padding:10px 14px; font-size:15px; border:1.5px solid #a5c8f0; border-radius:8px;">' +
         // 🐛 [2026-10-21 수정] 예전엔 여기 빨간 * 가 붙어 있는데 _validateStep4는 검사하지 않았고,
         //    안내문은 "비워둬도 된다"면서 저장 게이트는 막았다 — 마법사를 KTK PN 없이 끝내면 끝나자마자
@@ -358,7 +364,7 @@ function _renderStep4(body) {
         //    골라 모델명을 만들어 주는 보조 창(js/45). 규칙을 외우지 않아도 되고, 규칙이 개정되면
         //    그 파일의 표만 고치면 된다.
         '<div style="display:flex; gap:6px; align-items:stretch;">' +
-        '<input id="npw-ktkpn" type="text" placeholder="' + _t('예: 502574_MAIN>KTS320DPS01,LNW', 'e.g. 502574_MAIN>KTS320DPS01,LNW') + '" value="' + ktkpn + '" ' +
+        '<input id="npw-ktkpn" type="text" placeholder="' + _t('예: 502574_MAIN>KTS320DPS01,LNW', 'e.g. 502574_MAIN>KTS320DPS01,LNW') + '" value="' + _esc(ktkpn) + '" ' +
         'style="flex:1; min-width:0; box-sizing:border-box; padding:10px 14px; font-size:14px; border:1.5px solid #a5c8f0; border-radius:8px; font-family:monospace;">' +
         '<button type="button" onclick="window._mnbOpen && window._mnbOpen(\'npw-ktkpn\')" ' +
         'onmouseover="this.style.background=\'#d8f0d8\';" onmouseout="this.style.background=\'#eaf7ea\';" ' +
@@ -393,13 +399,13 @@ function _buildPmHtml() {
         // 🆕 [2026-10-07] 긴 드롭다운 대신 이름 일부(예: "박용" → "박용훈")만 쳐도 좁혀지는 자동완성으로
         //    교체 — Summary 탭 담당자(sum-pm)와 동일한 전역 부품(attachAddressAutocomplete) 재사용.
         //    주소록에 없는 이름도 그대로 입력해 쓸 수 있음(기존 "직접 입력" 칸과 동일하게 동작).
-        '<input id="npw-pm" type="text" autocomplete="off" value="' + pm + '" placeholder="' +
+        '<input id="npw-pm" type="text" autocomplete="off" value="' + _esc(pm) + '" placeholder="' +
         _t('이름 일부만 입력해도 찾습니다', 'Type part of the name to search') + '" ' +
         'style="width:100%; box-sizing:border-box; padding:9px 12px; font-size:14px; border:1.5px solid #a5c8f0; border-radius:8px; background:#fff;">' +
         '<div style="font-size:11.5px; color:#888; margin:4px 0 0 2px;">주소록에 없으면 입력한 이름 그대로 사용됩니다.</div>' +
         '<div style="font-size:13px; font-weight:bold; color:#333; margin:18px 0 8px;">메일 키워드 <span style="font-size:11px; color:#aaa; font-weight:normal;">(선택)</span></div>' +
         '<div style="font-size:11.5px; color:#888; margin-bottom:8px;">이 프로젝트로 메일을 자동 매칭할 키워드. 쉼표로 구분.</div>' +
-        '<input id="npw-kw" type="text" placeholder="' + _t('예: S32, STELLAR, 에스삼투', 'e.g. S32, STELLAR, ESSAMTU') + '" value="' + kws + '" ' +
+        '<input id="npw-kw" type="text" placeholder="' + _t('예: S32, STELLAR, 에스삼투', 'e.g. S32, STELLAR, ESSAMTU') + '" value="' + _esc(kws) + '" ' +
         'style="width:100%; box-sizing:border-box; padding:10px 14px; font-size:13px; border:1.5px solid #a5c8f0; border-radius:8px;">';
 }
 async function _renderStep5(body) {
