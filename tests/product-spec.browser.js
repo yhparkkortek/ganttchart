@@ -243,6 +243,20 @@ window.__psTest = async function (opt) {
         var bl = ['blu.r4.c3', 'blu.r4.c4', 'blu.r4.c2', 'blu.r3.c3'].map(function (k) { return window.DOC_AUTO_HOOKS.ps(cB, k).v; });
         check(bl.join('|') === '26.5|27.8||', 'BLU 전력 Typ/Max 표시대로, 표시 없는 전압은 비움 (' + bl.join('|') + ')');
         delete pSp['Lamps Power Consumption']; delete pSp['Lamp Voltage'];
+        // 🎛 패널 특성은 PARTS 패널 기록이 기준(2026-11-25 사용자 결정) — Customer SPEC(0.305/0.335·6850)보다 먼저,
+        //    같은 문서의 화면 사양 표와 CIE 표가 같은 값. 패널 기록이 '-' 면 다음 출처로
+        pSp['White Color Coordinates'] = 'x=0.313, y=0.329'; pSp['Color Temperature'] = '6500K';
+        pSp['Brightness (Min/Typ) (cd/m²)'] = '450 (Typ)';
+        var cK = window._dgCollect(), HK = window.DOC_AUTO_HOOKS.ps;
+        var pk = ['scr.r12.c1', 'cie.r2.c1', 'cie.r2.c2', 'scr.r11.c1', 'scr.r10.c1', 'lumYL'].map(function (k) { return HK(cK, k).v; });
+        check(pk.join('|') === 'x=0.313, y=0.329|0.313|0.329|6500|450 (Typ)|450 (Typ) cd/m2' && /PARTS ▸ PANEL/.test(HK(cK, 'cie.r2.c1').src),
+              '패널 특성은 PARTS 기록 먼저 — 화면 사양·CIE 표가 같은 백색 좌표 (' + pk.join('|') + ')');
+        pSp['White Color Coordinates'] = '-'; pSp['Color Temperature'] = '';
+        var cK2 = window._dgCollect();
+        var pk2 = ['cie.r2.c1', 'scr.r11.c1'].map(function (k) { return HK(cK2, k).v; });
+        check(pk2.join('|') === '0.305|6850' && /Customer SPEC/.test(HK(cK2, 'cie.r2.c1').src),
+              "패널 기록이 '-'·빈 칸이면 Customer SPEC 으로 (" + pk2.join('|') + ')');
+        delete pSp['White Color Coordinates']; delete pSp['Color Temperature']; delete pSp['Brightness (Min/Typ) (cd/m²)'];
         // 📄 PDF 로 본 뒤 고친 모양 둘 — 시야각 마지막 칸은 숫자만, 문단 안 Vendor Name 은 한 줄로
         pSp['Viewing Angle (L/R/U/D)'] = '85/85/80/80 (Typ.) (CR≥10)';
         var vm0 = window._plData.rows[0].panelMfr; window._plData.rows[0].panelMfr = 'VENDA\nVENDB';

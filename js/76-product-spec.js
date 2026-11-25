@@ -92,20 +92,23 @@
         'scr.r7.c1': ['panel:Viewing Angle (L/R/U/D)'],
         'scr.r8.c1': ['panel:Transmissive Contrast Ratio'],
         'scr.r9.c1': ['panel:Response Time'],
-        'scr.r10.c1': [SPEC.lv, 'panel:Brightness (Min/Typ) (cd/m²)'],
-        'scr.r11.c1': [SPEC.temp, 'pl:colorTemp', 'panel:Color Temperature'],
-        'scr.r12.c1': ['fn:xyPair', 'panel:White Color Coordinates'],
-        'scr.r13.c1': [SPEC.gamut, 'pl:colorGamut', 'panel:NTSC Ratio'],
+        // ⚠️ [2026-11-25 사용자 결정] 패널 특성은 **PARTS 패널 기록이 기준** — 비었을 때만('-' 포함) Customer SPEC·Project list.
+        //    (전엔 Customer SPEC·Project list 가 먼저라 같은 문서에서 백색 좌표가 PARTS 값·Project list 값 둘로 나왔다 — SHUFFLER 3.0 실측)
+        //    균일도는 예외 — PARTS 칸('White Variation (Max/Min)')은 최대/최소 **비율**이라 문서의 균일도 %와 다른 값이다
+        'scr.r10.c1': ['panel:Brightness (Min/Typ) (cd/m²)', SPEC.lv],
+        'scr.r11.c1': ['panel:Color Temperature', SPEC.temp, 'pl:colorTemp'],
+        'scr.r12.c1': ['panel:White Color Coordinates', 'fn:xyPair'],
+        'scr.r13.c1': ['panel:NTSC Ratio', SPEC.gamut, 'pl:colorGamut'],
         'scr.r14.c1': [SPEC.uni, 'pl:uniformity', 'panel:White Variation (Max/Min)'],
         panelVendor: ['pl:panelMfr', 'panel:Panel Brand'],
         // 시야각 표 — Right · Left · Up · Down (패널 'L/R/U/D' 를 쪼갠다)
         'va.r0.c4': ['fn:va:1'], 'va.r1.c4': ['fn:va:0'], 'va.r2.c4': ['fn:va:2'], 'va.r3.c4': ['fn:va:3'],
-        lumYL: ['fn:lumYL'],
+        lumYL: ['panel:Brightness (Min/Typ) (cd/m²)', 'fn:lumYL'],
         // ⚠️ BLU 전류·전압·전력은 **안 잇는다** — 라이브러리엔 값이 하나뿐인데 표는 Min/Typ/Max 세 칸이라
         //    어느 칸인지 모른다(실측: 라이브러리 전압 값은 원본의 Max 칸 값이었다 — Typ 에 넣으면 조용한 오답이 된다).
         'blu.r5.c2': ['panel:Lamp Life Time (Hrs)'],
-        'cie.r2.c1': [SPEC.xy + ':0', 'pl:cieX'],
-        'cie.r2.c2': [SPEC.xy + ':1', 'pl:cieY'],
+        'cie.r2.c1': ['panel:White Color Coordinates:0', SPEC.xy + ':0', 'pl:cieX'],    // ':0'/':1' = x/y 쪼개기
+        'cie.r2.c2': ['panel:White Color Coordinates:1', SPEC.xy + ':1', 'pl:cieY'],
         'amr.r1.c2': ['fn:range:Storage Temperature:0'], 'amr.r1.c3': ['fn:range:Storage Temperature:1'],
         'amr.r2.c2': ['fn:range:Operating Temperature:0'], 'amr.r2.c3': ['fn:range:Operating Temperature:1'],
         vcpTitle: ['fn:vcpTitle'],
@@ -229,7 +232,8 @@
         noUnit: function (v) { return String(v).replace(/\s*(mm|cm|hrs?|hours?)\s*$/i, '').trim(); },
         number: function (v) { return _num(v) || v; },
         minNumber: function (v) { return /^\s*\d+(\.\d+)?\s*%?\s*$/.test(v) ? 'Min = ' + _num(v) : v; },
-        rangeCd: function (v) { var r = _range(v); return r ? r + ' cd/m2' : v; },
+        // 범위가 아니어도(패널 기록 '450 (Typ)') 단위는 붙인다 — 'YL = 450 (Typ)' 로 단위 없이 나가지 않게
+        rangeCd: function (v) { var r = _range(v); return r ? r + ' cd/m2' : (/cd/i.test(v) || !/\d/.test(v) ? v : String(v).trim() + ' cd/m2'); },
         rangeCdTight: function (v) { var r = _range(v); return r ? r + 'cd/m2' : v; },
         xyOne: function (v) { return _stripXY(v); },
         // 문단 안 칸은 한 줄로 — Project list 는 칸 안에 줄을 바꿔 적기도 한다('BOE⏎KTK'). 문서에선 둘째 줄이 들여쓰기 없이 떨어졌다
@@ -1371,7 +1375,12 @@
         }
         if (LIB[kind]) {
             var rec = _libRec(ctx, kind);
+            var lpick = null, lm = arg.match(/^(.*):(\d)$/);           // 'White Color Coordinates:0' = x 만
+            if (lm && !(rec && rec.specs && Object.prototype.hasOwnProperty.call(rec.specs, arg))) { arg = lm[1]; lpick = +lm[2]; }
             var lv = rec ? String(rec.specs[arg] || '').trim() : '';
+            // '-'·'없음' 은 **빈 값**으로 — 패널 기록이 기준이지만 비어 있으면 다음 출처로(2026-11-25 사용자 결정)
+            if (_isNone(lv)) lv = '';
+            if (lv && lpick !== null) lv = _split(lv, lpick);
             return { v: lv, src: 'PARTS ▸ ' + LIB[kind].cat + (rec && rec._psVia ? ' (' + rec._psVia + ')' : '') + ' ▸ ' + arg + _libSrcTail(rec, arg) };
         }
         if (kind === 'fn') {
