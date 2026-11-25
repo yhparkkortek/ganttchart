@@ -285,6 +285,52 @@ window._modalPosSave = function(boxId, withSize) {
     }
     try { localStorage.setItem(window.MODAL_POS_POLICY.key, JSON.stringify(all)); } catch (e) { /* 꽉 차도 모달 동작은 그대로 */ }
 };
+// 📐 [2026-11-25 사용자 요청] **넓게 써야 하는 모달**은 처음 열 때 메인 페이지 영역에 맞춰 연다 —
+//    사이드바 오른쪽·상단바 아래·하단 작업표시줄 위, 페이지 여백(패딩)을 남기고 **오른쪽 절반**에 붙인다
+//    (왼쪽 절반엔 페이지가 그대로 보인다). 반쪽이 너무 좁으면(MIN_W) 영역 전체를 쓴다.
+//    사람이 옮기거나 크기를 바꾼 적이 있으면(위치 기억, _modalPosRestore) 그게 이긴다 — 이 규칙은 그 전까지의 기본값.
+//    대상은 데이터 한 줄: 박스 id 를 아래 목록에 넣으면 된다.
+window.MODAL_FIT_WIDE = ['gantt-qa-box', 'mail-analyzer-modal', 'task-inbox-modal', 'jira-issue-box', 'jira-search-box',
+                         'daily-box', 'matcart-box', 'ovc-box', 'ms-queue-box'];
+window.MODAL_FIT_POLICY = { side: 'right', minHalfW: 640, gapDefault: 10 };
+window._modalFitRect = function() {
+    const main = document.getElementById('app-main');
+    if (!main) return null;
+    const a = main.getBoundingClientRect();
+    const P = window.MODAL_FIT_POLICY;
+    // 페이지 여백 = 지금 보이는 페이지 머리 상자가 메인 영역 왼쪽에서 떨어진 만큼(위·오른쪽·아래도 같은 값)
+    let gap = P.gapDefault, top = a.top + gap;
+    const hdr = Array.prototype.find.call(main.querySelectorAll('.concept-header-box'), function (h) { return h.offsetWidth > 0; });
+    if (hdr) {
+        const r = hdr.getBoundingClientRect();
+        if (r.left - a.left >= 0 && r.left - a.left < 60) gap = Math.round(r.left - a.left) || P.gapDefault;
+        if (r.top >= a.top && r.top < a.top + 120) top = Math.round(r.top);
+    }
+    const right = a.left + main.clientWidth - gap;          // clientWidth — 세로 스크롤바는 뺀다
+    const bar = document.getElementById('modal-taskbar');
+    const barTop = (bar && bar.offsetHeight) ? bar.getBoundingClientRect().top : window.innerHeight;
+    const bottom = Math.min(barTop, window.innerHeight) - gap;
+    const fullL = a.left + gap, fullW = right - fullL;
+    let w = Math.round(fullW / 2), l = right - w;
+    if (P.side !== 'right' || w < P.minHalfW) { w = Math.round(fullW); l = fullL; }
+    return { l: Math.round(l), t: Math.round(top), w: w, h: Math.round(bottom - top) };
+};
+window._modalFitWide = function(boxId) {
+    if ((window.MODAL_FIT_WIDE || []).indexOf(boxId) < 0) return false;
+    const box = document.getElementById(boxId);
+    const r = window._modalFitRect();
+    if (!box || !r || r.w < 200 || r.h < 200) return false;
+    // 크기조절·위치 기억과 **같은 방식**: max-* 를 풀고 px 로 못박고, 가운데 정렬 transform 을 푼다
+    box.style.maxWidth = 'none';
+    box.style.maxHeight = 'none';
+    box.style.width  = r.w + 'px';
+    box.style.height = r.h + 'px';
+    box.style.transform = 'none';
+    box.style.left = r.l + 'px';
+    box.style.top  = r.t + 'px';
+    return true;
+};
+
 window._modalPosRestore = function(boxId) {
     const box = document.getElementById(boxId);
     if (!box) return false;
@@ -570,7 +616,7 @@ window._makeResizable = function(boxId, _retry, handleId) {
         }
         requestAnimationFrame(function() {
             // 모달 코드가 열면서 가운데로 되돌려도(observer 는 그 코드가 끝난 뒤 돈다) 기억한 자리가 이긴다
-            if (justOpened && window._modalPosRestore) window._modalPosRestore(boxId);
+            if (justOpened && !(window._modalPosRestore && window._modalPosRestore(boxId)) && window._modalFitWide) window._modalFitWide(boxId);
             window._clampModalToViewport(box);
             // 헤더가 열릴 때 그려지는 모달이 있어, 보일 때 색을 다시 읽는다(숨어 있으면 못 읽는다)
             if (window._mreszApplyBorder) window._mreszApplyBorder(boxId);
@@ -584,7 +630,7 @@ window._makeResizable = function(boxId, _retry, handleId) {
     } catch (e) { /* 구형 브라우저 — 창 크기 변경 시 보정은 아래에서 계속 동작 */ }
     // 📍 열 때마다 박스를 새로 만드는 모달(JIRA 상세 등)은 지금 이 설정 순간이 곧 "열리는 순간"이다 —
     //    관찰자는 이미 보이는 상태에서 붙어 숨김→보임 전환을 못 보므로 여기서 한 번 복원한다.
-    if (_wasShown) requestAnimationFrame(function() { if (window._modalPosRestore) window._modalPosRestore(boxId); });
+    if (_wasShown) requestAnimationFrame(function() { if (!(window._modalPosRestore && window._modalPosRestore(boxId)) && window._modalFitWide) window._modalFitWide(boxId); });
     if (_wasShown && window._currentLang === 'en' && window._applyLangLight) requestAnimationFrame(function() { try { window._applyLangLight(); } catch (e) { /* 번역 실패가 모달을 막지 않게 */ } });
 };
 
