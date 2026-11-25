@@ -78,6 +78,7 @@
         if (prevTab === 'projectlist' && tabName !== 'projectlist' && window.plFlushSave) window.plFlushSave();
         // Summary 탭은 Gantt chart Level 0 데이터와 연동된 타임라인을 매번 다시 그린다
         if (tabName === 'summary' && window.renderSummaryTimeline) window.renderSummaryTimeline();
+        if (tabName === 'summary' && window._sumColorizeDates) window._sumColorizeDates();
         // Summary 탭 진입 시 필수 항목(고객사/모델명/KTK PN/담당자) 미입력 하이라이트 갱신
         if (tabName === 'summary' && window._checkAllRequiredFields) window._checkAllRequiredFields();
         // "적용 목적" 자동 높이 — 숨겨진 동안엔 scrollHeight가 0이라 계산이 안 되므로,
@@ -449,6 +450,31 @@
             });
             el.addEventListener('drop', function (e) { e.preventDefault(); });
         });
+    }
+
+    // 🎨 [2026-11-25] Summary 마일스톤(계획·실적) 날짜 입력칸 글자색 — 일·공휴일=빨강, 토=파랑, 평일=회색(다른 페이지와 같은 규칙).
+    //    값은 여러 곳(불러오기·달력 선택·마법사 등)에서 코드로 채워지므로 한 곳(_sumColorizeDates)에서 클래스만 다시 단다.
+    window._sumColorizeDates = function () {
+        var cls = ['date-day-hol', 'date-day-sat', 'date-day-wk'];
+        document.querySelectorAll('#sum-milestone-body input[data-stage], #sum-milestone-body-actual input[data-stage]').forEach(function (inp) {
+            cls.forEach(function (c) { inp.classList.remove(c); });
+            var c = window._dateDayCls ? window._dateDayCls(inp.value) : '';
+            if (c) inp.classList.add(c);
+        });
+    };
+    ['input', 'change'].forEach(function (ev) {
+        document.addEventListener(ev, function (e) {
+            var t = e.target;
+            if (t && t.matches && t.matches('#sum-milestone-body input[data-stage], #sum-milestone-body-actual input[data-stage]')) window._sumColorizeDates();
+        }, true);
+    });
+    if (typeof window.populateTabData === 'function') {
+        var _sumPopPrev = window.populateTabData;
+        window.populateTabData = function () {
+            var r = _sumPopPrev.apply(this, arguments);
+            try { window._sumColorizeDates(); setTimeout(window._sumColorizeDates, 400); } catch (e) { /* 색만 — 저장·불러오기를 막지 않는다 */ }
+            return r;
+        };
     }
 
     // 새로고침해도 마지막 상태 복원
