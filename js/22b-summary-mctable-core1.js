@@ -1124,8 +1124,10 @@ window._addrStripTitleSuffix = function(name) {
             if (n.startsWith(t) && n.length > t.length) { n = n.slice(t.length).trim(); break; } // "팀장 윤재권" 형태
         }
         for (const t of ADDR_EN_TITLE_WORDS) {
-            const reSuf = new RegExp('[.,]?\\s*' + t + '\\.?$', 'i');
-            const rePre = new RegExp('^' + t + '\\.?\\s*', 'i');
+            // ⚠️ [2026-11-25] 낱말 경계 필수 — 예전엔 경계 없이 떼어 "Adams"→"Ada"(ms), "Drew"→"ew"(dr)처럼
+            //    이름 글자를 먹었고, 그 잘린 이름이 주소록의 다른 사람과 맞으면 그 사람에게 알람이 갔다.
+            const reSuf = new RegExp('(?:[.,]\\s*|\\s+)' + t + '\\.?$', 'i');
+            const rePre = new RegExp('^' + t + '(?:\\.\\s*|\\s+)', 'i');
             if (reSuf.test(n)) { n = n.replace(reSuf, '').trim(); break; }
             if (rePre.test(n)) { n = n.replace(rePre, '').trim(); break; }
         }
@@ -1164,6 +1166,56 @@ window._addrFindByName = function(name) {
     const stripped = window._addrStripTitleSuffix(trimmed);
     if (stripped && stripped !== trimmed) found = tryExact(stripped);
     return found || null;
+};
+
+// 🔔 [2026-11-25] 자동 발송 수신자 해석 — 이름(또는 주소) 하나를 주소록에서 **정확히 한 사람**으로만 인정한다.
+//    메일 AI 분석이 상세내용에 적은 [발신자→수신자] 이름이 알람 메일·텔레그램 수신자가 되는데,
+//    _addrFindByName 은 동명이인이면 **첫 번째 사람**을 말없이 고르고(전사 주소록), 이름 자리에
+//    이메일 글자가 있으면 주소록 대조 없이 그대로 보냈다. 되돌릴 수 없는 발송이라 모르면 안 보낸다
+//    (docs/ai-qa.md '메일 발송 수신자 화이트리스트'와 같은 원칙 — 주소록에 글자 그대로 있는 것만).
+//    반환 { email, person, reason }:
+//      ok                  한 사람, 이메일 있음
+//      no-email            한 사람, 이메일 없음(텔레그램은 가능)
+//      none                주소록에 없음(외부인·오타)
+//      ambiguous           서로 다른 사람이 둘 이상(동명이인) → 발송 제외
+//      email-not-in-book   이름 자리에 주소가 왔는데 주소록에 없는 주소 → 발송 제외
+//    ⚠️ 백엔드 `_addr_resolve_recipient`(kortek_backend.py)가 같은 규칙의 사본이다 — 한쪽만 고치면
+//       화면(즉시·자동 알람)과 예약 발송(기간·반복)이 갈린다.
+window._addrResolveRecipient = function(name) {
+    const addressBook = (window.tabData || {}).addressBook || [];
+    const trimmed = String(name || '').trim();
+    if (!trimmed) return { email: '', person: null, reason: 'none' };
+    // 같은 사람이 두 줄로 등록된 경우(이메일이 같다)는 한 사람으로 본다
+    const pkey = p => String((p && p.email) || '').trim().toLowerCase()
+        || ('#' + String((p && p.name) || '').trim() + '|' + String((p && p.nameEn) || '').trim().toLowerCase());
+    const uniq = list => { const m = new Map(); list.forEach(p => { const k = pkey(p); if (!m.has(k)) m.set(k, p); }); return [...m.values()]; };
+    if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
+        const lo = trimmed.toLowerCase();
+        const hit = uniq(addressBook.filter(p => String(p.email || '').trim().toLowerCase() === lo));
+        if (!hit.length) return { email: '', person: null, reason: 'email-not-in-book' };
+        return { email: String(hit[0].email).trim(), person: hit[0], reason: 'ok' };
+    }
+    const match = n => n ? uniq(addressBook.filter(p =>
+        (p.name && p.name.trim() === n) || (p.nameEn && p.nameEn.trim().toLowerCase() === n.toLowerCase()))) : [];
+    let hits = match(trimmed);
+    if (!hits.length) {
+        const stripped = window._addrStripTitleSuffix(trimmed);
+        if (stripped && stripped !== trimmed) hits = match(stripped);
+    }
+    if (!hits.length) return { email: '', person: null, reason: 'none' };
+    if (hits.length > 1) return { email: '', person: null, reason: 'ambiguous', count: hits.length };
+    const em = String(hits[0].email || '').trim();
+    return { email: em, person: hits[0], reason: em ? 'ok' : 'no-email' };
+};
+// 제외 사유 → 사람이 읽을 말 (알람 표·상세 창 표시용)
+window._addrResolveReasonText = function(x) {
+    const en = window._currentLang === 'en';
+    if (!x) return '';
+    if (x.reason === 'ambiguous') return en ? (x.name + ': ' + (x.count || 2) + ' people share this name in the address book — not sent')
+                                            : (x.name + ': 주소록에 같은 이름 ' + (x.count || 2) + '명 — 발송 제외');
+    if (x.reason === 'email-not-in-book') return en ? (x.name + ': address not in the address book — not sent')
+                                                    : (x.name + ': 주소록에 없는 주소 — 발송 제외');
+    return x.name;
 };
 
 // 💡 Summary 프로젝트 멤버(담당자 10종 + 멤버-3)를 참조인 후보로 변환 — 이메일은 주소록 기준
