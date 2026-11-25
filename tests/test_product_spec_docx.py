@@ -113,15 +113,15 @@ for family, variant in [(f, v) for f in FAM_SCHEMA for v in ('base', 'touch')]:
                       if (im.get('{urn:schemas-microsoft-com:office:office}title') or '').startswith('slot:'))
     check(slots_left == 0, '%s: 자리 그림이 남으면 안 된다(%d)' % (variant, slots_left))
     check('Picture img_block' in d.element.body.xml, '%s: img_block 그림이 들어가야' % variant)
-    # 덧그림 — 그림이 들어간 문단(img_block)의 덧그림은 남고, 그림이 빠진 문단(img_osdkey)의 덧그림 둘은 지워진다
+    # 덧그림 — 그림이 빠진 문단(img_osdkey)의 덧그림 둘은 지워지고, 손으로 올린 그림(img_block, 원본 정보 없음)
+    #   위의 양식 덧그림(STELLAR 흰 사각형 1)도 지워진다 — 남의 그림 위에 원본 제품 표시를 얹지 않는다(1-d 참고)
     #   (2026-11-24 실측: 그림 없이 남은 회색 사각형·빨간 점선 상자가 OSD 설명 글을 덮었다)
-    #   ⚠️ OBSIDIAN 은 그 상자가 그림 문단이 아니라 **위 제목 문단**에 걸려 있어 이 규칙이 안 닿는다(알려진 한계 — docs)
-    if family == 'stellar':
-        WSP = '{http://schemas.microsoft.com/office/word/2010/wordprocessingShape}wsp'
-        tpl_doc = Document(os.path.join(ROOT, 'templates', 'PRODUCT SPEC_양식%s.docx' % ('_TOUCH' if variant_ == 'touch' else '')))
-        n_tpl = sum(1 for _ in tpl_doc.element.body.iter(WSP))
-        n_out = sum(1 for _ in d.element.body.iter(WSP))
-        check(n_out == n_tpl - 2, '%s: 그림 빠진 자리의 덧그림만 지워져야 (양식 %d → %d)' % (variant, n_tpl, n_out))
+    WSP = '{http://schemas.microsoft.com/office/word/2010/wordprocessingShape}wsp'
+    tpl_doc = Document(kb._PS_FAMILIES[family]['templates'][variant_])
+    n_tpl = sum(1 for _ in tpl_doc.element.body.iter(WSP))
+    n_out = sum(1 for _ in d.element.body.iter(WSP))
+    n_drop = {'stellar': 3, 'obsidian': 3}[family]     # STELLAR: osdkey 2 + block 1 · OBSIDIAN: osdkey 2(제목 문단) + 외형도 흰 사각형 1
+    check(n_out == n_tpl - n_drop, '%s: 덧그림 %d개만 지워져야 (양식 %d → %d)' % (variant, n_drop, n_tpl, n_out))
     # 쪽 끝에 장 제목만 남지 않게(2026-11-25 OBSIDIAN27 실측: 5.2·6·6.2·6.3 이 쪽 맨 아래에 홀로) — 제목엔 keepNext, 글머리표엔 없음
     kn = {}
     for p in d.element.body.iterchildren(qn('w:p')):
@@ -133,6 +133,46 @@ for family, variant in [(f, v) for f in FAM_SCHEMA for v in ('base', 'touch')]:
     check(any(k.startswith('Voltage') for k in kn) and not any(v for k, v in kn.items() if k.startswith('Voltage') or k.startswith('Contrast Ratio (CR)')),
           '%s: 글머리표·긴 ① 문장엔 안 건다' % variant)
     variant = variant_
+
+# ── 1-d. OSD 키 그림 위 빨간 점선 상자 — 원본에 있었을 때만 (2026-11-25) ───────────────────
+#   상자는 양식 원본 제품의 OSD 키 자리를 가리킨다. OBSIDIAN 계열 OSD 키 그림 106개 중 상자 있는 원본은 8개라
+#   다른 제품 그림 위에 그대로 두면 엉뚱한 곳을 가리킨다. OBSIDIAN 은 상자가 **위 제목 문단**에 걸려 있다.
+print('1-d. 덧그림(빨간 점선 상자)')
+
+
+def _osd_box_count(d):
+    """OSD 키 그림 문단 + 바로 앞 문단의 덧그림 수 — 그림 문단은 'Picture img_osdkey' 로 찾고, 없으면 'OSD Key' 제목 다음."""
+    els = list(d.element.body.iterchildren())
+    for i, e in enumerate(els):
+        if 'Picture img_osdkey' in e.xml:
+            return len(kb._ps_overlays_near(e))
+    for i, e in enumerate(els):
+        t = ''.join(x.text or '' for x in e.iter(qn('w:t'))).strip()
+        if t.startswith('OSD Key Description') or (i + 1 < len(els) and 'Picture img_osdkey' in els[i + 1].xml):
+            return len([dr for dr in e.iter(qn('w:drawing')) if dr.find(qn('wp:anchor')) is not None])
+    return -1
+
+
+for family in FAM_SCHEMA:
+    for label, item, want in [('원본에 상자 있음(ov=2)', {'b64': b64, 'ov': 2}, 2),
+                              ('원본에 상자 없음(ov=0)', {'b64': b64, 'ov': 0}, 0),
+                              ('이 규칙 전 불러온 그림(cx만)', {'b64': b64, 'cx': 3000000, 'cy': 2000000}, 2),
+                              ('손으로 올린 그림', {'b64': b64}, 0)]:
+        r = client.post('/doc/product-spec-docx', json={'name': 'x', 'family': family, 'variant': 'base',
+                                                        'values': {}, 'images': {'img_osdkey': [item]}})
+        d = Document(io.BytesIO(r.data))
+        n = _osd_box_count(d)
+        check(n == want, '%s / %s: OSD 키 덧그림 %d개여야 (%d)' % (family, label, want, n))
+    # 그림이 비면 상자도 없다(OBSIDIAN — 제목 문단에 걸린 것까지)
+    r = client.post('/doc/product-spec-docx', json={'name': 'x', 'family': family, 'variant': 'base', 'values': {}, 'images': {}})
+    d = Document(io.BytesIO(r.data))
+    left = 0
+    for e in d.element.body.iterchildren(qn('w:p')):
+        t = ''.join(x.text or '' for x in e.iter(qn('w:t'))).strip()
+        if t.startswith('OSD Key Description'):
+            left = sum(1 for dr in e.iter(qn('w:drawing')) if dr.find(qn('wp:anchor')) is not None)
+    check(left == 0, '%s: OSD 키 그림이 비면 제목 문단의 상자도 지워져야 (%d)' % (family, left))
+
 schema = FAM_SCHEMA['stellar']      # 아래 1-b 는 STELLAR 양식으로
 
 # ── 1-c. 빈 표 칸의 번호 목록 서식 (2026-11-25 실측: OBSIDIAN 개정 이력 빈 줄 요약 칸에 '①' 만 찍혔다) ──
@@ -253,8 +293,9 @@ for src in srcs:
     check(pj['align']['ratio'] >= 0.95, '%s: 공통 글 일치율이 95%% 이상이어야' % name)
     check(not pj['skipped'], '%s: 못 읽은 칸이 없어야 %s' % (name, pj['skipped']))
     # 화면은 그림을 NAS 에 올리고 {folder,name,cx,cy} 로 보낸다 — 여기선 b64 로 같은 크기 정보를 싣는다
-    imgs = {k: [dict({'b64': v['b64']}, **{x: v[x] for x in ('cx', 'cy', 'ph', 'pv') if x in v})]
+    imgs = {k: [dict({'b64': v['b64']}, **{x: v[x] for x in ('cx', 'cy', 'ph', 'pv', 'ov') if x in v})]
             for k, v in pj['images'].items()}
+    check(all('ov' in v for v in pj['images'].values()), '%s: 그림마다 덧그림 수(ov)' % name)
     vml = {k for k, v in (FAM_SCHEMA.get(pj.get('family') or 'stellar', {}).get('images') or {}).items() if v.get('vml')}
     check(all(v.get('cx') and v.get('cy') for k, v in pj['images'].items() if k not in vml), '%s: 그림마다 원래 크기(cx,cy)' % name)
     check(isinstance(pj.get('layout'), list), '%s: 쪽 맞춤 빈 줄(layout)을 돌려줘야' % name)
@@ -271,6 +312,10 @@ for src in srcs:
     check(len(a) == len(b), '%s: 글 문단 수 같아야 (%d vs %d)' % (name, len(a), len(b)))
     check(not diff, '%s: 글이 원본과 같아야 — 다른 곳 %d: %s' % (name, len(diff), diff[:5]))
     check(pictures(orig) == pictures(out), '%s: 그림 수 같아야 (%d vs %d)' % (name, pictures(orig), pictures(out)))
+    # 덧그림(빨간 점선 상자·흰 사각형)도 원본과 같은 수 — 원본에 있던 건 남고 없던 건 안 생긴다
+    WSP = '{http://schemas.microsoft.com/office/word/2010/wordprocessingShape}wsp'
+    nw = lambda d: sum(1 for _ in d.element.body.iter(WSP))
+    check(nw(orig) == nw(out), '%s: 도형 수 같아야 (%d vs %d)' % (name, nw(orig), nw(out)))
     lay = lambda d: kb._ps_layout_of(list(d.element.body.iterchildren()))
     check(lay(orig) == lay(out), '%s: 빈 줄(쪽 맞춤)까지 원본과 같아야' % name)
     keep = os.environ.get('PS_KEEP')

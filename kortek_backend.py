@@ -9945,34 +9945,113 @@ def _ps_image_bytes(item):
         return f.read()
 
 
+_PS_MC_ALT = '{http://schemas.openxmlformats.org/markup-compatibility/2006}AlternateContent'
+
+
+def _ps_shape_top(dr):
+    """도형(w:drawing)을 지울 때 함께 가야 하는 맨 바깥 — mc:AlternateContent 안이면 그것(옛 VML 대체본까지)."""
+    from docx.oxml.ns import qn
+    top, cur = dr, dr.getparent()
+    while cur is not None and cur.tag != qn('w:r'):
+        if cur.tag == _PS_MC_ALT:
+            top = cur
+        cur = cur.getparent()
+    return top
+
+
+def _ps_para_of(el):
+    from docx.oxml.ns import qn
+    while el is not None and el.tag != qn('w:p'):
+        el = el.getparent()
+    return el
+
+
+def _ps_overlays_near(para):
+    """그림 문단에 딸린 **덧그림**(그림 위에 얹은 사각 테두리·화살표 — 떠 있고(anchor) 그림 바이트가 없는 도형).
+    ① 같은 문단의 것(STELLAR) ② 바로 앞 문단(장 제목)에 걸려 **아래로 늘어뜨린** 것(OBSIDIAN 'OSD Key Description' —
+    제목 문단 기준 +287020 EMU 아래, 그림 문단을 덮는다). 앞 문단에 그림이 있으면 그 문단 것이라 안 본다.
+    불러오기(원본에 있었나)와 원본저장(지울까)이 **같은 규칙**을 쓴다 — 둘로 두면 서로 다른 상자를 센다."""
+    from docx.oxml.ns import qn
+    out = []
+    if para is None or para.tag != qn('w:p'):
+        return out
+    blip_tag = '{%s}blip' % _PS_A
+
+    def _ov(dr):
+        return dr.find(qn('wp:anchor')) is not None and dr.find('.//' + blip_tag) is None
+    for dr in para.iter(qn('w:drawing')):
+        if _ov(dr):
+            out.append(_ps_shape_top(dr))
+    prev = para.getprevious()
+    if prev is not None and prev.tag == qn('w:p') and prev.find('.//' + blip_tag) is None:
+        for dr in prev.iter(qn('w:drawing')):
+            if not _ov(dr):
+                continue
+            pv = dr.find('.//' + qn('wp:positionV'))
+            po = pv.find(qn('wp:posOffset')) if pv is not None else None
+            try:
+                hang = pv.get('relativeFrom') == 'paragraph' and int((po.text or '').strip()) > 0
+            except Exception:
+                hang = False
+            if hang:
+                out.append(_ps_shape_top(dr))
+    seen, uniq = set(), []
+    for t in out:
+        if id(t) not in seen:
+            seen.add(id(t))
+            uniq.append(t)
+    return uniq
+
+
+def _ps_remove_all(els):
+    n = 0
+    for t in els:
+        parent = t.getparent()
+        if parent is not None:
+            parent.remove(t)
+            n += 1
+    return n
+
+
+def _ps_keep_overlays(item, vml=False):
+    """채운 그림 위에 양식의 덧그림을 남길까 — 덧그림은 **양식 원본 제품**의 그림 위 표시라(빨간 점선 상자가 가리키는
+    OSD 키 자리) 다른 제품 그림 위에선 엉뚱한 곳을 가리킨다(2026-11-25 실측: OBSIDIAN 계열 OSD 키 그림 106개 중
+    상자가 있는 원본은 8개). 불러오기가 원본에 덧그림이 있었는지(`ov` 개수)를 싣는다.
+    `ov` 가 없으면: 불러온 그림(cx 있음, 이 규칙 전에 들어온 것)은 예전처럼 남기고, 손으로 올린 그림은 뺀다.
+    VML 그림(OBSIDIAN 외형도)은 불러와도 cx 가 없어 구분이 안 되므로 `ov` 가 없으면 예전처럼 남긴다(흰 사각형 하나)."""
+    if not isinstance(item, dict):
+        return False
+    if 'ov' in item:
+        try:
+            return int(item.get('ov') or 0) > 0
+        except Exception:
+            return bool(item.get('ov'))
+    if vml:
+        return True
+    try:
+        return int(item.get('cx') or 0) > 0
+    except Exception:
+        return False
+
+
 def _ps_drop_overlays(para):
     """그림을 지운 문단에 남은 **덧그림**(그림 위에 얹은 도형 — 사각 테두리·화살표)을 지운다.
     2026-11-24 실측: OSD 키 그림을 지우자 그 위에 얹혀 있던 회색 사각형·빨간 점선 상자가 남아 **아래 글을 덮었다**
-    (그림이 자리를 차지하던 게 사라져 글이 위로 올라온다). 그 문단에 그림(a:blip)이 하나라도 남아 있으면 손대지 않는다."""
+    (그림이 자리를 차지하던 게 사라져 글이 위로 올라온다). 그 문단에 그림(a:blip)이 하나라도 남아 있으면 손대지 않는다.
+    (2026-11-25) 바로 앞 제목 문단에 걸려 아래로 늘어뜨린 상자(OBSIDIAN)도 같이 — `_ps_overlays_near`."""
     from docx.oxml.ns import qn
     if para is None:
         return 0
     blip_tag = '{%s}blip' % _PS_A
     if any(True for _ in para.iter(blip_tag)):
         return 0
-    mc_alt = '{http://schemas.openxmlformats.org/markup-compatibility/2006}AlternateContent'
-    n = 0
+    n = _ps_remove_all(_ps_overlays_near(para))
     for dr in list(para.iter(qn('w:drawing'))):
-        top = dr
-        cur = dr.getparent()
-        while cur is not None and cur.tag != qn('w:r'):
-            if cur.tag == mc_alt:
-                top = cur
-            cur = cur.getparent()
-        parent = top.getparent()
-        if parent is not None:
-            parent.remove(top)
-            n += 1
+        n += _ps_remove_all([_ps_shape_top(dr)])
     for pict in list(para.iter(qn('w:pict'))):     # VML 대체 그림만 남은 경우
-        parent = pict.getparent()
-        if parent is not None:
-            parent.remove(pict)
-            n += 1
+        if any(True for _ in pict.iter('{urn:schemas-microsoft-com:vml}imagedata')):
+            continue                               # VML **그림**(그림 칸·채운 그림)은 덧그림이 아니다 — 그 차례에
+        n += _ps_remove_all([pict])
     return n
 
 
@@ -10084,9 +10163,11 @@ def _ps_fill_images(doc, images):
         blob = None
         want = None
         pos = None
+        used = None
         for it in (lst if isinstance(lst, list) else [lst]):
             blob = _ps_image_bytes(it)
             if blob:
+                used = it
                 pos = {k2: it.get(k2) for k2 in ('ph', 'pv') if isinstance(it.get(k2), int)}
                 # 📐 불러온 그림은 **원래 문서의 크기**(EMU)를 들고 온다 — 양식 상자는 다른 파일에서
                 #    만들어져 비율이 달라(실측 Upper 블록도가 절반 크기로 줄었다) 그대로 써야 같은 문서가 된다.
@@ -10142,6 +10223,8 @@ def _ps_fill_images(doc, images):
                 po.text = str(int(pv))
         docpr.set('descr', '')
         docpr.set('name', 'Picture %s' % key)
+        if not _ps_keep_overlays(used):            # 원본에 없던 표시(빨간 점선 상자 등)는 남의 그림 위에 얹지 않는다
+            _ps_remove_all(_ps_overlays_near(_ps_para_of(dr)))
         filled.append(key)
     # 옛 방식(VML) 그림 칸 — `o:title="slot:<열쇠>"`(OBSIDIAN 외형도). 상자 크기(style)는 그대로, 바이트만.
     V, O = 'urn:schemas-microsoft-com:vml', 'urn:schemas-microsoft-com:office:office'
@@ -10151,15 +10234,20 @@ def _ps_fill_images(doc, images):
             continue
         key = title[5:]
         blob = None
+        used = None
         for it in (images.get(key) or []) if isinstance(images.get(key), list) else [images.get(key)]:
             blob = _ps_image_bytes(it) if it else None
             if blob:
+                used = it
                 break
+        para = _ps_para_of(imd)
         if blob:
             try:
                 rid, _img = doc.part.get_or_add_image(io.BytesIO(blob))
                 imd.set('{%s}id' % _PS_R, rid)
                 imd.set('{%s}title' % O, '')
+                if not _ps_keep_overlays(used, vml=True):
+                    _ps_remove_all(_ps_overlays_near(para))
                 filled.append(key)
                 continue
             except Exception:
@@ -10169,6 +10257,7 @@ def _ps_fill_images(doc, images):
             pict = pict.getparent()
         if pict is not None and pict.getparent() is not None:
             pict.getparent().remove(pict)
+        _ps_drop_overlays(para)                    # 그림이 빠진 자리의 덧그림(흰 사각형 등)도
         removed.append(key)
     return filled, removed
 
@@ -10661,6 +10750,8 @@ def _ps_parse_one(src_bytes, family, variant=None, trace=False):
                     po = dr.find('.//' + qn('wp:position' + axis) + '/' + qn('wp:posOffset'))
                     if po is not None and (po.text or '').strip().lstrip('-').isdigit():
                         got['p' + axis.lower()] = int(po.text.strip())
+                # 원본 그림 위에 덧그림(빨간 점선 상자 등)이 있었나 — 원본저장이 양식의 상자를 남길지 이걸로 정한다
+                got['ov'] = len(_ps_overlays_near(_ps_para_of(dr)))
                 break
         if not got and info.get('vml'):
             # 옛 방식(VML w:pict) 그림 — OBSIDIAN 외형도
@@ -10669,7 +10760,8 @@ def _ps_parse_one(src_bytes, family, variant=None, trace=False):
                 if rid and rid in src.part.rels:
                     part = src.part.rels[rid].target_part
                     got = {'b64': base64.b64encode(part.blob).decode('ascii'),
-                           'mime': part.content_type, 'ext': os.path.splitext(part.partname)[1].lstrip('.')}
+                           'mime': part.content_type, 'ext': os.path.splitext(part.partname)[1].lstrip('.'),
+                           'ov': len(_ps_overlays_near(_ps_para_of(imd)))}
                     break
         if got:
             images[key] = got

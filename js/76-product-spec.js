@@ -1344,7 +1344,8 @@
             if (!list.length) { var rf = _refImage(ctx, k); if (rf) list = rf.list; }   // 📑 비어 있으면 참고 사양서 그림
             if (list.length) images[k] = list.map(function (a) {
                 var o = { folder: a.folder, name: a.name };
-                ['cx', 'cy', 'ph', 'pv'].forEach(function (x) { if (typeof a[x] === 'number') o[x] = a[x]; });
+                // ov = 원본 그림 위에 덧그림(빨간 점선 상자 등)이 몇 개 있었나 — 원본저장이 양식의 상자를 남길지 정한다
+                ['cx', 'cy', 'ph', 'pv', 'ov'].forEach(function (x) { if (typeof a[x] === 'number') o[x] = a[x]; });
                 return o;
             });
         });
@@ -1539,7 +1540,7 @@
             d.att[k] = [];
             await window._docAttachAdd(FORM_ID, k, [_b64ToFile(im.b64, k + '.' + (im.ext || 'png'), im.mime)]);
             var last = (d.att[k] || [])[d.att[k].length - 1];
-            if (last) ['cx', 'cy', 'ph', 'pv'].forEach(function (x) { if (typeof im[x] === 'number') last[x] = im[x]; });
+            if (last) ['cx', 'cy', 'ph', 'pv', 'ov'].forEach(function (x) { if (typeof im[x] === 'number') last[x] = im[x]; });
         }
         // 저장 대상으로 표시 — 앱의 진짜 표시는 `_markNonGanttDirty`(js/04a). (`markUnsavedChanges` 는 앱에 없다)
         if (window._markNonGanttDirty) window._markNonGanttDirty();
