@@ -378,14 +378,14 @@
             const { issue, fix } = wrExtractIssue(contentStr);
             if (!issue) return;
             const assignee = wrExtractAssignee(contentStr);
-            rows.push({ task: t.text, issue, fix, assignee, dateLabel: `${wrDateSpan(t.row._calcStartTs)}~${wrDateSpan(t.row._calcPlanTs)}` });
+            rows.push({ task: t.text, taskHtml: (t.wrName != null ? escapeHtml(t.wrName) + ' (' + wrDateSpan(t.wrS) + '~' + wrDateSpan(t.wrE) + ')' : escapeHtml(t.text)), issue, fix, assignee, dateLabel: `${wrDateSpan(t.row._calcStartTs)}~${wrDateSpan(t.row._calcPlanTs)}` });
         });
         const _wiEn = window._currentLang === 'en';
         if (rows.length === 0) return '<div style="color:#999;">' + (_wiEn ? 'No issues this week.' : '이번 주 문제점/이슈 없음') + '</div>';
         // 🦓 [2026-11-24] 다른 페이지와 같은 흰색 + 팔레트 제브라(색은 styles.css / js/21 이 정한다)
         const body = rows.map((r, ri) => `
             <tr${ri % 2 ? ' class="wr-zebra-b"' : ''}>
-                <td style="padding:8px; border:1px solid #e0e0e0;"><div style="font-weight:bold; font-size:11px; color:#555; margin-bottom:3px;">${escapeHtml(r.task)}</div>${escapeHtml(r.issue)}</td>
+                <td style="padding:8px; border:1px solid #e0e0e0;"><div style="font-weight:bold; font-size:11px; color:#555; margin-bottom:3px;">${r.taskHtml}</div>${escapeHtml(r.issue)}</td>
                 <td style="padding:8px; border:1px solid #e0e0e0;">${escapeHtml(r.fix || '-')}</td>
                 <td style="padding:8px; border:1px solid #e0e0e0; white-space:nowrap;">${r.dateLabel}</td>
                 <td style="padding:8px; border:1px solid #e0e0e0; white-space:nowrap;">${escapeHtml(r.assignee || '-')}</td>
