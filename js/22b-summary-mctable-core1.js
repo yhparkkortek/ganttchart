@@ -1215,7 +1215,20 @@ window._addrResolveReasonText = function(x) {
                                             : (x.name + ': 주소록에 같은 이름 ' + (x.count || 2) + '명 — 발송 제외');
     if (x.reason === 'email-not-in-book') return en ? (x.name + ': address not in the address book — not sent')
                                                     : (x.name + ': 주소록에 없는 주소 — 발송 제외');
+    if (x.reason === 'not-in-mail-headers') return en ? (x.name + ': not among the original mail\'s From/To/Cc — not sent')
+                                                      : (x.name + ': 원본 메일의 보낸사람·받는사람·참조에 없음 — 발송 제외');
     return x.name;
+};
+
+// 📨 [2026-11-25] 메일 원문(row._mailRaw)의 헤더 주소 — 보낸사람·받는사람·참조 문자열에서 이메일만 뽑아 소문자로.
+//    헤더가 하나도 없으면 null(= 대조하지 않는다: 직접 입력·붙여넣기·헤더를 잃은 옛 행).
+//    ⚠️ 백엔드 `_mail_header_addrs`(kortek_backend.py)가 같은 규칙의 사본이다.
+window._mailHeaderAddrs = function(mr) {
+    if (!mr || typeof mr !== 'object') return null;
+    const raw = [mr.sender, mr.from, mr.to, mr.cc].map(v => Array.isArray(v) ? v.join(',') : String(v || '')).join(',');
+    const found = raw.match(/[A-Za-z0-9._%+'-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g) || [];
+    const out = [...new Set(found.map(e => e.toLowerCase()))];
+    return out.length ? out : null;
 };
 
 // 💡 Summary 프로젝트 멤버(담당자 10종 + 멤버-3)를 참조인 후보로 변환 — 이메일은 주소록 기준

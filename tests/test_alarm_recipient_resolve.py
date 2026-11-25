@@ -65,14 +65,16 @@ B._load_address_book = lambda force=False: BOOK
 B._project_doc_by_id = lambda fid: (PROJECT, 'nas')
 
 
-def fire(content):
+def fire(content, mail_raw=None):
     due = (datetime.now(B.KST).date() + timedelta(days=3)).strftime('%Y-%m-%d')
+    row = {'data': ['업무1', due, content, '진행'], '_알림': True, '_level': 3, '_origT3': '업무1'}
+    if mail_raw is not None:
+        row['_mailRaw'] = mail_raw
     PROJECT.clear()
     PROJECT.update({
         'colIdx': {'plan': 1, 'content': 2, 'status': 3, 'wbs': 0},
         'projectMeta': {'고객사': 'TEST'},
-        'globalData': [{'data': ['헤더']},
-                       {'data': ['업무1', due, content, '진행'], '_알림': True, '_level': 3, '_origT3': '업무1'}],
+        'globalData': [{'data': ['헤더']}, row],
     })
     del SENT_MAIL[:]
     del SENT_TG[:]
@@ -107,6 +109,18 @@ ok('허용 안 된 외부 주소는 사내 주소와 섞여도 빠진다', SENT_
 
 out = fire('[샘플발송][Taylor Kim→Morgan Lee] 2026-11-20')
 ok('외부인 이름만 → 발송 없음', SENT_MAIL == [] and out.get('emailSkipped'), (SENT_MAIL, out))
+
+print('3) 📨 메일 헤더 대조')
+MR = {'sender': 'Andy Lee <andy@customer.com>', 'to': '"Lee, Seoyeon" <SY.LEE@kortek.co.kr>', 'cc': ''}
+out = fire('[샘플요청][Andy→이서연] 2026-11-20', MR)
+ok('헤더에 없는 사내 Andy 에게 메일 안 감', SENT_MAIL == ['sy.lee@kortek.co.kr'], SENT_MAIL)
+ok('헤더에 없는 사내 Andy 에게 텔레그램 안 감', '333' not in SENT_TG, SENT_TG)
+ok('사유: 메일 헤더에 없음', any('Andy' in x and '헤더' in x for x in out.get('excluded', [])), out)
+out = fire('[샘플요청][Andy→이서연] 2026-11-20')
+ok('헤더 없는 업무는 주소록 규칙만(예전 그대로)', 'andy.park@kortek.co.kr' in (SENT_MAIL[0] if SENT_MAIL else ''), SENT_MAIL)
+out = fire('[샘플요청][Andy→이서연] 2026-11-20', {'sender': '', 'to': '', 'body2000': '...'})
+ok('헤더 글자가 비면 대조 안 함', 'andy.park@kortek.co.kr' in (SENT_MAIL[0] if SENT_MAIL else ''), SENT_MAIL)
+ok('배열 헤더도 읽는다', B._mail_header_addrs({'to': ['a@x.com', 'B@Y.co.kr']}) == ['a@x.com', 'b@y.co.kr'])
 
 print('%s 예약 알람 수신자 해석 %d/%d' % ('✅' if not FAIL[0] else '❌', PASS[0], PASS[0] + FAIL[0]))
 sys.exit(1 if FAIL[0] else 0)

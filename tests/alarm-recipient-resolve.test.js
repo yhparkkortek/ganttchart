@@ -59,8 +59,11 @@ function setRows(contents) {
     const gd = [['헤더']];
     fakeRows = [];
     contents.forEach((c, i) => {
+        const mailRaw = (c && typeof c === 'object') ? c.mailRaw : null;
+        if (c && typeof c === 'object') c = c.c;
         const row = ['업무' + (i + 1), due, c, '진행'];
         row._알림 = true; row._level = 3; row._origT3 = '업무' + (i + 1);
+        if (mailRaw) row._mailRaw = mailRaw;
         gd.push(row);
         fakeRows.push({ dataset: { rowIndex: String(i + 1) }, querySelectorAll: () => [] });
     });
@@ -117,6 +120,25 @@ const run = contents => { setRows(contents); return window.collectAlarmItems(); 
     ok(!it.toEmail.includes('out@customer.com'), '허용 안 된 외부 주소는 사내 주소와 함께 있어도 빠진다 (toEmail=' + it.toEmail + ')');
     ok(it.blockedByDomain.includes('out@customer.com'), '차단 배지에 외부 주소가 오른다');
     window.tabData.addressBook.pop();
+}
+// 5-3) 📨 메일 헤더 대조 — 메일에서 온 업무는 원본 메일의 보낸사람·받는사람·참조 주소만 받는다
+{
+    // 고객사 Andy 가 보낸 메일 — AI 는 "Andy" 라고 적었고, 주소록의 사내 Andy(박지훈)로 풀린다
+    const mr = { sender: 'Andy Lee <andy@customer.com>', to: '"Lee, Seoyeon" <SY.LEE@kortek.co.kr>', cc: '' };
+    const [it] = run([{ c: '[샘플요청][Andy→이서연] 2026-11-20', mailRaw: mr }]);
+    ok(!it.toEmail.includes('andy.park@'), '헤더에 없는 사내 Andy 에게 안 간다 (toEmail=' + it.toEmail + ')');
+    ok(it.toEmail === 'sy.lee@kortek.co.kr', '헤더에 있는 사람(대소문자·표시이름 무관)은 받는다');
+    ok((it.excludedPeople || []).some(x => x.name === 'Andy' && x.reason === 'not-in-mail-headers'), '사유: not-in-mail-headers');
+    ok(!it.allowedPeople.includes('Andy'), '헤더에 없으면 텔레그램도 안 간다');
+    // 헤더가 없는 업무(직접 입력·붙여넣기)는 예전 규칙 그대로
+    const [it2] = run(['[샘플요청][Andy→이서연] 2026-11-20']);
+    ok(it2.toEmail.split(',').includes('andy.park@kortek.co.kr'), '헤더 없는 업무는 주소록 규칙만 (toEmail=' + it2.toEmail + ')');
+    const [it3] = run([{ c: '[샘플요청][Andy→이서연] 2026-11-20', mailRaw: { sender: '', to: '', cc: '', body2000: '...' } }]);
+    ok(it3.toEmail.split(',').includes('andy.park@kortek.co.kr'), '헤더 글자가 비어 있으면 대조하지 않는다');
+    // 이메일 없는 사람은 헤더로 확인할 길이 없다 → 제외
+    const [it4] = run([{ c: '[검토요청][이서연→최유나] 2026-11-20', mailRaw: { sender: 'sy.lee@kortek.co.kr', to: 'team@kortek.co.kr' } }]);
+    ok(!it4.allowedPeople.includes('최유나') && it4.excludedPeople.some(x => x.name === '최유나'), '이메일 없는 사람은 헤더 대조 불가 → 제외');
+    ok(window._mailHeaderAddrs({ to: ['a@x.com', 'B@Y.co.kr'] }).join(',') === 'a@x.com,b@y.co.kr', '배열 헤더도 읽는다');
 }
 // 6) 해석기 직접 — 공개 계약
 {

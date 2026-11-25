@@ -2769,6 +2769,37 @@ def _lookup_email(address_book: list, name: str) -> str:
     return _addr_resolve_recipient(address_book, name)['email']
 
 
+_MAIL_ADDR_RE = re.compile(r"[A-Za-z0-9._%+'-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
+
+
+def _mail_header_addrs(mr):
+    # 📨 [2026-11-25] 메일 원문(row._mailRaw)의 보낸사람·받는사람·참조 주소(소문자). 하나도 없으면 None(= 대조 안 함).
+    #    js/22b `_mailHeaderAddrs` 의 사본 — 한쪽만 고치면 화면 알람과 예약 발송이 갈린다.
+    if not isinstance(mr, dict):
+        return None
+    parts = []
+    for k in ('sender', 'from', 'to', 'cc'):
+        v = mr.get(k)
+        parts.append(','.join(map(str, v)) if isinstance(v, list) else str(v or ''))
+    out = list(dict.fromkeys(e.lower() for e in _MAIL_ADDR_RE.findall(','.join(parts))))
+    return out or None
+
+
+_ALARM_EXCLUDE_REASONS = ('ambiguous', 'email-not-in-book', 'not-in-mail-headers')
+
+
+def _addr_resolve_for_row(address_book: list, name: str, hdr) -> dict:
+    # 메일에서 온 업무(헤더 있음)는 그 메일의 보낸사람·받는사람·참조에 있는 주소만 인정 — js/22c resolveRow 와 같은 규칙
+    r = _addr_resolve_recipient(address_book, name)
+    if not hdr:
+        return r
+    if r['reason'] == 'ok' and str(r['email']).lower() not in hdr:
+        return dict(r, email='', reason='not-in-mail-headers')
+    if r['reason'] == 'no-email':
+        return dict(r, reason='not-in-mail-headers')
+    return r
+
+
 def _is_alarm_domain_allowed(email: str, allowed_external_domains: list) -> bool:
     """@kortek.co.kr은 항상 허용, 그 외 도메인은 규칙 저장 시점에 스냅샷된 허용 목록에 있어야 허용"""
     if not email:
@@ -2863,24 +2894,29 @@ def _build_alarm_task_snapshot(project_data: dict, row_idx: int):
     receiver_names = _addr_split_names(receiver_raw)
     all_people     = list(dict.fromkeys([n for n in (sender_names + receiver_names) if n]))
 
+    hdr = _mail_header_addrs(row_obj.get('_mailRaw'))   # 📨 메일에서 온 업무면 그 메일의 헤더 주소만 인정
+
+    def row_email(n):
+        return _addr_resolve_for_row(address_book, n, hdr)['email']
+
     assignee        = ', '.join(sender_names) or '-'
-    sender_emails   = list(dict.fromkeys([e for e in (_lookup_email(address_book, n) for n in sender_names) if e]))
+    sender_emails   = list(dict.fromkeys([e for e in (row_email(n) for n in sender_names) if e]))
     assignee_email  = ','.join(sender_emails)
-    # 🔔 [2026-11-25] 발송 제외(동명이인·주소록에 없는 주소) — 결과 기록에 사유를 남긴다
+    # 🔔 [2026-11-25] 발송 제외(동명이인·주소록에 없는 주소·메일 헤더에 없음) — 결과 기록에 사유를 남긴다
     excluded = []
     for n in all_people:
-        r = _addr_resolve_recipient(address_book, n)
-        if r['reason'] in ('ambiguous', 'email-not-in-book'):
+        r = _addr_resolve_for_row(address_book, n, hdr)
+        if r['reason'] in _ALARM_EXCLUDE_REASONS:
             excluded.append({'name': n, 'reason': r['reason'], 'count': r.get('count')})
     receiver_str    = ', '.join(receiver_names) or '-'
-    receiver_emails = list(dict.fromkeys([e for e in (_lookup_email(address_book, n) for n in receiver_names) if e]))
+    receiver_emails = list(dict.fromkeys([e for e in (row_email(n) for n in receiver_names) if e]))
 
     status_val = str(col('status') or '').strip() if col_idx.get('status', -1) != -1 else ''
 
     return {
         'taskName': task_name, 'status': status_val,
         'assignee': assignee, 'assigneeEmail': assignee_email, 'senderEmails': sender_emails,
-        'excludedPeople': excluded,
+        'excludedPeople': excluded, 'mailHeaderAddrs': hdr,
         'receiverStr': receiver_str, 'receiverEmails': receiver_emails,
         'allPeopleNames': all_people,
         'dueStr': due_str, 'diffDays': diff_days, 'content': content_raw_for_mail,
@@ -2991,8 +3027,8 @@ def _fire_alarm_rule(rule: dict):
     receiver_emails = [e for e in snap['receiverEmails'] if _is_alarm_domain_allowed(e, allowed_domains)]
     to_email = ','.join(dict.fromkeys([e for e in (sender_emails + receiver_emails) if e]))
     if snap.get('excludedPeople'):
-        out['excluded'] = ['%s(%s)' % (x['name'], '동명이인' if x['reason'] == 'ambiguous' else '주소록에 없는 주소')
-                           for x in snap['excludedPeople']]
+        _why = {'ambiguous': '동명이인', 'email-not-in-book': '주소록에 없는 주소', 'not-in-mail-headers': '메일 헤더에 없음'}
+        out['excluded'] = ['%s(%s)' % (x['name'], _why.get(x['reason'], x['reason'])) for x in snap['excludedPeople']]
         print(f"[업무알람 발송 제외] '{snap['taskName']}' — {', '.join(out['excluded'])}")
     # 💡 [2026-08-31] 수신 대상(기본수신/개별수신) 스냅샷 — 이메일 켜져있고(emailOn) 도메인 허용된
     #    사람만 이메일 cc로, 텔레그램 켜져있는(tgOn) 사람은 아래에서 별도로 텔레그램 발송
@@ -3057,7 +3093,10 @@ def _fire_alarm_rule(rule: dict):
                 out['telegram'] += 1
 
         for name in snap['allPeopleNames']:
-            person = _addr_resolve_recipient(address_book, name)['person']  # 동명이인이면 None — 첫 번째 사람을 집지 않는다
+            _r = _addr_resolve_for_row(address_book, name, snap.get('mailHeaderAddrs'))
+            if _r['reason'] in _ALARM_EXCLUDE_REASONS:
+                continue   # 동명이인·메일 헤더에 없는 사람 — 첫 번째 사람을 집거나 엉뚱한 사람에게 보내지 않는다
+            person = _r['person']
             if not person or not person.get('telegramId'):
                 continue
             email = person.get('email') or ''

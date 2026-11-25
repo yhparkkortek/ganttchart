@@ -20,8 +20,17 @@ window.collectAlarmItems = function() {
         if (!(k in _resolveCache)) _resolveCache[k] = window._addrResolveRecipient(k);
         return _resolveCache[k];
     };
-    const lookupEmail = function(name) { return resolve(name).email || ''; };
-    const isExcluded = function(name) { const r = resolve(name).reason; return r === 'ambiguous' || r === 'email-not-in-book'; };
+    // 📨 [2026-11-25 사용자 요청] 메일에서 온 업무는 **그 메일 헤더(보낸사람·받는사람·참조)에 있는 주소만** 받는다 —
+    //    AI 가 본문에서 뽑은 "Andy"(고객사 사람)가 주소록의 사내 Andy 로 풀려 엉뚱한 사람에게 가던 것을 막는다.
+    //    헤더가 없는 업무(직접 입력·붙여넣기·옛 행)는 주소록 규칙만(js/22b _mailHeaderAddrs 가 null).
+    const resolveRow = function(name, hdr) {
+        const r = resolve(name);
+        if (!hdr) return r;
+        if (r.reason === 'ok' && hdr.indexOf(String(r.email).toLowerCase()) === -1) return Object.assign({}, r, { email: '', reason: 'not-in-mail-headers' });
+        if (r.reason === 'no-email') return Object.assign({}, r, { reason: 'not-in-mail-headers' }); // 확인할 주소가 없다 — 텔레그램도 안 보낸다
+        return r;
+    };
+    const EXCLUDE_REASONS = ['ambiguous', 'email-not-in-book', 'not-in-mail-headers'];
 
     // 💡 [2026-08-31] 수신 대상(CC)은 업무마다 다를 수 있음 — 기본수신(전역 공용 명단, 대부분의
     //    업무가 여기 해당)이거나 개별수신(그 업무의 row._알림수신자)이거나. 행마다 아래서 계산.
@@ -103,9 +112,11 @@ window.collectAlarmItems = function() {
         const receiverNames = window._addrSplitNames(receiverRaw);
         // 발신인 + 수신인 전원
         const allPeople  = [...new Set([...senderNames, ...receiverNames].filter(Boolean))];
-        const toEmails   = [...new Set(allPeople.map(n => lookupEmail(n)).filter(Boolean))];
-        // 발송 제외(동명이인·주소록에 없는 주소)는 "미등록"과 따로 — 사유를 화면에 보여준다
-        const excludedPeople = allPeople.filter(isExcluded).map(n => Object.assign({ name: n }, resolve(n)));
+        const _hdr = window._mailHeaderAddrs ? window._mailHeaderAddrs(row._mailRaw) : null;
+        const lookupEmail = function(name) { return resolveRow(name, _hdr).email || ''; };
+        const isExcluded  = function(name) { return EXCLUDE_REASONS.indexOf(resolveRow(name, _hdr).reason) !== -1; };
+        // 발송 제외(동명이인·주소록에 없는 주소·메일 헤더에 없음)는 "미등록"과 따로 — 사유를 화면에 보여준다
+        const excludedPeople = allPeople.filter(isExcluded).map(n => Object.assign({ name: n }, resolveRow(n, _hdr)));
         const missingPeople = allPeople.filter(n => !lookupEmail(n) && !isExcluded(n));
 
         const assignee       = senderNames.join(', ') || '-';
