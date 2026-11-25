@@ -124,8 +124,11 @@
         var hayNorm = normToken(hay);
         var hist = loadHist();
         var byFid = function (h, c) { return (h.fid && h.fid === c.drive_file_id) || (h.fname && h.fname === c.file_name); };
-        var threadHist = subj ? hist.filter(function (h) { return h.subj === subj; }) : [];
-        var senderHist = (from && !isInternal(from)) ? hist.filter(function (h) { return h.from === from; }) : [];
+        // 🗂 [2026-11-25 사용자 결정] 잡무 프로젝트로 간 자동 배치는 근거에서 뺀다(js/74 threadTarget 과 같은 규칙) — 발신자 기록은
+        //  사람이 넣은 것도 뺀다(잡무로 오는 사람은 모든 일을 거기로 보내는 사람이 아니다). 판정은 js/74 한 곳(_mailRouteIsCatchAllRecord).
+        var isCA = function (h) { return !!(window._mailRouteIsCatchAllRecord && window._mailRouteIsCatchAllRecord(h.fid, h.fname, cands)); };
+        var threadHist = subj ? hist.filter(function (h) { return h.subj === subj && !(h.how !== 'human' && isCA(h)); }) : [];
+        var senderHist = (from && !isInternal(from)) ? hist.filter(function (h) { return h.from === from && !isCA(h); }) : [];
         var codes = window._msExtractCodeTokens ? window._msExtractCodeTokens(hay) : [];
         // 토큰 적중 — 공용어(여러 후보에 걸리는 것)는 먼저 센다
         // 🐛 [2026-11-17, 사용자 지시로 다른 테스트 파일들을 돌려보다 발견] tokCount 는 "이 정규화된

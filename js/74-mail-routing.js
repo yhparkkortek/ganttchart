@@ -62,7 +62,7 @@
     var P = window.MAIL_ROUTING_POLICY;
     // 판정 규칙 버전 — 카드의 routing.v 에 적는다. 배경 재판정은 같은 버전으로 이미 본 카드를 건너뛴다.
     //  ⚠️ 판정 규칙(식별자·가족·문턱)을 바꾸면 이 값을 올릴 것 — 안 올리면 옛 판정 카드가 배경에서 다시 안 보인다.
-    var RULE_V = '2026-11-24h';
+    var RULE_V = '2026-11-25a';
     window.MAIL_ROUTING_RULE_V = RULE_V;
     /** 카드의 사유 글에서 AI 사유만 — 재판정마다 '🧭 판정 · 🤖 (이전 사유 전체)' 로 겹겹이 길어지던 것(실측) */
     function aiReasonOnly(mb) {
@@ -162,6 +162,14 @@
     window._mailRouteIsCommonSubject = isCommonSubject;
     window._mailRouteIsCatchAll = function (c) { return isCatchAll(c); };
     function isCatchAll(c) { return !!(c && (CATCH[norm(c.model)] || CATCH[norm(String(c.customer || '').split('>').pop())])); }
+    /** 배치 기록(fid·파일 이름)이 잡무 프로젝트를 가리키는가 — 후보 목록에서 찾고, 없으면 파일 이름에 잡무 이름이 있는지로. */
+    function catchAllFid(fid, fname, cands) {
+        var c = (cands || []).filter(function (x) { return x && ((fid && x.drive_file_id === fid) || (fname && x.file_name === fname)); })[0];
+        if (c) return isCatchAll(c);
+        var n = norm(fname || '');
+        return !!n && Object.keys(CATCH).some(function (w) { return w && n.indexOf(w) !== -1; });
+    }
+    window._mailRouteIsCatchAllRecord = catchAllFid;
 
     /** 후보 1개의 식별자 토큰(정규화) — 모델·고객모델명·코드류 keywords(+낱말·연속 두 낱말 조각).
      *  사람 이름·자재내역·범용어·짧은 것 제외. 고유한지(다른 후보에 없는지)는 부르는 쪽이 가른다. */
@@ -920,7 +928,12 @@
             // 🧷 [2026-11-23] 표만 믿을 만한 배치에서 받는다 — 사람이 배치했거나 결정론 근거로 배치된 것.
             //  AI 판단으로 배치된 기록(옛 규칙의 AI "상"·family_ai 등, routing 없음 포함)을 스레드 근거로 쓰면
             //  AI 의 추측이 "같은 스레드가 여기로 갔다"는 **결정론 근거로 둔갑**해 번식한다. 교정(correct/undo)은 그대로 본다.
-            if (e.type === 'placed' && e.fid && trustedPlacement(e)) votes[e.fid] = (votes[e.fid] || 0) + 1;
+            if (e.type === 'placed' && e.fid && trustedPlacement(e)) {
+                // 🗂 [2026-11-25 사용자 결정] 잡무 프로젝트(MAIL_ROUTING_CATCHALL)로 간 자동 배치는 표로 안 센다 — 실측: UL Draft 메일이
+                //  옛 규칙('kortek' 낱말)으로 개발업무에 잘못 가자, 같은 발신자의 다음 메일까지 그쪽 근거가 됐다. 사람이 넣은 것만 센다.
+                if (e.how !== 'human' && catchAllFid(e.fid, e.fname, cands)) return;
+                votes[e.fid] = (votes[e.fid] || 0) + 1;
+            }
         });
         var fids = Object.keys(votes).filter(function (f) { return !bad[f]; });
         if (fids.length !== 1) return null;

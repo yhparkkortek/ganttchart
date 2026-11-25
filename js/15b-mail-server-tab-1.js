@@ -1917,6 +1917,17 @@ window._msRenderQueueModal = function(type) {
                 : '';
             // 💡 [2026-09-01 신규] 미분류 메일 전용 — 위 💡 근거를 읽어보고, 사람이 판단한 의견(힌트)을 남겨서
             //    AI에게 그 메일 하나만 다시 판단시킴(_msQueueReanalyze). 근거 없이 "그냥 다시 해봐"도 가능.
+            // 🆕 [2026-11-25 사용자 결정] 사내 목록(js/49)에 있는데 앱엔 없는 프로젝트 — 그 자리에서 새 프로젝트 마법사.
+            //    AI 0회(사전 값으로 채운다). 만드는 건 사람(마법사·관리자 비밀번호), 만들고 나면 미분류를 결정론으로 다시 본다.
+            let _npHit = null;
+            if (type === 'unmatched' && window._ppMatchText) {
+                try { _npHit = window._ppMatchText((r.subject || '') + ' ' + (r.body || '')); } catch (e) { _npHit = null; }
+            }
+            const newProjBtn = _npHit
+                ? `<button class="ms-queue-newproj-btn" data-filename="${_msQEsc(r.fileName)}"
+                        onmouseover="this.style.background='#c9ecd3'; this.style.borderColor='#7cc494';" onmouseout="this.style.background='#e6f6ea'; this.style.borderColor='#a8dab8';"
+                        title="${_msQEsc(window._t('사내 목록의 “' + _npHit.project.name + '”(으)로 새 프로젝트 만들기', 'Create a new project from “' + _npHit.project.name + '” in the in-house list'))}" style="display:inline-flex; align-items:center; justify-content:center; background:#e6f6ea; border:1px solid #a8dab8; color:#1f7a3d; border-radius:6px; width:26px; height:26px; padding:0; cursor:pointer; font-size:12px; transition:background .15s, border-color .15s;">➕</button>`
+                : '';
             const reanalyzeBtn = (type === 'unmatched')
                 ? `<button class="ms-queue-reanalyze-btn" data-filename="${_msQEsc(r.fileName)}"
                         onmouseover="this.style.background='#c9ecd3'; this.style.borderColor='#7cc494';" onmouseout="this.style.background='#e6f6ea'; this.style.borderColor='#a8dab8';"
@@ -1947,6 +1958,7 @@ window._msRenderQueueModal = function(type) {
                         title="원문 보기" style="display:inline-flex; align-items:center; justify-content:center; background:#e8f4fd; border:1px solid #a5c8f0; color:#1a4f7a; border-radius:6px; width:26px; height:26px; padding:0; cursor:pointer; font-size:12px; transition:background .15s, border-color .15s;">📧</button>
                     ${analyzeBtn}
                     ${ruleBtn}
+                    ${newProjBtn}
                     ${reanalyzeBtn}
                     <button class="ms-queue-del-btn" data-filename="${_msQEsc(r.fileName)}"
                         onmouseover="this.style.background='#f5c2bd'; this.style.borderColor='#e08f87';" onmouseout="this.style.background='#fbe4e2'; this.style.borderColor='#eeb0ac';"
@@ -2015,6 +2027,8 @@ window._msRenderQueueModal = function(type) {
                 return;
             }
             // 💡 [2026-09-01 신규] "🔄 재분석 요청" — 미분류 사유를 읽고 사용자 의견(선택)을 남긴 뒤 그 메일만 다시 판단
+            const newProjBtn = e.target.closest('.ms-queue-newproj-btn');
+            if (newProjBtn) { window._msQueueNewProject(newProjBtn.dataset.filename); return; }
             const reanalyzeBtn = e.target.closest('.ms-queue-reanalyze-btn');
             if (reanalyzeBtn) { window._msOpenReanalyzeHintModal(reanalyzeBtn.dataset.filename); return; }
             // 💡 [2026-10-21 신규] "✅ 지금 AI 분석" — 신규발신자/폐기 큐에서 걸러진 메일을 분석기로 되돌린다
@@ -2504,6 +2518,30 @@ window._msSyncReanalyzeHintFromSelection = function() {
         ? ('이 메일은 ' + labelOf(list[0]) + (list[0].customer ? ' (' + list[0].customer + ')' : '') + ' 건임')
         : ('이 메일은 다음 프로젝트들에 공통으로 해당할 수 있음: ' + list.map(labelOf).join(', '));
     ta.focus();
+};
+
+// ─── 🆕 [2026-11-25] 미분류 줄의 ➕ — 사내 목록(js/49)에서 찾은 프로젝트로 마법사를 채워 연다(AI 0회).
+//    보관함 새 프로젝트 제안(_tiNewProjectOpen, js/14c)과 같은 순서: 새 빈 시트 → 마법사, 첫 저장 성공 뒤 미분류 결정론 재판정.
+window._msQueueNewProject = function(fileName) {
+    const r = (window._msQueueRows || []).find(function(x) { return x && x.fileName === fileName; })
+           || (window._msResults || []).find(function(x) { return x && x.fileName === fileName; });
+    const hit = r && window._ppMatchText ? window._ppMatchText((r.subject || '') + ' ' + (r.body || '')) : null;
+    if (!hit || !window._npwOpen) {
+        if (window.showToast) window.showToast(window._t('사내 목록에서 이 메일의 프로젝트를 다시 찾지 못했습니다', 'Could not find this mail project in the in-house list'), 'warning');
+        return;
+    }
+    const p = hit.project || {};
+    const model = p.model || p.name || '';
+    const prefill = { customer: p.customer || '', model: model, keywords: [model].filter(Boolean) };
+    window._npwOnCreated = function() {
+        if (window.mailRouteTeamCandsReset) window.mailRouteTeamCandsReset();
+        window._projectIndexCache = { data: null, at: 0 };
+        // 색인 갱신(저장 직후 백그라운드)이 끝날 틈을 준다 — 그 뒤 미분류를 지금 규칙으로 다시 본다(AI 없음)
+        setTimeout(function() { if (window.mailRouteRejudgeUnmatched) window.mailRouteRejudgeUnmatched({ toast: true }); }, 4000);
+    };
+    if (window._openAsNewSheet) window._openAsNewSheet('new_' + Date.now(), null, null);
+    if (window._resetToBlankNoConfirm) window._resetToBlankNoConfirm(true);
+    window._npwOpen(prefill, 'MP(EC)');
 };
 
 // ─── 💡 [2026-09-03] "새 프로젝트 AI 추출" — 미분류 메일 재분석 모달에서 선택 시
