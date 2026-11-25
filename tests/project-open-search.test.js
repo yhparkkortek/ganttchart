@@ -521,5 +521,6 @@ const reset = window._driveModalSearchState.q === '';
   chk(M('EDID 검토', 'edid, 2026-11', W._searchSpan(ts(2026, 11, 10), ts(2026, 11, 14))), '[날짜 공용] 낱말+월 AND');
   chk(M('EDID', '2026-11-12~', W._searchSpan(ts(2026, 11, 20), null)) && !M('EDID', '~2026-11-12', W._searchSpan(ts(2026, 11, 20), null)), '[날짜 공용] 열린 기간');
   chk(W._searchDateRange('32') === null && W._searchDateRange('2026-02-30') === null, '[날짜 공용] 숫자 하나·없는 날짜는 날짜 아님');
+  chk(W._searchMatchAny('2026-11-20', tk('2026-11-15~2026-11-30')) && !W._searchMatchAny('2026-10-20', tk('2026-11-15~2026-11-30')), '[날짜 공용] 칸 하나(_searchMatchAny)도 날짜로 걸림 — Summary 마일스톤 강조');
 }
 console.log(`\n${pass}/${pass + fail}`); process.exit(fail ? 1 : 0);

@@ -1449,7 +1449,7 @@ window._hdrFindMount = function (hdr, el, before) {
 //    페이지마다 다른 건 `PAGE_FIND_TARGETS`(데이터) 한 곳뿐 — 같은 꼴 페이지가 늘면 한 줄.
 // ─────────────────────────────────────────────────────────────────────────────
 window.PAGE_FIND_TARGETS = [
-    { key: 'sum', rootId: 'tab-summary', skip: ['.concept-header-box', '#sum-history-box'],
+    { key: 'sum', rootId: 'tab-summary', skip: ['.concept-header-box', '#sum-history-box'], dates: true,
       ko: '🔍 Summary 에서 찾기', en: '🔍 Find in Summary' },
     { key: 'doc', rootId: 'doc-page-body', headerId: 'doc-header-tools', skip: [],
       ko: '🔍 문서에서 찾기', en: '🔍 Find in document' }
@@ -1559,7 +1559,7 @@ window.PAGE_FIND_TARGETS = [
         var hdr = cfg.headerId ? document.getElementById(cfg.headerId) : r0.querySelector('.concept-header-box');
         if (!hdr) return st;
         var w = window._hdrFindWidget({ id: cfg.key + '-search-bar', inputId: cfg.key + '-search-input', countId: cfg.key + '-search-count',
-            nav: { prevId: cfg.key + '-search-prev', nextId: cfg.key + '-search-next' }, ko: cfg.ko, en: cfg.en,
+            nav: { prevId: cfg.key + '-search-prev', nextId: cfg.key + '-search-next' }, ko: cfg.ko, en: cfg.en, dates: !!cfg.dates,
             inputTitle: _en() ? 'Several words OK — Enter/▼ next, Shift+Enter/▲ previous' : '여러 낱말 가능 — Enter·▼ 다음, Shift+Enter·▲ 이전' });
         window._hdrFindMount(hdr, w.el);
         // Document 처럼 헤더 도구줄을 통째로 다시 그리는 페이지 — 위젯이 빠지면 다시 꽂는다(같은 요소라 상태 유지)

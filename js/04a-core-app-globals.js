@@ -449,8 +449,16 @@ ${mailText}`;
     /** 낱말이 하나라도 들어 있나 — 걸린 칸/글자 강조용. */
     window._searchMatchAny = function (text, tokens) {
         if (!tokens || !tokens.length) return false;
-        var low = String(text == null ? '' : text).toLowerCase(), norm = window._searchNorm(low);
-        return tokens.some(function (t) { return window._searchHasToken(low, t, norm); });
+        var low = String(text == null ? '' : text).toLowerCase(), norm = window._searchNorm(low), hd = null;
+        // 📅 [2026-11-25] 날짜·기간 낱말도 본다 — 안 보면 Summary 처럼 "칸마다 걸렸나"를 이걸로 가르는 페이지에서
+        //    줄 전체(_searchMatchAll)는 걸렸는데 강조할 칸이 0개라 결과가 통째로 사라졌다.
+        return tokens.some(function (t) {
+            if (window._searchHasToken(low, t, norm)) return true;
+            var r = window._searchDateRange ? window._searchDateRange(t) : null;
+            if (!r) return false;
+            if (hd === null) hd = window._searchHayDates(low);
+            return hd.some(function (d) { return d.from <= r.to + _SD_DAY - 1 && d.to + _SD_DAY - 1 >= r.from; });
+        });
     };
     /** 강조 표시(이미 escape 된 html 을 감싼다) — 모양 한 벌. */
     window._searchMarkHtml = function (escapedHtml) {
