@@ -171,6 +171,7 @@ window.calSetViewMode = function(mode) {
     window.calRender();
 };
 window.calGoToday = function() {
+    window._calScrolledSig = null;   // 📍 같은 달이어도 오늘로 다시 데려간다
     const t = new Date();
     window.calState.year = t.getFullYear(); window.calState.month = t.getMonth();
     window.calState.weekStart = calGetWeekStart(t);
@@ -680,3 +681,35 @@ window.calRender = function() {
 
     container.innerHTML = allHtml;
 };
+
+// 📍 [2026-11-25 사용자 신고] '오늘'·이전·다음을 눌러 머리말은 '2026년 11월'로 바뀌는데 화면은
+//    5개월(주 모드는 4주) 묶음의 맨 위(9월)에 그대로 있었다 — 고른 달이 화면 밖이라 버튼이 안 먹는 것처럼 보였다.
+//    → 그린 뒤 고른 달(주) 블록(.cal-month-current)으로 스크롤한다. 같은 달을 다시 그릴 땐(업무 클릭·검색·
+//    그룹웨어 겹치기) 사람이 옮겨 둔 스크롤을 지킨다 — 고른 달·보기가 바뀌었을 때만 옮긴다.
+(function () {
+    const _orig = window.calRender;
+    if (!_orig || _orig._calScrollWrapped) return;
+    function scrollParent(el) {
+        for (let p = el.parentElement; p; p = p.parentElement) {
+            const oy = getComputedStyle(p).overflowY;
+            if ((oy === 'auto' || oy === 'scroll') && p.scrollHeight > p.clientHeight) return p;
+        }
+        return null;
+    }
+    window.calRender = function () {
+        const r = _orig.apply(this, arguments);
+        try {
+            const st = window.calState || {};
+            const sig = st.viewMode === 'week' ? 'w' + st.weekStart : 'm' + st.year + '-' + st.month;
+            if (sig === window._calScrolledSig) return r;
+            const page = document.getElementById('cal-page');
+            const cur = page && page.querySelector('.cal-month-current');
+            if (!cur || !cur.getClientRects().length) return r;   // 탭이 숨어 있으면 다음에 보일 때 옮긴다
+            const sp = scrollParent(cur);
+            if (sp) sp.scrollTop += cur.getBoundingClientRect().top - sp.getBoundingClientRect().top - 8;
+            window._calScrolledSig = sig;
+        } catch (e) { /* 스크롤 실패가 달력 그리기를 막지 않는다 */ }
+        return r;
+    };
+    window.calRender._calScrollWrapped = true;
+})();

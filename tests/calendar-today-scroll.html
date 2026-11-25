@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Calendar 오늘·이전·다음 → 고른 달로 스크롤 시험</title></head><body style="margin:0">
+<!-- 📍 [2026-11-25] Calendar 의 오늘/이전/다음이 머리말만 바꾸고 화면은 5개월 묶음 맨 위(두 달 전)에 머물던 회귀.
+     진짜 kortek_pm.html 을 iframe 으로 띄워 진짜 버튼을 누르고, 고른 달 블록이 스크롤 영역 맨 위에 오는지 본다. 가짜 없음.
+     실행: chrome --headless=new --allow-file-access-from-files --window-size=1500,900 --virtual-time-budget=30000
+           --dump-dom file:///.../tests/calendar-today-scroll.html → <pre id="out"> (마지막 줄 N/M) -->
+<iframe id="f" src="../kortek_pm.html?caltoday=1" style="border:0;width:1400px;height:800px;"></iframe>
+<pre id="out">running…</pre>
+<script>
+var out = [], pass = 0, fail = 0;
+function chk(c, l) { c ? pass++ : fail++; out.push((c ? 'ok   ' : 'FAIL ') + l); }
+function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+var f = document.getElementById('f');
+f.onload = async function () {
+  await sleep(2500);
+  var W = f.contentWindow, D = f.contentDocument;
+  try {
+    D.querySelectorAll('[id$="-overlay"],[id$="-modal"]').forEach(function (x) { if (x.style) x.style.display = 'none'; });
+    function curTop() {   // 고른 달 블록이 스크롤 영역 위에서 얼마나 떨어져 있나
+      var cur = D.querySelector('#cal-page .cal-month-current'); if (!cur) return null;
+      var p = cur.parentElement; while (p && !(/(auto|scroll)/.test(W.getComputedStyle(p).overflowY) && p.scrollHeight > p.clientHeight)) p = p.parentElement;
+      if (!p) return 'noscroll';
+      return Math.round(cur.getBoundingClientRect().top - p.getBoundingClientRect().top);
+    }
+    function curTitle() { var c = D.querySelector('#cal-page .cal-month-current .cal-month-title'); return c ? c.textContent : ''; }
+    var t = new Date(), todayTitle = t.getFullYear() + '년 ' + (t.getMonth() + 1) + '월';
+    W.switchTab('calendar'); await sleep(500);
+    var a = curTop();
+    chk(curTitle() === todayTitle && a !== null && Math.abs(a) <= 12, '탭을 열면 이번 달이 맨 위 — ' + curTitle() + ' @' + a);
+    var btn = [].slice.call(D.querySelectorAll('button')).find(function (b) { return /calGoToday/.test(b.getAttribute('onclick') || ''); });
+    var sp = D.querySelector('#cal-page .cal-month-current'); var p = sp.parentElement; while (p && !(/(auto|scroll)/.test(W.getComputedStyle(p).overflowY) && p.scrollHeight > p.clientHeight)) p = p.parentElement;
+    p.scrollTop = 0; await sleep(100);
+    chk(Math.abs(curTop()) > 100, '맨 위로 올려 두면 이번 달이 화면 아래 — @' + curTop());
+    btn.click(); await sleep(400);
+    chk(Math.abs(curTop()) <= 12 && curTitle() === todayTitle, '[오늘] 누르면 이번 달로 돌아온다 — ' + curTitle() + ' @' + curTop());
+    W.calChangePeriod(1); await sleep(400);
+    chk(Math.abs(curTop()) <= 12 && curTitle() !== todayTitle, '[다음] 다음 달이 맨 위 — ' + curTitle() + ' @' + curTop());
+    W.calChangePeriod(-1); await sleep(400);
+    var keep = p.scrollTop = p.scrollTop + 200; await sleep(50); keep = p.scrollTop;
+    W.calRender(); await sleep(300);
+    chk(Math.abs(p.scrollTop - keep) <= 2, '같은 달 다시 그리기(업무 클릭·검색)는 사람이 옮긴 스크롤을 지킨다 — ' + keep + '→' + p.scrollTop);
+    W.calSetViewMode('week'); await sleep(400);
+    chk(Math.abs(curTop()) <= 12, '[주] 보기에서도 이번 주가 맨 위 — ' + curTitle() + ' @' + curTop());
+    W.calSetViewMode('month'); await sleep(400);
+  } catch (e) { out.push('SETUP ' + e.message); }
+  out.push(pass + '/' + (pass + fail));
+  document.getElementById('out').textContent = out.join('\n');
+};
+</script></body></html>
