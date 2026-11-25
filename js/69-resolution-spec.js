@@ -283,6 +283,15 @@
             document.body.appendChild(ov);
             if (window._makeDraggable) { try { window._makeDraggable('respick-box', 'respick-head'); } catch (e) { /* 〃 */ } }
             if (window._bindClickToFront) { try { window._bindClickToFront('respick-overlay'); } catch (e) { /* 〃 */ } }
+            // 🧬 EDID 파일을 창에 끌어다 놓기 — ⚠️ stopPropagation 필수(안 막으면 js/04f 전역 드롭이
+            //    그 파일을 프로젝트 엑셀로 열려 한다, docs/file-upload-dragdrop-audit.md)
+            var box = document.getElementById('respick-box');
+            box.addEventListener('dragover', function (e) { e.preventDefault(); e.stopPropagation(); });
+            box.addEventListener('drop', function (e) {
+                e.preventDefault(); e.stopPropagation();
+                var f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+                if (f) window.resEdidLoadFile(f);
+            });
             // 칸 누르기는 **위임**으로 받는다 — 줄이 수백 개라 칸마다 달면 느리다.
             document.getElementById('respick-body').addEventListener('change', function (e) {
                 var el = e.target;
@@ -396,7 +405,15 @@
                      + _esc(_t('끄기', 'off')) + '</a></span>';
             }).join('')
             + '<span style="margin-left:auto; color:#868e96;">'
-            + _esc(_t('RGB = 아날로그 D-Sub(옛 문서의 "PC")', 'RGB = analog D-Sub ("PC")')) + '</span>';
+            + _esc(_t('RGB = 아날로그 D-Sub(옛 문서의 "PC")', 'RGB = analog D-Sub ("PC")')) + '</span>'
+            // 🧬 [2026-11-25] 실제 EDID 파일에서 해상도를 읽어 채운다 (js/77 판독기, AI 0회)
+            + '<div style="flex-basis:100%; display:flex; align-items:center; gap:8px; flex-wrap:wrap;">'
+            + '<button onclick="window.resEdidPick()" title="'
+            + _esc(_t('펌웨어 EDID 파일(.ddc · .bin · .hex · .txt)을 읽어 그 포트의 지원 해상도를 체크합니다 — 창에 끌어다 놓아도 됩니다',
+                      'Read an EDID file and check its modes for a port (drag & drop also works)')) + '"'
+            + ' style="padding:4px 10px; border:1px solid #a3d9e0; border-radius:5px; font-size:11.5px; font-weight:bold;'
+            + ' cursor:pointer; white-space:nowrap; background:#e0f5f7; color:#00707d;">🧬 ' + _esc(_t('EDID 불러오기', 'Load EDID')) + '</button>'
+            + '<span id="respick-edid" style="color:#555;"></span></div>';
 
         document.getElementById('respick-foot').innerHTML =
             '<button onclick="window.resCustomAdd()" title="'
@@ -411,7 +428,7 @@
             + ' border:1px solid #a3d9e0; background:#e0f5f7; color:#00707d; border-radius:5px; font-weight:bold;">'
             + _esc(_t('닫기', 'Close')) + '</button>';
 
-        _paintRows(); _paintFoot(); _paintToggleBtn();
+        _paintRows(); _paintFoot(); _paintToggleBtn(); _paintEdidStatus();
     };
 
     var _paintRows = function () {
@@ -509,5 +526,289 @@
         var rows = window.resSelectedRows();
         el.textContent = _t('고른 해상도 ', 'Selected ') + rows.length + _t('개', '')
             + (rows.length ? '  (' + window.resSummary() + ')' : '');
+    };
+    // ══ 🧬 [2026-11-25] EDID 로 지원 해상도 채우기 ═══════════════════════════════
+    //   흐름: 파일 고르기/끌어다 놓기 → js/77 `EDID.parse`(AI 0회) → **미리보기** → 사람이 [적용]
+    //   ⚠️ 바로 덮어쓰지 않는다 — EDID 는 "광고하는 모드" 라 실제로 받는 모드보다 적을 수 있다.
+    //      그래서 EDID 에 없는 체크는 **기본으로 그대로 둔다**(끄려면 사람이 상자를 켠다).
+    //   ⚠️ 목록에 없는 모드는 CUSTOMER RESOLUTION 에 한 줄로 더한다 — 열쇠는 `resKeyOf` 한 곳이 정한다.
+    //   💾 원본 바이트는 모델×포트로 보관한다(`tabData.resolutionEdidByUnit[모델][포트]`, 128~512바이트)
+    //      — 펌웨어가 바뀌면 이전 EDID 와 무엇이 달라졌는지 보여 준다.
+
+    // 파일 이름 낱말 → 포트 (데이터). 실측 이름: `P12_DP_1_LNW_S32_V1.1.ddc`
+    window.RES_EDID_PORT_WORDS = window.RES_EDID_PORT_WORDS || {
+        DP: 'DP', DISPLAYPORT: 'DP', EDP: 'DP', HDMI: 'HDMI', DVI: 'DVI',
+        VGA: 'RGB', RGB: 'RGB', DSUB: 'RGB', ANALOG: 'RGB', PC: 'RGB'
+    };
+    var _edidPortFromName = function (name) {
+        var words = String(name || '').toUpperCase().replace(/D-SUB/g, 'DSUB').split(/[^A-Z0-9]+/);
+        var map = window.RES_EDID_PORT_WORDS || {};
+        for (var i = 0; i < words.length; i++) if (map[words[i]]) return map[words[i]];
+        return '';
+    };
+
+    var _edidStore = function (create) {
+        var td = _td();
+        if (!td.resolutionEdidByUnit) { if (!create) return {}; td.resolutionEdidByUnit = {}; }
+        var u = window.resActiveUnit();
+        if (!td.resolutionEdidByUnit[u]) { if (!create) return {}; td.resolutionEdidByUnit[u] = {}; }
+        return td.resolutionEdidByUnit[u];
+    };
+    window.resEdidSaved = function () { return _edidStore(false); };
+
+    var _paintEdidStatus = function () {
+        var el = document.getElementById('respick-edid');
+        if (!el) return;
+        var st = _edidStore(false), ports = Object.keys(st);
+        if (!ports.length) {
+            el.innerHTML = '<span style="color:#868e96;">' + _esc(_t('이 모델에 불러온 EDID 없음 — 파일을 이 창에 끌어다 놓아도 됩니다.',
+                'No EDID loaded for this model — you can drop a file here.')) + '</span>';
+            return;
+        }
+        el.innerHTML = ports.map(function (p) {
+            var r = st[p] || {};
+            return '<span title="' + _esc((r.file || '') + ' · ' + (r.at || '')) + '" style="white-space:nowrap;">🧬 <b>' + _esc(p) + '</b> '
+                 + _esc((r.name || r.vendor || '') + ' · ' + (r.checksum || '') + ' · ' + _t('모드 ', '') + ((r.modes || []).length)
+                 + _t('개', ' modes')) + '</span>';
+        }).join(' &nbsp; ');
+    };
+
+    window.resEdidPick = function () {
+        var inp = document.createElement('input');
+        inp.type = 'file';      // accept 비움 — 앱 규칙(무엇이든 받고, 못 읽으면 이유를 말한다)
+        inp.onchange = function () { if (inp.files && inp.files[0]) window.resEdidLoadFile(inp.files[0]); };
+        inp.click();
+    };
+
+    var _edidPending = null;   // { res, file, port, portSrc, offMissing }
+
+    window.resEdidLoadFile = function (file) {
+        if (!window.EDID) { _toast(_t('EDID 판독기(js/77)가 안 불렸습니다 — 새로고침해 주세요.', 'EDID parser missing'), 'error'); return; }
+        if (file.size > 64 * 1024) {
+            _toast(_t('EDID 파일로 보기엔 너무 큽니다(' + Math.round(file.size / 1024) + 'KB) — EDID 는 보통 128~512바이트, 16진 덤프여도 몇 KB 입니다.',
+                      'Too large for an EDID file'), 'error');
+            return;
+        }
+        var fr = new FileReader();
+        fr.onload = function () { window.resEdidLoadBytes(new Uint8Array(fr.result), file.name); };
+        fr.onerror = function () { _toast(_t('파일을 읽지 못했습니다.', 'Could not read the file.'), 'error'); };
+        fr.readAsArrayBuffer(file);
+    };
+
+    /** 바이트(또는 16진 글자) → 미리보기. 하네스도 이 입구로 들어온다. */
+    window.resEdidLoadBytes = function (data, fileName) {
+        var res = window.EDID.parse(data);
+        if (!res.ok) { _toast('🧬 ' + res.error, 'error'); return null; }
+        var byName = _edidPortFromName(fileName);
+        var port = byName || res.portGuess || '';
+        _edidPending = {
+            res: res, file: fileName || '', port: port, offMissing: false,
+            portSrc: byName ? _t('파일 이름', 'file name') : (res.portGuess ? (res.iface ? _t('EDID 입력 종류', 'EDID interface') : _t('아날로그 입력', 'analog input')) : '')
+        };
+        _edidRender();
+        return res;
+    };
+
+    window.resEdidSetPort = function (p) { if (_edidPending) { _edidPending.port = p; _edidRender(); } };
+    window.resEdidSetOff = function (on) { if (_edidPending) { _edidPending.offMissing = !!on; } };
+    window.resEdidClose = function () {
+        _edidPending = null;
+        var ov = document.getElementById('resedid-overlay');
+        if (ov) ov.style.display = 'none';
+    };
+
+    // EDID 모드 → { key, label(목록 이름), inList }
+    var _edidRowOf = function (m) {
+        var key = window.resKeyOf(m.label);
+        var hit = window.resAllRows().filter(function (r) { return r.key === key; })[0];
+        return { key: key, label: hit ? hit.label : m.label, inList: !!hit, g: hit ? hit.g : '' };
+    };
+
+    // Customer SPEC 의 EDID Check Sum 칸 — 같은지 대조만 한다(그 칸은 사람이 적는 문서 값이라 덮지 않는다)
+    var _edidSpecSum = function () {
+        try {
+            var ctx = window._dgCollect ? window._dgCollect() : null;
+            var rows = (ctx && ctx.spec) || [];
+            var hit = rows.filter(function (r) { return /^edid/i.test(String(r.label || '').replace(/\s+/g, '')); })[0];
+            return hit ? String(hit.value == null ? '' : hit.value).trim() : null;
+        } catch (e) { return null; }
+    };
+
+    var _edidRender = function () {
+        var P = _edidPending;
+        if (!P) return;
+        var ov = document.getElementById('resedid-overlay');
+        if (!ov) {
+            ov = document.createElement('div');
+            ov.id = 'resedid-overlay';
+            ov.style.cssText = 'display:flex; position:fixed; inset:0; z-index:9510; pointer-events:none; background:none;';
+            ov.innerHTML = '<div id="resedid-box" style="pointer-events:all; position:fixed; left:50%; top:9%;'
+                + ' transform:translateX(-50%); width:min(820px,95vw); max-height:82vh; display:flex; flex-direction:column;'
+                + ' background:#fff; border:1px solid #a3d9e0; border-radius:10px; box-shadow:0 8px 28px rgba(0,0,0,.18); overflow:hidden;">'
+                + '<div id="resedid-head" style="flex-shrink:0; display:flex; align-items:center; justify-content:space-between;'
+                + ' padding:9px 12px; background:#e0f5f7; border-bottom:1px solid #a3d9e0; color:#00707d; font-weight:bold; font-size:13px; cursor:grab;">'
+                + '<span id="resedid-title"></span><button onclick="window.resEdidClose()" style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border);'
+                + ' color:var(--modal-icon-text); border-radius:6px; font-size:16px; cursor:pointer; width:28px; height:28px;">✕</button></div>'
+                + '<div id="resedid-body" style="flex:1; min-height:0; overflow-y:auto; padding:10px 12px; font-size:12px;"></div>'
+                + '<div id="resedid-foot" style="flex-shrink:0; padding:8px 12px; border-top:1px solid #cfe3e5; background:#eef6f7;'
+                + ' display:flex; align-items:center; gap:10px; font-size:12px;"></div></div>';
+            document.body.appendChild(ov);
+            if (window._makeDraggable) { try { window._makeDraggable('resedid-box', 'resedid-head'); } catch (e) { /* 〃 */ } }
+            if (window._bindClickToFront) { try { window._bindClickToFront('resedid-overlay'); } catch (e) { /* 〃 */ } }
+        }
+        ov.style.display = 'flex';
+        if (window.bringModalToFront) { try { window.bringModalToFront('resedid-overlay'); } catch (e) { /* 〃 */ } }
+
+        var r = P.res, unit = window.resActiveUnit();
+        document.getElementById('resedid-title').textContent = '🧬 ' + _t('EDID 로 지원 해상도 채우기', 'Fill resolutions from EDID')
+            + (unit && unit !== '_' ? ' — ' + unit : '');
+
+        var cell = 'border:1px solid #cfe3e5; padding:4px 6px;';
+        var th = cell + ' background:#eef6f7; text-align:left;';
+        var h = '';
+        // ── 머리 정보
+        h += '<table style="border-collapse:collapse; width:100%; margin-bottom:8px;">'
+           + '<tr><td style="' + th + ' width:110px;">' + _esc(_t('파일', 'File')) + '</td><td style="' + cell + '">' + _esc(P.file || '—') + '</td></tr>'
+           + '<tr><td style="' + th + '">' + _esc(_t('모니터', 'Monitor')) + '</td><td style="' + cell + '">'
+           + _esc((r.name || '—') + '  ·  ' + r.vendor + ' ' + r.product + '  ·  EDID ' + r.version + '  ·  ' + r.year + _t('년 ', ' wk') + r.week + _t('주', '')
+                  + '  ·  ' + r.sizeCm[0] + '×' + r.sizeCm[1] + ' cm  ·  ' + (r.digital ? _t('디지털', 'digital') : _t('아날로그', 'analog'))
+                  + (r.blocks > 1 ? '  ·  ' + _t('확장 ', 'ext ') + (r.blocks - 1) : '')) + '</td></tr>'
+           + '<tr><td style="' + th + '">' + _esc(_t('체크섬', 'Checksum')) + '</td><td style="' + cell + '">'
+           + r.checksums.map(function (c) {
+                 return (r.blocks > 1 ? _esc(_t('블록 ', 'block ') + c.block + ' ') : '') + '<b>' + _esc(c.value) + '</b>'
+                      + (c.valid ? ' <span style="color:#2b8a3e;">✓</span>' : ' <span style="color:#c92a2a;">✗ ' + _esc(_t('맞지 않음', 'invalid')) + '</span>');
+             }).join(' · ');
+        var spec = _edidSpecSum();
+        if (spec !== null) {
+            var same = !!spec && spec.toUpperCase().replace(/\s+/g, '').indexOf(r.checksum.slice(2).toUpperCase()) >= 0;
+            h += ' &nbsp; <span style="color:' + (same ? '#2b8a3e' : '#c92a2a') + ';">'
+               + _esc(_t('Customer SPEC EDID Check Sum: ', 'Customer SPEC: ') + (spec || _t('(비어 있음)', '(empty)'))
+                      + (same ? _t(' — 같음', ' — same') : _t(' — 다름/없음 (문서 값이라 자동으로 고치지 않습니다)', ' — differs'))) + '</span>';
+        }
+        h += '</td></tr>';
+        // ── 포트
+        var ports = window.RES_PORTS || [];
+        h += '<tr><td style="' + th + '">' + _esc(_t('입력 포트', 'Port')) + '</td><td style="' + cell + '">'
+           + ports.map(function (p) {
+                 return '<label style="margin-right:12px; cursor:pointer; white-space:nowrap;"><input type="radio" name="resedid-port"'
+                      + ' data-port="' + _esc(p.key) + '"' + (P.port === p.key ? ' checked' : '')
+                      + ' onchange="window.resEdidSetPort(this.getAttribute(\'data-port\'))"> <b>' + _esc(p.label) + '</b></label>';
+             }).join('')
+           + (P.port ? (P.portSrc ? '<span style="color:#868e96;">(' + _esc(P.portSrc + _t('에서 추정 — 맞는지 확인하세요', ' — please confirm')) + ')</span>' : '')
+                     : '<span style="color:#c92a2a; font-weight:bold;">' + _esc(_t('← 어느 입력의 EDID 인지 골라 주세요', '← choose the port')) + '</span>')
+           + '</td></tr></table>';
+
+        // ── 이전 EDID 와 비교 (같은 모델·포트)
+        var prev = P.port ? _edidStore(false)[P.port] : null;
+        if (prev && prev.hex) {
+            var pr = window.EDID.parse(prev.hex);
+            if (pr.ok) {
+                var nowL = r.modes.map(function (m) { return window.resKeyOf(m.label); });
+                var prevL = pr.modes.map(function (m) { return window.resKeyOf(m.label); });
+                var added = r.modes.filter(function (m, i) { return prevL.indexOf(nowL[i]) < 0; }).map(function (m) { return m.label; });
+                var gone = pr.modes.filter(function (m, i) { return nowL.indexOf(prevL[i]) < 0; }).map(function (m) { return m.label; });
+                h += '<div style="margin:0 0 8px; padding:6px 8px; border:1px solid #ffd8a8; background:#fff9db; border-radius:6px;">'
+                   + _esc(_t('이전 EDID(', 'Previous EDID (') + (prev.file || '') + ', ' + (prev.checksum || '') + ', ' + String(prev.at || '').slice(0, 10) + ') ')
+                   + (prev.checksum === r.checksum && !added.length && !gone.length
+                        ? _esc(_t('와 같습니다.', ': identical.'))
+                        : _esc(_t('와 다릅니다 — ', ': differs — '))
+                          + (added.length ? '➕ ' + _esc(added.join(', ')) + ' ' : '')
+                          + (gone.length ? '➖ ' + _esc(gone.join(', ')) : '')
+                          + (!added.length && !gone.length ? _esc(_t('모드는 같고 다른 바이트가 바뀌었습니다.', 'same modes, other bytes changed.')) : ''))
+                   + '</div>';
+            }
+        }
+
+        // ── EDID 모드 표
+        h += '<div style="font-weight:bold; color:#00707d; margin:4px 0;">' + _esc(_t('EDID 가 광고하는 모드 ', 'Modes in EDID ') + r.modes.length + _t('개', '')) + '</div>'
+           + '<table style="border-collapse:collapse; width:100%;"><thead><tr>'
+           + '<th style="' + th + '">' + _esc(_t('해상도', 'Mode')) + '</th>'
+           + '<th style="' + th + '">' + _esc(_t('출처', 'Source')) + '</th>'
+           + '<th style="' + th + '">' + _esc(_t('타이밍', 'Timing')) + '</th>'
+           + '<th style="' + th + '">' + _esc(_t('목록', 'List')) + '</th>'
+           + '<th style="' + th + '">' + _esc(P.port || _t('포트', 'Port')) + '</th></tr></thead><tbody>';
+        var nNew = 0, nAdd = 0;
+        r.modes.forEach(function (m) {
+            var row = _edidRowOf(m);
+            var on = P.port && window.resPortOn(row.key, P.port);
+            if (!row.inList) nAdd++;
+            if (P.port && !on) nNew++;
+            var t = m.timing;
+            h += '<tr' + (m.native ? ' style="background:#f3fbfc;"' : '') + '>'
+               + '<td style="' + cell + '"><b>' + _esc(m.label) + '</b>' + (m.native ? ' <span style="color:#00707d;">★ ' + _esc(_t('기본', 'native')) + '</span>' : '') + '</td>'
+               + '<td style="' + cell + ' color:#555;">' + _esc(m.srcs.join(', ')) + '</td>'
+               + '<td style="' + cell + ' color:#555; font-size:11px;">' + (t ? _esc(t.pclkMHz.toFixed(2) + ' MHz · ' + t.khz.toFixed(2) + ' kHz · '
+                     + t.hTotal + '×' + t.vTotal + (t.hPol ? ' · ' + t.hPol + 'H' + t.vPol + 'V' : '')) : '—') + '</td>'
+               + '<td style="' + cell + '">' + (row.inList ? _esc(row.label) : '<span style="color:#e8590c;">➕ ' + _esc(_t('CUSTOMER 에 추가', 'add to CUSTOMER')) + '</span>') + '</td>'
+               + '<td style="' + cell + ' text-align:center;">' + (!P.port ? '·' : on ? '<span style="color:#868e96;">' + _esc(_t('이미 체크', 'already')) + '</span>'
+                     : '<b style="color:#2b8a3e;">' + _esc(_t('켬', 'on')) + '</b>') + '</td></tr>';
+        });
+        h += '</tbody></table>';
+
+        // ── 체크돼 있지만 EDID 에 없는 것
+        if (P.port) {
+            var edidKeys = r.modes.map(function (m) { return window.resKeyOf(m.label); });
+            var missing = window.resSelectedRows().filter(function (s) { return s.ports[P.port] && edidKeys.indexOf(s.key) < 0; });
+            if (missing.length) {
+                h += '<div style="margin-top:10px; padding:6px 8px; border:1px solid #cfe3e5; border-radius:6px;">'
+                   + '<b>' + _esc(_t('체크돼 있지만 EDID 에 없는 ' + P.port + ' 해상도 ', 'Checked for ' + P.port + ' but not in EDID: ') + missing.length + _t('개', '')) + '</b> — '
+                   + _esc(missing.map(function (x) { return x.label; }).join(', '))
+                   + '<div style="margin-top:4px; color:#555;">' + _esc(_t('스케일러는 EDID 에 없는 입력도 받는 경우가 많아 기본으로 그대로 둡니다.',
+                        'Scalers often accept modes not in EDID, so they are kept by default.')) + '</div>'
+                   + '<label style="cursor:pointer;"><input type="checkbox" id="resedid-off"' + (P.offMissing ? ' checked' : '')
+                   + ' onchange="window.resEdidSetOff(this.checked)"> ' + _esc(_t('이 ' + missing.length + '개의 ' + P.port + ' 체크를 끄기', 'Uncheck them')) + '</label></div>';
+            }
+        }
+        if (r.warn.length || r.notes.length) {
+            h += '<div style="margin-top:10px; color:#c92a2a;">' + r.warn.map(function (w) { return '⚠️ ' + _esc(w); }).join('<br>') + '</div>'
+               + '<div style="margin-top:4px; color:#868e96;">' + r.notes.map(function (w) { return 'ℹ️ ' + _esc(w); }).join('<br>') + '</div>';
+        }
+        document.getElementById('resedid-body').innerHTML = h;
+
+        document.getElementById('resedid-foot').innerHTML =
+            '<span style="color:#555;">' + _esc(P.port
+                ? _t(P.port + ' 에 ' + nNew + '개를 새로 켜고, 목록에 없는 ' + nAdd + '개는 CUSTOMER RESOLUTION 에 더합니다.',
+                     'Turn on ' + nNew + ', add ' + nAdd + ' to CUSTOMER.')
+                : _t('포트를 고르면 적용할 수 있습니다.', 'Choose a port to apply.')) + '</span>'
+            + '<button onclick="window.resEdidClose()" style="margin-left:auto; padding:5px 14px; font-size:12px; cursor:pointer;'
+            + ' border:1px solid #ced4da; background:#fff; color:#495057; border-radius:5px;">' + _esc(_t('취소', 'Cancel')) + '</button>'
+            + '<button id="resedid-apply" onclick="window.resEdidApply()"' + (P.port ? '' : ' disabled')
+            + ' style="padding:5px 14px; font-size:12px; cursor:pointer; border:1px solid #00707d; background:#00707d; color:#fff;'
+            + ' border-radius:5px; font-weight:bold;">' + _esc(_t('적용', 'Apply')) + '</button>';
+    };
+
+    window.resEdidApply = function () {
+        var P = _edidPending;
+        if (!P || !P.port) return false;
+        var r = P.res, port = P.port;
+        var custom = window.resCustomList();
+        var nOn = 0, nAdd = 0, nOff = 0;
+        r.modes.forEach(function (m) {
+            var row = _edidRowOf(m);
+            if (!row.inList) {
+                // 목록에 없으면 CUSTOMER 에 한 줄 — 열쇠가 같은 줄이 이미 있으면 더하지 않는다
+                var has = custom.some(function (c) { return c && window.resKeyOf(c) === row.key; });
+                if (!has) { custom.push(m.label); nAdd++; }
+            }
+            if (!window.resPortOn(row.key, port)) { window.resSetPort(row.key, row.label, port, true); nOn++; }
+        });
+        if (P.offMissing) {
+            var edidKeys = r.modes.map(function (m) { return window.resKeyOf(m.label); });
+            window.resSelectedRows().forEach(function (s) {
+                if (s.ports[port] && edidKeys.indexOf(s.key) < 0) { window.resSetPort(s.key, s.label, port, false); nOff++; }
+            });
+        }
+        _edidStore(true)[port] = {
+            file: P.file, checksum: r.checksum, name: r.name || '', vendor: r.vendor, product: r.product, version: r.version,
+            hex: window.EDID.hex(r.bytes), at: new Date().toISOString(),
+            modes: r.modes.map(function (m) { return m.label; }), native: r.native ? r.native.label : ''
+        };
+        _markDirty();
+        window.resEdidClose();
+        var ov = document.getElementById('respick-overlay');
+        if (ov && ov.style.display !== 'none') { _paintRows(); _paintFoot(); _paintEdidStatus(); }
+        _toast('🧬 ' + port + ' — ' + _t('EDID 적용: ' + nOn + '개 켬' + (nAdd ? ', CUSTOMER ' + nAdd + '줄 추가' : '') + (nOff ? ', ' + nOff + '개 끔' : ''),
+                                          'EDID applied: ' + nOn + ' on' + (nAdd ? ', ' + nAdd + ' added' : '') + (nOff ? ', ' + nOff + ' off' : '')), 'success');
+        return { on: nOn, added: nAdd, off: nOff };
     };
 })();
