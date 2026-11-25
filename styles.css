@@ -60,6 +60,11 @@ button:disabled:not(.topbar-menu-item), input[type="button"]:disabled, input[typ
   opacity: 0.5 !important;
   cursor: not-allowed !important;
 }
+/* 🔗 [2026-11-25] 텍스트 링크 한 벌 — 색은 테마(--ui-accent), 밑줄 실선. 인라인 색이 있으면 그게 이긴다
+   (역할색: 빨강 삭제 · 초록 NAS 사양서 있음 · 회색 보조). 버튼·아이콘 모양 링크는 인라인 text-decoration:none.
+   href 없는 <a onclick> 는 브라우저가 링크로 안 봐서 밑줄·손가락이 빠졌다 → 같이 준다. */
+a { color: var(--ui-accent, #00707d); text-underline-offset: 2px; }
+a[onclick]:not([href]) { cursor: pointer; text-decoration: underline; }
 
 /* ───── 1. head 메인 스타일시트 (:root 변수 등) (원본 줄 31~1085) ───── */
     :root {

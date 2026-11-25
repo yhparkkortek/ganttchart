@@ -905,7 +905,7 @@ window._sapPnFind = function (target, hint) {
                 window._sapPnFindRows = pls;
                 status.style.color = '#2b8a3e';
                 status.innerHTML = '📒 ' + T('Project list 에서 ', 'Project list: ') + pls.length + T('건 — 맞는 것을 눌러 넣으세요. 없으면 ', ' found — click one. Not there? ')
-                    + '<a href="#" id="sap-pn-find-tosap" style="color:#00707d; font-weight:bold;">🏭 ' + T('SAP 에서 찾기', 'Search SAP') + '</a>';
+                    + '<a href="#" id="sap-pn-find-tosap" style="color:var(--ui-accent, #00707d); font-weight:bold;">🏭 ' + T('SAP 에서 찾기', 'Search SAP') + '</a>';
                 document.getElementById('sap-pn-find-tosap').onclick = function (e) { e.preventDefault(); run(mode === 'desc' ? 'sapdesc' : 'sap'); };
                 list.innerHTML = pls.slice(0, 200).map(function (m, i) {
                     var r = m._pl, sub = [r.cabinet, r.customer, r.project, r.type].filter(function (x) { return String(x || '').trim(); }).join(' · ');

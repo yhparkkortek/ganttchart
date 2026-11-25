@@ -771,7 +771,7 @@ function _dsRenderCrumb() {
         var last = (i === segs.length - 1);
         parts.push(last
             ? '<span style="color:#555; font-weight:bold;">' + _esc(s) + '</span>'
-            : '<span onclick="window._dsPickCrumb(' + _esc(JSON.stringify(acc)) + ')" style="cursor:pointer; color:#1971c2; text-decoration:underline;">' + _esc(s) + '</span>');
+            : '<span onclick="window._dsPickCrumb(' + _esc(JSON.stringify(acc)) + ')" style="cursor:pointer; color:var(--ui-accent, #00707d); text-decoration:underline;">' + _esc(s) + '</span>');
     });
     el.style.display = 'block';
     el.innerHTML = '📂 ' + parts.join('<span style="color:#aaa; margin:0 3px;">/</span>');

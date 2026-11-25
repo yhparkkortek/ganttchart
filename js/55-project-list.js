@@ -3832,7 +3832,7 @@
                              arrowsCell = '<td></td>';
                          }
                          return '<tr style="border-bottom:1px solid #eef3f4;">'
-                              + (di === 0 ? '<td style="padding:5px 6px; cursor:pointer; color:#00707d; text-decoration:underline; word-break:break-all;" onclick="window.plCheckGotoRow(\'' + m.row._id + '\')" rowspan="' + m.diffs.length + '">' + _esc(m.row.no || '') + '</td>' : '')
+                              + (di === 0 ? '<td style="padding:5px 6px; cursor:pointer; color:var(--ui-accent, #00707d); text-decoration:underline; word-break:break-all;" onclick="window.plCheckGotoRow(\'' + m.row._id + '\')" rowspan="' + m.diffs.length + '">' + _esc(m.row.no || '') + '</td>' : '')
                               + '<td style="padding:5px 6px; word-break:break-word;">' + _esc(df.label) + '</td>'
                               + plCell + arrowsCell + fileCell + '</tr>';
                      }).join('');

@@ -460,7 +460,7 @@ window._mnbCheckSap = async function() {
                 + '<b>' + _mnbEsc(used.join(', ')) + '</b>'
                 + (next ? ' → ' + _t('다음 번호 제안 ', 'suggested next ')
                     + '<b style="color:#145c2b;">' + next + '</b>'
-                    + ' <span class="mnb-usenext" data-v="' + next + '" style="cursor:pointer; text-decoration:underline; color:#1f7a3d;">'
+                    + ' <span class="mnb-usenext" data-v="' + next + '" style="cursor:pointer; text-decoration:underline; color:var(--ui-accent, #00707d);">'
                     + _t('(이 번호로 넣기)', '(use it)') + '</span>' : '')
                 + '</div>' : '')
             + '<div style="max-height:160px; overflow:auto; border:1px solid #eee; border-radius:6px;">'

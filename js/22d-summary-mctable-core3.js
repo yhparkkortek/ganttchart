@@ -249,9 +249,9 @@ window.renderPanelCompareTab = async function() {
                 : 'https://www.panelook.com/modelsearch.php?keyword=' + encodeURIComponent(m);
             const has = !!entries[i];
             const nameLink = (nasCnt > 1)
-                ? `<a href="javascript:void(0)" onclick="window._dsOpenPanelSpec(${escapeHtml(JSON.stringify(m))})" title="${_en ? `NAS spec files: ${nasCnt}` : `NAS 사양서 ${nasCnt}개 — 골라서 열기`}" style="color:#2c5f8a; text-decoration:underline; font-weight:bold; word-break:break-all;">${escapeHtml(m)} <span style="font-size:9.5px; color:#1f7a3d;">📜${nasCnt}</span></a>`
+                ? `<a href="javascript:void(0)" onclick="window._dsOpenPanelSpec(${escapeHtml(JSON.stringify(m))})" title="${_en ? `NAS spec files: ${nasCnt}` : `NAS 사양서 ${nasCnt}개 — 골라서 열기`}" style="color:var(--ui-accent, #00707d); text-decoration:underline; font-weight:bold; word-break:break-all;">${escapeHtml(m)} <span style="font-size:9.5px; color:#1f7a3d;">📜${nasCnt}</span></a>`
                 : `<a href="${url}" target="_blank" rel="noopener" title="${nasName ? (_en ? 'Open the spec on the NAS: ' : 'NAS 사양서 열기: ') + nasName
-                                 : (_en ? 'No spec on the NAS — open panelook.com search' : 'NAS에 사양서가 없어 panelook.com 검색을 엽니다')}" style="color:#2c5f8a; text-decoration:underline; font-weight:bold; word-break:break-all;">${escapeHtml(m)}</a>`;
+                                 : (_en ? 'No spec on the NAS — open panelook.com search' : 'NAS에 사양서가 없어 panelook.com 검색을 엽니다')}" style="color:var(--ui-accent, #00707d); text-decoration:underline; font-weight:bold; word-break:break-all;">${escapeHtml(m)}</a>`;
             headHtml += `<th style="min-width:120px; padding-left:6px; padding-right:6px; padding-top:4px !important; padding-bottom:4px !important;">
                 ${nameLink}
                 <div style="margin-top:2px; display:flex; gap:4px; justify-content:center; align-items:center; flex-wrap:wrap;">
@@ -460,7 +460,7 @@ window.panelCompareOpenAddModal = async function() {
                     <span id="pc-add-file-name" style="font-size:11px; color:#888; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${_en ? 'or drag & drop a file here' : '또는 파일을 여기로 드래그하세요'}</span>
                 </div>
                 <div style="font-size:10.5px; color:#999; margin-bottom:6px;">
-                    <span onclick="window.open('https://www.panelook.com/', '_blank', 'noopener')" class="inbox-help-ico" style="cursor:pointer; margin-left:0; font-size:10.5px; font-weight:bold; color:#2c5f8a; text-decoration:underline; text-underline-offset:2px;">
+                    <span onclick="window.open('https://www.panelook.com/', '_blank', 'noopener')" class="inbox-help-ico" style="cursor:pointer; margin-left:0; font-size:10.5px; font-weight:bold; color:var(--ui-accent, #00707d); text-decoration:underline; text-underline-offset:2px;">
                         💡 ${_en ? 'Extract panel SPEC from panelook.com' : 'panelook.com 에서 패널 SPEC 추출'}
                         <span class="inbox-help-tip" style="top:16px;">
                             ${_en
@@ -908,7 +908,7 @@ window.showPanelSpecModal = async function(model, codeHint) {
         : nasUrl
         ? `<a href="${escapeHtml(nasUrl)}" target="_blank" rel="noopener" title="${escapeHtml(nasHit.name)}" style="color:#1f7a3d; font-weight:bold;">📜 ${_en ? 'Open NAS spec file' : 'NAS 사양서 열기'}</a>`
           + ` <a href="${escapeHtml(entry && entry.sourceUrl || url)}" target="_blank" rel="noopener" style="color:#999; font-size:11px; margin-left:6px;">🔗 panelook.com ${_en ? 'search' : '검색'}</a>`
-        : `<a href="${escapeHtml(entry && entry.sourceUrl || url)}" target="_blank" rel="noopener" style="color:#2c5f8a;">🔗 panelook.com ${_en ? 'search' : '검색'}</a>`;
+        : `<a href="${escapeHtml(entry && entry.sourceUrl || url)}" target="_blank" rel="noopener" style="color:var(--ui-accent, #00707d);">🔗 panelook.com ${_en ? 'search' : '검색'}</a>`;
     if (!entry) {
         // 💡 [2026-08-25] 두 요소를 헷갈려서(링크=panelook.com 이동, 버튼=로컬 붙여넣기/AI추출) "추출하기를
         //    눌렀는데 홈페이지에서 멈춘다"는 문의가 있었음 — panelook.com은 자동화 접근을 막는 슬라이더
@@ -924,7 +924,7 @@ window.showPanelSpecModal = async function(model, codeHint) {
             </div>
             ${nasManyHtml ? `<div style="margin-bottom:8px;">${nasManyHtml}</div>`
               : nasUrl ? `<a href="${escapeHtml(nasUrl)}" target="_blank" rel="noopener" title="${escapeHtml(nasHit.name)}" style="display:inline-block; margin-bottom:8px; color:#1f7a3d; font-weight:bold;">📜 ${_en ? 'Open NAS spec file' : 'NAS 사양서 열기'}</a><br>` : ''}
-            <a href="${url}" target="_blank" rel="noopener" style="display:inline-block; margin-bottom:10px; color:#2c5f8a;">🔗 #1 panelook.com${_en ? ' (open & copy manually)' : '에서 직접 확인·복사'}</a><br>
+            <a href="${url}" target="_blank" rel="noopener" style="display:inline-block; margin-bottom:10px; color:var(--ui-accent, #00707d);">🔗 #1 panelook.com${_en ? ' (open & copy manually)' : '에서 직접 확인·복사'}</a><br>
             <button onclick="document.getElementById('pc-spec-modal').style.display='none'; window.panelCompareReextract(${escapeHtml(JSON.stringify(model_display))});" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="padding:8px 14px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; cursor:pointer; font-weight:bold; transition:background .15s, border-color .15s;">🤖 #2 ${_en ? 'Attach the HTML file & extract with AI' : 'HTML 파일 첨부 후 AI로 추출'}</button>
         `;
         return;

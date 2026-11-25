@@ -475,7 +475,7 @@
                 //    결과가 0건이면 "연결된 이슈가 없다"가 아니라 "필터에 다 걸렸다"가 맞는 말이다
                 //    — 메시지를 구분하지 않으면 사람이 필터를 잊고 "이슈가 사라졌다"로 오인한다.
                 emptyMsg = T('필터 조건에 맞는 이슈가 없습니다 — ', 'No issues match the current filters — ')
-                    + '<button onclick="window._jiraClearAllFilters()" style="border:none; background:none; color:#00707d; cursor:pointer; text-decoration:underline; font-size:12.5px;">'
+                    + '<button onclick="window._jiraClearAllFilters()" style="border:none; background:none; color:var(--ui-accent, #00707d); cursor:pointer; text-decoration:underline; font-size:12.5px;">'
                     + T('필터 초기화', 'clear filters') + '</button>';
             } else {
                 emptyMsg = note || T('연결된 JIRA 이슈가 없습니다 — ⚙️ 연결 설정에서 키/검색어를 등록해주세요.',
@@ -1023,7 +1023,7 @@
             }).join('')
             : '<tr><td colspan="' + (sim ? 9 : 8) + '" style="padding:24px; text-align:center; color:#999;">'
                 + T('필터 조건에 맞는 이슈가 없습니다 — ', 'No issues match the current filters — ')
-                + '<button onclick="window._jiraClearAllFilters(\'search\')" style="border:none; background:none; color:#00707d; cursor:pointer; text-decoration:underline; font-size:12px;">'
+                + '<button onclick="window._jiraClearAllFilters(\'search\')" style="border:none; background:none; color:var(--ui-accent, #00707d); cursor:pointer; text-decoration:underline; font-size:12px;">'
                 + T('필터 초기화', 'clear filters') + '</button></td></tr>';
         // ⚠️ 머리글은 스크롤해도 위에 붙어 있게(sticky) — 50줄을 내리다 보면 어느 열인지 잊는다
         var whatNote = (_searchMode === 'text' && _searchNote) ? '<div style="font-size:11px; color:#00707d; margin:6px 0 0;">' + esc(_searchNote) + '</div>' : '';
@@ -1587,7 +1587,7 @@
             return '<div style="margin-bottom:8px; padding-bottom:8px; border-bottom:1px dashed #e5e5e5;">'
                 + '<div style="display:flex; align-items:baseline; gap:8px;">'
                 + '<div style="font-size:11px; color:#888; flex:1; min-width:0;">' + esc(c.author || '') + ' · ' + esc((c.created || '').slice(0, 16).replace('T', ' ')) + '</div>'
-                + '<a onclick="window._jiraEditComment(\'' + esc(key) + '\', ' + i + ')" style="font-size:11px; color:#00707d; cursor:pointer; white-space:nowrap;">✏️ ' + T('수정', 'Edit') + '</a>'
+                + '<a onclick="window._jiraEditComment(\'' + esc(key) + '\', ' + i + ')" style="font-size:11px; color:var(--ui-accent, #00707d); cursor:pointer; white-space:nowrap;">✏️ ' + T('수정', 'Edit') + '</a>'
                 + '<a onclick="window._jiraDeleteComment(\'' + esc(key) + '\', ' + i + ')" style="font-size:11px; color:#a3281c; cursor:pointer; white-space:nowrap;">🗑️ ' + T('삭제', 'Delete') + '</a>'
                 + '</div>'
                 + '<div id="jira-comment-body-' + i + '" style="white-space:pre-wrap;">' + esc(c.body) + '</div></div>';
@@ -1602,7 +1602,7 @@
             '<textarea id="jira-comment-edit-' + i + '" rows="2" style="width:100%; box-sizing:border-box; padding:6px 8px; border:1px solid #ccc; border-radius:6px; font-size:12px; resize:vertical;">' + esc(c.body) + '</textarea>'
             + '<div style="display:flex; justify-content:flex-end; gap:10px; margin-top:4px;">'
             + '<a onclick="window._jiraCancelEditComment(' + i + ')" style="font-size:11px; color:#777; cursor:pointer;">' + T('취소', 'Cancel') + '</a>'
-            + '<a onclick="window._jiraSaveEditComment(\'' + esc(key) + '\', ' + i + ')" style="font-size:11px; color:#00707d; cursor:pointer; font-weight:bold;">' + T('저장', 'Save') + '</a>'
+            + '<a onclick="window._jiraSaveEditComment(\'' + esc(key) + '\', ' + i + ')" style="font-size:11px; color:var(--ui-accent, #00707d); cursor:pointer; font-weight:bold;">' + T('저장', 'Save') + '</a>'
             + '</div>';
         var ta = document.getElementById('jira-comment-edit-' + i);
         if (ta) ta.focus();
@@ -1806,7 +1806,7 @@
             + '<div id="jira-issue-drag" style="padding:13px 18px; background:#e7f3ff; border-bottom:1px solid #a5c8f0; color:#1971c2; border-radius:10px 10px 0 0;'
             + ' cursor:grab; display:flex; align-items:center; gap:8px;">'
             + '<strong id="jira-issue-title" style="font-size:14px;">🪐 ' + esc(key) + '</strong>'
-            + '<a id="jira-issue-openlink" target="_blank" rel="noopener" style="font-size:11px; color:#00707d;">' + T('JIRA에서 열기 ↗', 'Open in JIRA ↗') + '</a>'
+            + '<a id="jira-issue-openlink" target="_blank" rel="noopener" style="font-size:11px; color:var(--ui-accent, #00707d);">' + T('JIRA에서 열기 ↗', 'Open in JIRA ↗') + '</a>'
             + '<span style="flex:1;"></span>'
             + '<button onclick="document.getElementById(\'jira-issue-modal\').style.display=\'none\'"'
             + ' style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); color:var(--modal-icon-text);'
