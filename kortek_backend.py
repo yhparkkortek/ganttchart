@@ -9941,6 +9941,96 @@ def _ps_drop_overlays(para):
     return n
 
 
+# 📄 쪽 끝에 장 제목만 남지 않게 — '다음 문단과 함께'(keepNext)를 거는 문단(데이터)
+#   양식은 STELLAR 내용 높이에 맞춘 빈 줄로 쪽을 나눠 두었다. 표 하나 높이만 달라져도(2026-11-25 OBSIDIAN27:
+#   개정 이력 4줄→1줄) 뒤가 한 줄씩 당겨져 5.2·6·6.2·6.3 제목이 쪽 맨 아래에 홀로 남고 표는 다음 쪽으로 갔다.
+_PS_KEEP_NEXT = {
+    'decimal': {'maxLevel': 2},                                  # 1. / 5.2 / 5.1.1 장 제목
+    'decimalEnclosedCircle': {'maxLen': 50, 'beforeBlock': True},   # ① Viewing Angle — 짧고 바로 뒤가 표·그림일 때만
+}
+_PS_KEEP_NEXT_BLANKS = 3     # 제목과 다음 내용 사이 빈 줄까지 같이 묶는 최대 개수
+
+
+def _ps_keep_headings(doc):
+    """번호 매긴 장 제목(+ 그 뒤 빈 줄)에 keepNext 를 건다. 내용·쪽 맞춤 빈 줄은 안 바꾼다 —
+    제목이 쪽 끝에 걸릴 때만 Word 가 다음 쪽으로 같이 넘긴다(이미 쪽 위에 있으면 아무 일도 없다). 반환: 건 개수."""
+    from docx.oxml.ns import qn
+    try:
+        numbering = doc.part.numbering_part.element
+    except Exception:
+        return 0
+    absmap = {}
+    for an in numbering.findall(qn('w:abstractNum')):
+        lv = {}
+        for l in an.findall(qn('w:lvl')):
+            f = l.find(qn('w:numFmt'))
+            lv[l.get(qn('w:ilvl'))] = f.get(qn('w:val')) if f is not None else ''
+        absmap[an.get(qn('w:abstractNumId'))] = lv
+    nummap = {}
+    for n in numbering.findall(qn('w:num')):
+        a = n.find(qn('w:abstractNumId'))
+        if a is not None:
+            nummap[n.get(qn('w:numId'))] = a.get(qn('w:val'))
+
+    def _txt(el):
+        return ''.join(t.text or '' for t in el.iter(qn('w:t'))).strip()
+
+    def _blank(el):
+        return (el.tag == qn('w:p') and not _txt(el) and not list(el.iter(qn('w:drawing')))
+                and not list(el.iter(qn('w:pict'))) and el.find('.//' + qn('w:sectPr')) is None
+                and not any(b.get(qn('w:type')) == 'page' for b in el.iter(qn('w:br'))))
+
+    def _set_keep(el):
+        pPr = el.find(qn('w:pPr'))
+        if pPr is None:
+            pPr = el.makeelement(qn('w:pPr'), {})
+            el.insert(0, pPr)
+        if pPr.find(qn('w:keepNext')) is None:
+            kn = pPr.makeelement(qn('w:keepNext'), {})
+            # 스키마 순서: pStyle 다음 — 앞쪽에 둔다
+            st = pPr.find(qn('w:pStyle'))
+            if st is not None:
+                st.addnext(kn)
+            else:
+                pPr.insert(0, kn)
+
+    els = list(doc.element.body.iterchildren())
+    n = 0
+    for i, el in enumerate(els):
+        if el.tag != qn('w:p'):
+            continue
+        pPr = el.find(qn('w:pPr'))
+        np_ = pPr.find(qn('w:numPr')) if pPr is not None else None
+        if np_ is None or np_.find(qn('w:numId')) is None:
+            continue
+        il = np_.find(qn('w:ilvl'))
+        il = il.get(qn('w:val')) if il is not None else '0'
+        fmt = absmap.get(nummap.get(np_.find(qn('w:numId')).get(qn('w:val')), ''), {}).get(il, '')
+        rule = _PS_KEEP_NEXT.get(fmt)
+        t = _txt(el)
+        if not rule or not t:
+            continue
+        if 'maxLevel' in rule and int(il) > rule['maxLevel']:
+            continue
+        if 'maxLen' in rule and len(t) > rule['maxLen']:
+            continue
+        # 뒤따르는 빈 줄(최대 N개)과 그 다음 내용
+        j, blanks = i + 1, []
+        while j < len(els) and len(blanks) < _PS_KEEP_NEXT_BLANKS and _blank(els[j]):
+            blanks.append(els[j])
+            j += 1
+        nxt = els[j] if j < len(els) else None
+        if nxt is None or nxt.tag == qn('w:sectPr') or (nxt.tag == qn('w:p') and _blank(nxt)):
+            continue                                  # 빈 줄이 더 길게 이어지면 쪽 맞춤 자리 — 묶지 않는다
+        if rule.get('beforeBlock') and not (nxt.tag == qn('w:tbl') or list(nxt.iter(qn('w:drawing')))):
+            continue
+        _set_keep(el)
+        n += 1
+        for b in blanks:
+            _set_keep(b)
+    return n
+
+
 def _ps_fill_images(doc, images):
     """`slot:<열쇠>` 그림의 바이트만 바꾼다. 원래 상자(cx,cy) 안에 **비율을 지켜** 맞춘다 —
     같은 계열 사양서에서 불러온 그림이면 비율이 같아 원본과 똑같은 크기가 된다.
@@ -10047,6 +10137,7 @@ def doc_product_spec_docx():
         layout_ok = _ps_apply_layout(doc, req.get('layout')) if req.get('layout') else None
         _ps_fill_text(doc, values)
         _ps_fill_images(doc, images)
+        _ps_keep_headings(doc)        # 쪽 끝에 장 제목만 남지 않게(글·빈 줄은 안 바꾼다)
         cp = doc.core_properties
         cp.title = 'TFT LCD MONITOR'
         cp.author = str(req.get('author') or '')[:80]

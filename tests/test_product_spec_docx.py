@@ -108,6 +108,16 @@ for variant in ('base', 'touch'):
     n_tpl = sum(1 for _ in tpl_doc.element.body.iter(WSP))
     n_out = sum(1 for _ in d.element.body.iter(WSP))
     check(n_out == n_tpl - 2, '%s: 그림 빠진 자리의 덧그림만 지워져야 (양식 %d → %d)' % (variant, n_tpl, n_out))
+    # 쪽 끝에 장 제목만 남지 않게(2026-11-25 OBSIDIAN27 실측: 5.2·6·6.2·6.3 이 쪽 맨 아래에 홀로) — 제목엔 keepNext, 글머리표엔 없음
+    kn = {}
+    for p in d.element.body.iterchildren(qn('w:p')):
+        t = ''.join(x.text or '' for x in p.iter(qn('w:t'))).strip()
+        pPr = p.find(qn('w:pPr'))
+        kn.setdefault(t, pPr is not None and pPr.find(qn('w:keepNext')) is not None)   # 같은 글이 두 번이면 첫 번째(6.1 의 ①)
+    check(kn.get('Supply Video Timing Chart') and kn.get('LCD Panel Specifications') and kn.get('Screen Specification')
+          and kn.get('Viewing Angle') and kn.get('Test Equipment Setup'), '%s: 장 제목·짧은 ① 제목에 다음 문단과 함께' % variant)
+    check(any(k.startswith('Voltage') for k in kn) and not any(v for k, v in kn.items() if k.startswith('Voltage') or k.startswith('Contrast Ratio (CR)')),
+          '%s: 글머리표·긴 ① 문장엔 안 건다' % variant)
 
 # ── 1-a. 파일 이름에 줄바꿈 (2026-11-25 실측: 고객 PN 칸이 두 줄이라 이름에 \r\n → 응답 헤더 거부 → HTTP 500) ──
 print('1-a. 줄바꿈 든 파일 이름')
