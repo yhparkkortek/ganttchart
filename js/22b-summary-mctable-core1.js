@@ -80,7 +80,7 @@ window.renderNoticeTab = function() {
     if (delSelBtn) delSelBtn.style.display = 'none';
     const _niEn = window._currentLang === 'en';
     if (!window._noticeItems.length) {
-        tbody.innerHTML = `<tr><td colspan="9" style="padding:30px;text-align:center;color:#aaa;font-size:13px;">${_niEn ? 'No notices registered. Click [+ Add Notice] to add one.' : '등록된 공지가 없습니다. [+ 공지 등록] 버튼을 눌러 추가하세요.'}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="9" style="padding:24px 10px;text-align:center;color:#999;font-size:12.5px;">${_niEn ? 'No notices registered. Click [+ Add Notice] to add one.' : '등록된 공지가 없습니다. [+ 공지 등록] 버튼을 눌러 추가하세요.'}</td></tr>`;
         window._noticeRenderLog(); window.loadScheduleRulesFromBackend(); return;
     }
     const today = new Date(); today.setHours(0,0,0,0);
@@ -109,19 +109,19 @@ window.renderNoticeTab = function() {
                    style="cursor:pointer; width:14px; height:14px;">
           </td>
           <td style="padding:6px 6px;text-align:center;font-size:11.5px;color:#888;font-weight:bold;" title="#NI${no}">${no}</td>
-          <td style="padding:10px 12px;text-align:center;font-size:16px;">${statusDot}</td>
-          <td style="padding:10px 12px;">
+          <td style="padding:6px 8px;text-align:center;font-size:16px;">${statusDot}</td>
+          <td style="padding:6px 8px;">
             <div style="font-weight:bold;color:#333;font-size:12.5px;">${n.title}</div>
             <div style="font-size:11px;color:#888;margin-top:2px;max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${n.body}</div>
           </td>
-          <td style="padding:10px 12px;text-align:center;font-size:12.5px;color:#555;">${targetLabel}</td>
-          <td class="${window._dateDayCls(n.deadline)}" style="padding:10px 12px;text-align:center;font-size:12.5px;color:${isPast?'#aaa':'#333'};${isPast?' opacity:.6;':''}">${n.deadline}</td>
-          <td style="padding:10px 12px;text-align:center;">
+          <td style="padding:6px 8px;text-align:center;font-size:12.5px;color:#555;">${targetLabel}</td>
+          <td class="${window._dateDayCls(n.deadline)}" style="padding:6px 8px;text-align:center;font-size:12.5px;color:${isPast?'#aaa':'#333'};${isPast?' opacity:.6;':''}">${n.deadline}</td>
+          <td style="padding:6px 8px;text-align:center;">
             <span style="font-size:12px;font-weight:bold;color:${diffDays<=3&&diffDays>=0?'#e03131':diffDays<0?'#aaa':'#2c5f8a'};">${dDayStr}</span>
             <div style="font-size:10px;color:#aaa;">${dDaysLabel}</div>
           </td>
-          <td style="padding:10px 12px;text-align:center;font-size:11.5px;color:#666;">${lastSent}</td>
-          <td style="padding:10px 12px;text-align:center;">
+          <td style="padding:6px 8px;text-align:center;font-size:11.5px;color:#666;">${lastSent}</td>
+          <td style="padding:6px 8px;text-align:center;">
             <div style="display:flex;gap:4px;justify-content:center;flex-wrap:nowrap;">
               <button onclick="window.sendNoticeNow('${n.id}')" title="즉시 발송"
                 onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';"
@@ -620,7 +620,7 @@ window.renderScheduleRuleTable = function() {
         return;
     }
     if (!window._scheduleRules.length) {
-        tbody.innerHTML = `<tr><td colspan="6" style="padding:24px;text-align:center;color:#aaa;font-size:12.5px;">${_en
+        tbody.innerHTML = `<tr><td colspan="6" style="padding:24px 10px;text-align:center;color:#999;font-size:12.5px;">${_en
             ? 'No scheduled sending rules registered. Choose "Date Range/Recurring" in [+ Add Notice] to add one.'
             : '등록된 예약 발송 규칙이 없습니다. [+ 공지 등록]에서 "기간·반복"을 선택해 추가하세요.'}</td></tr>`;
         return;
@@ -639,15 +639,15 @@ window.renderScheduleRuleTable = function() {
         const offTitle = _en ? '🔴 Off — click to turn on' : '🔴 꺼짐 — 클릭하여 켜기';
         const statusIcon = `<span onclick="window.toggleScheduleRuleEnabled('${r.id}')" style="cursor:pointer;font-size:16px;" title="${isOn ? onTitle : offTitle}">${isOn ? '🟢' : '🔴'}</span>`;
         return `<tr style="background:${rowBg};border-bottom:1px solid #cfe3e5;">
-          <td style="padding:8px 12px;text-align:center;">${statusIcon}</td>
-          <td style="padding:8px 12px;">
+          <td style="padding:6px 8px;text-align:center;">${statusIcon}</td>
+          <td style="padding:6px 8px;">
             <div style="font-weight:bold;color:#333;font-size:12.5px;">${escapeHtml(r.title||'')}</div>
             <div style="font-size:11px;color:#888;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(r.message||'')}</div>
           </td>
-          <td style="padding:8px 12px;text-align:center;font-size:12px;color:#555;">${typeLabel}</td>
-          <td style="padding:8px 12px;text-align:center;font-size:11.5px;color:#555;">${dateLabel}</td>
-          <td style="padding:8px 12px;text-align:center;font-size:11.5px;color:#555;">${timeLabel}</td>
-          <td style="padding:8px 12px;text-align:center;">
+          <td style="padding:6px 8px;text-align:center;font-size:12px;color:#555;">${typeLabel}</td>
+          <td style="padding:6px 8px;text-align:center;font-size:11.5px;color:#555;">${dateLabel}</td>
+          <td style="padding:6px 8px;text-align:center;font-size:11.5px;color:#555;">${timeLabel}</td>
+          <td style="padding:6px 8px;text-align:center;">
             <div style="display:flex;gap:4px;justify-content:center;">
               <button onclick="window.openScheduleRuleEditModal('${r.id}')" title="${_en ? 'Edit' : '수정'}"
                 style="width:26px;height:26px;border:1px solid #edbf85;color:#a85d0a;background:#fbead9;border-radius:4px;cursor:pointer;font-size:12px;">✏️</button>

@@ -275,16 +275,16 @@
           <thead>
             <tr style="background:#eef6f7; border-bottom:2px solid #cfe3e5;">
               <th style="padding:10px 6px; text-align:center; width:32px;">
-                <input type="checkbox" id="notice-select-all" title="전체 선택/해제" onchange="window._noticeToggleSelectAll(this.checked)" style="cursor:pointer; width:14px; height:14px;">
+                <input type="checkbox" id="notice-select-all" title="전체 선택/해제" onchange="window._noticeToggleSelectAll(this.checked)" style="cursor:pointer; width:14px; height:14px; display:block; margin:0 auto;">
               </th>
               <th style="padding:10px 6px; text-align:center; width:36px; color:#555; font-weight:bold; font-size:11.5px;">No.</th>
-              <th style="padding:10px 12px; text-align:center; width:54px;" data-i18n="th-notice-status">상태</th>
-              <th style="padding:10px 12px; text-align:center;" data-i18n="th-notice-title">제목</th>
-              <th style="padding:10px 12px; text-align:center; width:100px;" data-i18n="th-notice-target">발송 채널</th>
-              <th style="padding:10px 12px; text-align:center; width:100px;" data-i18n="th-notice-date">기준일</th>
-              <th style="padding:10px 12px; text-align:center; width:90px;">D-day</th>
-              <th style="padding:10px 12px; text-align:center; width:100px;" data-i18n="th-notice-lastsent">마지막 발송</th>
-              <th style="padding:10px 12px; text-align:center; width:150px;" data-i18n="th-notice-action">액션</th>
+              <th style="padding:10px 8px; text-align:center; width:54px;" data-i18n="th-notice-status">상태</th>
+              <th style="padding:10px 8px; text-align:center;" data-i18n="th-notice-title">제목</th>
+              <th style="padding:10px 8px; text-align:center; width:100px;" data-i18n="th-notice-target">발송 채널</th>
+              <th style="padding:10px 8px; text-align:center; width:100px;" data-i18n="th-notice-date">기준일</th>
+              <th style="padding:10px 8px; text-align:center; width:90px;">D-day</th>
+              <th style="padding:10px 8px; text-align:center; width:100px;" data-i18n="th-notice-lastsent">마지막 발송</th>
+              <th style="padding:10px 8px; text-align:center; width:150px;" data-i18n="th-notice-action">액션</th>
             </tr>
           </thead>
           <tbody id="notice-table-body">
@@ -307,12 +307,12 @@
         <table style="width:100%; border-collapse:collapse; font-size:12.5px;">
           <thead>
             <tr style="background:#eef6f7; border-bottom:2px solid #cfe3e5;">
-              <th id="schedule-rule-th-status" style="padding:10px 12px; text-align:center; width:54px;">상태</th>
-              <th id="schedule-rule-th-title" style="padding:10px 12px; text-align:center;">제목</th>
-              <th id="schedule-rule-th-type" style="padding:10px 12px; text-align:center; width:120px;">종류</th>
-              <th id="schedule-rule-th-date" style="padding:10px 12px; text-align:center; width:200px;">날짜</th>
-              <th id="schedule-rule-th-time" style="padding:10px 12px; text-align:center; width:130px;">시간</th>
-              <th id="schedule-rule-th-action" style="padding:10px 12px; text-align:center; width:150px;">액션</th>
+              <th id="schedule-rule-th-status" style="padding:10px 8px; text-align:center; width:54px;">상태</th>
+              <th id="schedule-rule-th-title" style="padding:10px 8px; text-align:center;">제목</th>
+              <th id="schedule-rule-th-type" style="padding:10px 8px; text-align:center; width:120px;">종류</th>
+              <th id="schedule-rule-th-date" style="padding:10px 8px; text-align:center; width:200px;">날짜</th>
+              <th id="schedule-rule-th-time" style="padding:10px 8px; text-align:center; width:130px;">시간</th>
+              <th id="schedule-rule-th-action" style="padding:10px 8px; text-align:center; width:150px;">액션</th>
             </tr>
           </thead>
           <tbody id="schedule-rule-table-body">
@@ -2734,8 +2734,8 @@
 
 <!-- 22-tabs-summary-mctable.js 분리 (토큰 절약 · 협업용): 로딩 순서는 기존과 동일하게 유지 -->
 <script src="js/22a-summary-mctable-parse.js?v=2026112596"></script>
-<script src="js/22b-summary-mctable-core1.js?v=20261125dp"></script>
-<script src="js/22c-summary-mctable-core2.js?v=2026112841"></script>
+<script src="js/22b-summary-mctable-core1.js?v=2026112851"></script>
+<script src="js/22c-summary-mctable-core2.js?v=2026112851"></script>
 <script src="js/22d-summary-mctable-core3.js?v=2026112801"></script>
 <script src="js/22e-summary-mctable-core4.js?v=2026112735"></script>
 <script src="js/22f-address-book.js?v=2026112811"></script>
