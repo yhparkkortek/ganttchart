@@ -116,9 +116,51 @@
     // 💡 [2026-08-29 변경] Alarm/Notice 밑줄탭 2개 고정 대신, Elec Parts(🖥️ PANEL ▾)와 동일한
     //    "단일 트리거 + 드롭다운" 구성으로 통일 — window._toggleAlarmViewDropdown 참고.
     window.ALARM_VIEW_META = {
-        alarm:  { label: 'Alarm',  icon: '🔔' },
-        notice: { label: 'Notice', icon: '📢' },
+        alarm:  { label: 'Alarm',  ko: '알람', icon: '🔔' },
+        notice: { label: 'Notice', ko: '공지', icon: '📢' },
     };
+    window._alarmViewLabel = function(m) { return m ? ((window._currentLang === 'en' || !m.ko) ? m.label : m.ko) : ''; };
+
+    // 🌐 [2026-11-25] 페이지 이름 한/영 — 사이드 메뉴와 각 페이지 헤더 제목이 **이 표 한 곳**을 읽는다.
+    //    (예전엔 둘 다 영어로 박혀 있어 언어를 바꿔도 그대로였다.) 새 페이지는 여기 한 줄 + 사이드바
+    //    `.sb-item[data-tab]` + 헤더 제목에 `data-page-title="<탭>"` 을 달면 따라온다.
+    window.PAGE_TITLES = {
+        projectlist: { icon: '📒', ko: '프로젝트 목록', en: 'Project list' },
+        summary:     { icon: '📝', ko: '프로젝트 개요', en: 'Summary' },
+        briefspec:   { icon: '📐', ko: '고객 사양',     en: 'Customer SPEC' },
+        bom:         { icon: '🧱', ko: 'BOM',           en: 'BOM' },
+        elecparts:   { icon: '⚡', ko: '부품',          en: 'PARTS' },
+        mctable:     { icon: '💰', ko: '재료비(M.C)',   en: 'M.C Table' },
+        document:    { icon: '📄', ko: '문서',          en: 'Document' },
+        jira:        { icon: '🪐', ko: 'JIRA',          en: 'JIRA' },
+        gantt:       { icon: '📊', ko: '간트차트',      en: 'Gantt chart' },
+        calendar:    { icon: '📅', ko: '캘린더',        en: 'Calendar' },
+        weekly:      { icon: '📋', ko: '주간 보고',     en: 'Weekly Report' },
+        daily:       { icon: '📔', ko: '일일 보고',     en: 'Daily Report' },
+        psummary:    { icon: '📑', ko: '프로젝트 리뷰', en: 'Project Review' },
+        alarm:       { icon: '🔔', ko: '알람/공지',     en: 'Alarm/Notice' },
+        address:     { icon: '🪪', ko: '주소록',        en: 'Address' },
+    };
+    window._pageTitle = function(tab, withIcon) {
+        var m = window.PAGE_TITLES[tab]; if (!m) return '';
+        var t = window._currentLang === 'en' ? m.en : m.ko;
+        return withIcon ? m.icon + ' ' + t : t;
+    };
+    window._applyPageTitles = function() {
+        document.querySelectorAll('#sb-nav .sb-item[data-tab]').forEach(function (el) {
+            var lab = el.querySelector('.sb-label'), t = window._pageTitle(el.dataset.tab);
+            if (lab && t) lab.textContent = t;
+            if (t) el.title = t;   // 사이드바를 접었을 때 이름이 안 보이므로 말풍선으로
+        });
+        document.querySelectorAll('[data-page-title]').forEach(function (el) {
+            var t = window._pageTitle(el.getAttribute('data-page-title'), true);
+            if (t) el.textContent = t;
+        });
+        var al = document.getElementById('alarm-view-trigger-label');
+        var am = window.ALARM_VIEW_META[window._alarmView || 'alarm'];
+        if (al && am) al.textContent = am.icon + ' ' + window._alarmViewLabel(am);
+    };
+    window._applyPageTitles();
     window._alarmView = window._alarmView || 'alarm';
     window._switchAlarmView = function(view) {
         window._alarmView = view;
@@ -133,7 +175,7 @@
         if (toggleEl && targetBox && targetBox.firstElementChild !== toggleEl) targetBox.insertBefore(toggleEl, targetBox.firstChild);
         const meta = window.ALARM_VIEW_META[view];
         const label = document.getElementById('alarm-view-trigger-label');
-        if (label && meta) label.textContent = meta.icon + ' ' + meta.label;
+        if (label && meta) label.textContent = meta.icon + ' ' + window._alarmViewLabel(meta);
         if (view === 'alarm'  && window.renderAlarmTab)  window.renderAlarmTab();
         if (view === 'notice' && window.renderNoticeTab) window.renderNoticeTab();
         try { localStorage.setItem('gantt_alarm_view', view); } catch(e) {}
@@ -151,7 +193,7 @@
                          style="padding:7px 10px; cursor:pointer; border-radius:4px; font-size:12.5px; font-weight:bold; white-space:nowrap;
                                 background:${active ? '#2c5f8a' : 'transparent'}; color:${active ? '#fff' : '#333'};"
                          onmouseover="if(this.style.background!=='rgb(44, 95, 138)') this.style.background='#f1f3f5';"
-                         onmouseout="if(this.style.background!=='rgb(44, 95, 138)') this.style.background='transparent';">${o.icon} ${o.label}</div>`;
+                         onmouseout="if(this.style.background!=='rgb(44, 95, 138)') this.style.background='transparent';">${o.icon} ${window._alarmViewLabel(o)}</div>`;
         }).join('');
         const rect = btn.getBoundingClientRect();
         popup.style.left = rect.left + 'px';

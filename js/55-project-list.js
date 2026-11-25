@@ -1253,7 +1253,7 @@
             if (el) el.title = window.PL_UI_TITLE[id][en ? 1 : 0];
         });
         var h2 = document.querySelector('#pl-header-box h2');
-        if (h2) h2.textContent = '📒 ' + (en ? 'Project list' : 'Project list');
+        if (h2) h2.textContent = window._pageTitle ? window._pageTitle('projectlist', true) : '📒 Project list';
         var si = document.getElementById('pl-search');
         if (si) si.placeholder = en ? '🔍 Search all cells — several words OK' : '🔍 검색 — 모든 칸 · 여러 낱말';
         var sel = document.getElementById('pl-team');

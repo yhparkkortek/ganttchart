@@ -808,6 +808,9 @@
             if (i18nValueMap[key] !== undefined) el.value = i18nValueMap[key];
         });
 
+        // 🌐 [2026-11-25] 사이드 메뉴·페이지 헤더 제목 (표는 js/23 PAGE_TITLES)
+        if (window._applyPageTitles) window._applyPageTitles();
+
         // 💾 상단바 "프로젝트 저장 : 파일명" 칩 — 글자가 _t로 조립돼 있어 여기서 다시 그려야 한다.
         //    (멱등 함수라 그냥 한 번 더 부르면 된다 — docs/ui-conventions.md의 "재렌더 누락" 항목)
         if (window.updateCurrentFileLabel) window.updateCurrentFileLabel();

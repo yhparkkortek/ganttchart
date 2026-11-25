@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>사이드 메뉴·페이지 헤더 한/영 시험</title></head><body style="margin:0">
+<!-- 🌐 [2026-11-25] 사이드 메뉴 + 페이지 헤더 제목이 언어 버튼(진짜 toggleLang)으로 한↔영 바뀌는지.
+     진짜 kortek_pm.html 을 iframe 으로 띄우고 진짜 버튼을 누른다. 가짜 없음.
+     실행: chrome --headless=new --allow-file-access-from-files --window-size=1500,900 --virtual-time-budget=20000
+           --dump-dom file:///.../tests/page-titles-lang.html   → <pre id="out"> (마지막 줄 N/M) -->
+<iframe id="f" src="../kortek_pm.html?ptl=1" style="border:0;width:1400px;height:800px;"></iframe>
+<pre id="out">running…</pre>
+<script>
+var out = [], pass = 0, fail = 0;
+function chk(c, l) { c ? pass++ : fail++; out.push((c ? 'ok   ' : 'FAIL ') + l); }
+function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+var f = document.getElementById('f');
+f.onload = async function () {
+  await sleep(2500);
+  var W = f.contentWindow, D = f.contentDocument;
+  try {
+    var T = W.PAGE_TITLES;
+    chk(!!T, 'PAGE_TITLES 표가 있다');
+    function sb() { var o = {}; D.querySelectorAll('#sb-nav .sb-item[data-tab]').forEach(function (el) { o[el.dataset.tab] = el.querySelector('.sb-label').textContent; }); return o; }
+    function hd() { var o = {}; D.querySelectorAll('[data-page-title]').forEach(function (el) { o[el.getAttribute('data-page-title')] = el.textContent; }); return o; }
+    var tabs = Object.keys(T);
+    var s0 = sb(), h0 = hd();
+    chk(tabs.every(function (k) { return s0[k] === T[k].ko; }), '처음(한국어) 사이드 메뉴 ' + tabs.length + '개 한국어 — ' + JSON.stringify(s0));
+    chk(Object.keys(h0).length >= 10 && Object.keys(h0).every(function (k) { return h0[k] === T[k].icon + ' ' + T[k].ko; }), '처음 헤더 제목 ' + Object.keys(h0).length + '개 한국어');
+    chk(D.getElementById('alarm-view-trigger-label').textContent === '🔔 알람', '알람 헤더 = 🔔 알람');
+    D.getElementById('lang-toggle-btn').click(); await sleep(300);
+    var s1 = sb(), h1 = hd();
+    chk(tabs.every(function (k) { return s1[k] === T[k].en; }), '영어로 바꾸면 사이드 메뉴 영어 — ' + JSON.stringify(s1));
+    chk(Object.keys(h1).every(function (k) { return h1[k] === T[k].icon + ' ' + T[k].en; }), '헤더 제목 영어 — ' + JSON.stringify(h1));
+    chk(D.getElementById('alarm-view-trigger-label').textContent === '🔔 Alarm', '알람 헤더 = 🔔 Alarm');
+    chk(!!D.querySelector('#tab-bom .inbox-help-ico, h2 .inbox-help-ico'), 'BOM·M.C 제목 옆 ℹ️ 도움말이 지워지지 않았다');
+    W.switchTab('projectlist'); await sleep(400);
+    chk(D.querySelector('#pl-header-box h2').textContent === '📒 Project list', 'Project list 탭이 제목을 다시 그려도 영어');
+    W._switchAlarmView('notice'); await sleep(200);
+    chk(D.getElementById('alarm-view-trigger-label').textContent === '📢 Notice', '공지로 바꾸면 📢 Notice');
+    D.getElementById('lang-toggle-btn').click(); await sleep(300);
+    var s2 = sb();
+    chk(tabs.every(function (k) { return s2[k] === T[k].ko; }), '다시 한국어로 돌아온다');
+    chk(D.getElementById('alarm-view-trigger-label').textContent === '📢 공지', '공지 헤더 = 📢 공지');
+    W._switchAlarmView('alarm');
+  } catch (e) { out.push('SETUP ' + e.message); }
+  out.push(pass + '/' + (pass + fail));
+  document.getElementById('out').textContent = out.join('\n');
+};
+</script></body></html>
