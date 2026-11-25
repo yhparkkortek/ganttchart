@@ -22,7 +22,7 @@ ctx._mailEvidenceNoAutoSweep = true;
 ctx._appUserKey = 'tester';   // 없으면 js/74 record() 가 아무것도 안 적는다(첫 실행에서 [4] 첫 항목이 그 덕에 거짓 통과했다)
 ctx._msParseSenderEmail = (s) => { const m = String(s || '').match(/[\w.+-]+@[\w.-]+\.\w+/); return m ? m[0].toLowerCase() : ''; };
 vm.createContext(ctx);
-for (const f of ['61-mail-evidence.js', '74-mail-routing.js']) vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'js', f), 'utf8'), ctx, { filename: f });
+for (const f of ['61-mail-evidence.js', '74-mail-routing.js', '75-approval-intake.js']) vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'js', f), 'utf8'), ctx, { filename: f });
 
 let pass = 0, fail = 0;
 function ok(n, c, d) { if (c) { pass++; console.log('  OK   ' + n); } else { fail++; console.log('  FAIL ' + n + (d !== undefined ? '  — ' + JSON.stringify(d).slice(0, 300) : '')); } }
@@ -82,6 +82,20 @@ j = ctx.mailRouteJudge({ subject: "[환경 대응 의뢰서] Cosmic Dual Main To
 ok('"환경 대응" 하나로 Cosmic iDeck 에 안 간다', !(j.target && j.target.drive_file_id === 'CI'), j);
 j = ctx.mailRouteJudge({ subject: '[환경 대응 의뢰서] LNW _Cosmic 18.5" iDeck', sender: 'x@kortek.co.kr', body: '', refs: [] }, C5, null);
 ok('모델(Cosmic 18.5)이 적힌 건 그대로 간다', !!(j.target && j.target.drive_file_id === 'CI'), j);
+
+console.log('\n[6] 보관함 대기 재점검 (2026-11-25 2차 실측) — 부품 코드·형태 낱말·크기');
+const KG = { drive_file_id: 'KG', file_name: 'KONAMI_KGP-4_55.0.json', model: 'KGP-4', customer: 'KONAMI>KGP-4', inch: '55', keywords: ['KGP-4', 'C Curved', 'Narrow'] };
+const SG = { drive_file_id: 'SG', file_name: 'LNW(SG)_SSBT_27.0.json', model: 'SSBTX27', customer: 'LNW(SG)>SSBT', inch: '27', keywords: ['SSBTX27'] };
+const O2 = { drive_file_id: 'O2', file_name: 'LNW_OBSIDIAN27_DB_27.0.json', model: 'OBSIDIAN27_DB', customer: 'LNW>OBSIDIAN 27', inch: '27', keywords: ['OBSIDIAN27_DB', '302601', '303033'] };
+const C6 = [KG, SG, O2, ST];
+j = ctx.mailRouteJudge({ subject: '[연구개발과제 발의서] KONAMI>75" C Curved(3000R) EC', sender: 'x@kortek.co.kr', body: '', refs: [] }, C6, null);
+ok('75" 결재가 KONAMI 한 단어로 55" KGP-4 에 안 간다(크기 가드)', !(j.target && j.target.drive_file_id === 'KG') && j.basis === 'size_mismatch', j);
+j = ctx.mailRouteJudge({ subject: 'C Curved 패널 곡률 문의', sender: 'x@kortek.co.kr', body: '', refs: [] }, C6, null);
+ok('"C Curved" 는 식별자가 아니다', !(j.basis && /identifier/.test(j.basis)), j);
+j = ctx.mailRouteJudge({ subject: 'UK 견적 의뢰', sender: 'x@lnw.com', body: 'SSBTX27 사양 — 보드 302601 / 303033 재사용 검토', refs: [] }, C6, null);
+ok('반제품 코드(30xxxx)는 강한 단서가 아니다 — 모델명(SSBTX27)이 이긴다', !!(j.target && j.target.drive_file_id === 'SG'), j);
+j = ctx.mailRouteJudge({ subject: 'KONAMI 55" KGP-4 샘플', sender: 'x@kortek.co.kr', body: '', refs: [] }, C6, null);
+ok('크기가 맞으면 그대로 간다', !!(j.target && j.target.drive_file_id === 'KG'), j);
 
 console.log('\n결과: ' + pass + '/' + (pass + fail) + ' 통과');
 process.exit(fail ? 1 : 0);

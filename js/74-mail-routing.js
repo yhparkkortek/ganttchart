@@ -51,6 +51,9 @@
         familyAllWhenNoPrimary: true, // [2026-11-23 사용자 결정] 가족은 확정·모델 단서 없음·대표 없음 → 형제 **모두**에 배치(가족별로 '대기' 선택 가능)
         familyAllMax: 3,          // 형제 모두 배치의 상한 — 이보다 큰 가족은 모두에 뿌리지 않고 대기
         familyModelPrefixMin: 9,
+        // [2026-11-25 실측] '강한 단서' 로 칠 숫자 — 제품 관리번호(5xxxxx)·고객 PN(7자리+)만. 반제품·원자재 코드(30xxxx·13xxxx)는
+        //  여러 제품이 같이 쓴다 — SSBT 견적 메일 본문의 보드 코드 302601·303033 이 OBSIDIAN27 DB 로 끌고 갔다.
+        strongNumRe: '^(?:5\\d{5}|\\d{7,})$',
         commonToCustomer: true,   // [2026-11-23 사용자 결정] 회의록·로드맵 같은 공통 건(제목 어휘 MAIL_ROUTING_COMMON_WORDS)이 한 고객사로 모이면 그 고객사 프로젝트 **전부**에
         commonCustomerMax: 20,    // 공통 건을 뿌릴 고객사 프로젝트 수 상한 — 넘으면 대기(사유에 적는다). 12 였는데 K27 등록으로 LNW 가 13곳이 되자 회의록이 조용히 대기로 빠졌다(2026-11-23)  // 같은 고객 + 모델명 앞부분(정규화)이 이만큼 같으면 형제('AMUSNET 55…' → 'amusnet55')
         routeDir: 'App_Config/MailRoutes',
@@ -62,7 +65,7 @@
     var P = window.MAIL_ROUTING_POLICY;
     // 판정 규칙 버전 — 카드의 routing.v 에 적는다. 배경 재판정은 같은 버전으로 이미 본 카드를 건너뛴다.
     //  ⚠️ 판정 규칙(식별자·가족·문턱)을 바꾸면 이 값을 올릴 것 — 안 올리면 옛 판정 카드가 배경에서 다시 안 보인다.
-    var RULE_V = '2026-11-25c';
+    var RULE_V = '2026-11-25d';
     window.MAIL_ROUTING_RULE_V = RULE_V;
     /** 카드의 사유 글에서 AI 사유만 — 재판정마다 '🧭 판정 · 🤖 (이전 사유 전체)' 로 겹겹이 길어지던 것(실측) */
     function aiReasonOnly(mb) {
@@ -129,7 +132,7 @@
         'csot', 'innolux', 'tianma', 'sharp', 'samsung', 'lgdisplay',
         // [2026-11-24 실측] 형태·곡률을 말하는 낱말 — KGP-4 키워드 'slim'·'1500R' 이 LNW Slim Slot 결재 4건·Amusnet 55J1500R 결재 3건을
         //  KGP-4 로 끌고 갔다(메일도 같은 판정). 'curved' 는 위에 이미 있다. 곡률(R)은 흔한 값만 적는다.
-        'slim', 'narrow', 'ultraslim', 'thin', '1000r', '1500r', '1650r', '1800r', '2300r', '3000r', '4000r',
+        'slim', 'narrow', 'ultraslim', 'thin', 'ccurved', 'jcurved', 'scurved', '1000r', '1500r', '1650r', '1800r', '2300r', '3000r', '4000r',
         // [2026-11-24 실측] 회사 공통 낱말 — 새 프로젝트 SLIM SLOT IDECK 키워드의 'GAME'(모든 ECO 제목 머리 'GAME_')·'VINA'(베트남 공장) 가
         //  식별자로 잡혀 실문서 287건 중 6건이 잘못 자동배치·13건이 대기로 떨어졌다. 'gaming' 도 같은 뜻으로 쓰인다.
         'game', 'gaming', 'vina', 'vietnam',
@@ -442,11 +445,26 @@
             if (js.decision === 'auto' && SUBJECT_FIRST_BASES[js.basis]) {
                 js.basis = 'subject_' + js.basis;
                 js.reason = T('제목: ', 'subject: ') + js.reason;
-                return js;
+                return sizeGuard(js, mail);
             }
         }
-        return commonToCustomer(judgeCore(mail, cands, aiTag), mail, cands);
+        return sizeGuard(commonToCustomer(judgeCore(mail, cands, aiTag), mail, cands), mail);
     };
+    /** 📐 [2026-11-25 실측] 제목에 크기가 적혀 있는데 자동 대상의 크기와 하나도 안 맞으면 대기 — 결재 가져오기(js/75)에만 있던
+     *  크기 가드를 판정기 자체에 둔다. 배경 재판정은 이 함수만 거치므로, 없으면 'KONAMI>75" C Curved' 결재가
+     *  'konami' 한 단어로 KGP-4(55") 에 들어갔다. 크기 읽기는 js/75 `_approvalSizesIn` 하나(규칙 두 벌 금지), 오차는 0.6(색인은 반올림). */
+    function sizeGuard(j, mail) {
+        if (!j || j.decision !== 'auto' || !j.target || P.sizeGuard === false) return j;
+        if (j.extra && j.extra.length) return j;   // 여러 곳에 뿌리는 판정(공통 건·형제 모두)은 사람이 정한 규칙이라 크기로 막지 않는다
+        var f = window._approvalSizesIn; if (typeof f !== 'function') return j;
+        var tin = parseFloat(j.target.inch); if (!tin) return j;
+        var ss = f(String((mail && mail.subject) || '')) || [];
+        if (!ss.length || ss.some(function (x) { return Math.abs(parseFloat(x) - tin) <= (P.sizeTolerance || 0.6); })) return j;
+        return { decision: 'wait', target: null, candidates: [j.target].concat(j.candidates || []).filter(function (c, i, a) { return a.indexOf(c) === i; }).slice(0, 6),
+            basis: 'size_mismatch', family: j.family || null, hits: j.hits,
+            reason: T('제목의 크기(' + ss.join('·') + '")가 ' + (j.target.file_name || '') + '(' + tin + '")와 다름 — 사람이 고른다',
+                'subject size (' + ss.join('/') + '") differs from ' + (j.target.file_name || '') + ' (' + tin + '") — needs a person') };
+    }
     /** 📋 [2026-11-23 사용자 결정 "회의록·Road map 같은 공통 건은 고객사 형제 프로젝트로"] 결정론 판정이 '여러 프로젝트라 대기'
      *  (conflict·customer_only·family_unresolved)로 끝났고, 제목이 공통 건 어휘이고, 걸린 후보가 **한 고객사**뿐이면
      *  그 고객사의 프로젝트 **전부**에 배치한다. 고객사가 둘 이상이면 그대로 대기(사람이 카드에서 '팀 전체 배분' 등으로 정한다).
@@ -616,7 +634,7 @@
         //  'LNW_L7 Jackpot Wheel 31.5in_502582' 는 L7 의 502582·모델명 통째에 걸리는데 Digital Wheel 의 키워드
         //  'Obsidian Digital Wheel 31.5"' 를 쪼갠 'wheel315' 하나 때문에 충돌이 됐다. 약한 쪽 조각은 이 판정에서 뺀다.
         if (withUniq.length > 1 && famKeys.length > 1 && P.strongBeatsPieces !== false && !isCommonSubject((mail && mail.subject) || '')) {
-            var isStrong = function (i, t) { var src = idents[i][t] || ''; return /^\d{5,}$/.test(t) || src === 'model' || t === norm(cands[i].model || ''); };
+            var isStrong = function (i, t) { var src = idents[i][t] || ''; return new RegExp(P.strongNumRe || '^\\d{5,}$').test(t) || src === 'model' || t === norm(cands[i].model || ''); };
             var strongIdx = withUniq.filter(function (i) { return uniqHits[i].some(function (t) { return isStrong(i, t); }); });
             if (strongIdx.length === 1) {
                 var weakToks = {};
