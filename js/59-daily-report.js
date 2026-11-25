@@ -3327,7 +3327,13 @@
         dailyEnsureSearchWidget();
         var date = window._dailyTabDate || ymd();
         var lbl = document.getElementById('daily-day-label');
-        if (lbl) lbl.textContent = dayLabel(date);
+        if (lbl) {
+            lbl.textContent = dayLabel(date);
+            // 🎨 [2026-11-25] 헤더 날짜 글자색 — 일·공휴일=빨강, 토=파랑, 평일은 원래 색(다른 페이지와 같은 규칙, 색은 styles.css/js/21)
+            lbl.classList.remove('date-day-hol', 'date-day-sat');
+            var dc = window._dateDayCls ? window._dateDayCls(date) : '';
+            if (dc === 'date-day-hol' || dc === 'date-day-sat') lbl.classList.add(dc);
+        }
         // 🗓️ 보기 토글 버튼 라벨은 **js/59 가 맡는다** — 그래서 HTML 에 `data-i18n` 을 달지 않았다.
         //    (i18n 맵은 HTML 라벨을 덮어쓰므로, 맵에 맡기면 '하루 보기'가 다시 '월 보기'로 되돌아간다)
         //    ⚠️ 전엔 아무도 안 고쳐서 **월 보기로 바꿔도 버튼이 계속 '월 보기'** 였다.
