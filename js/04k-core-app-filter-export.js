@@ -7,6 +7,21 @@
     window.getSummaryAssignee = function() { return ((window.projectMeta || {}).프로젝트담당자 || '').trim(); };
     window.getSummaryCustomer = function() { return ((window.projectMeta || {}).고객사 || '').trim(); };
     window.getSummaryModel    = function() { return ((window.projectMeta || {}).고객모델명 || '').trim(); };
+    // 📐 [2026-11-25] 글 안에 그 인치가 이미 적혀 있나 — 파일명 인치 중복 제거용.
+    //    숫자 앞이 글자·숫자·점이면 인치가 아니다(`S32` 는 모델명, `R2100` 은 곡률). 숫자 뒤가 숫자여도 아니다.
+    //    뒤에 `"`·`''`·inch·글자(27MVD·55C)가 와도 인치로 본다 — 실제 프로젝트명이 그렇게 적힌다.
+    //    값 비교라 `27` 과 `27.0` 은 같다.
+    window._textHasInch = function (text, inch) {
+        const want = parseFloat(String(inch || ''));
+        if (!(want > 0)) return false;
+        const re = /(^|[^0-9A-Za-z.])(\d{1,3}(?:\.\d)?)(?![0-9])/g;
+        let m;
+        const s = String(text || '');
+        while ((m = re.exec(s))) {
+            if (Math.abs(parseFloat(m[2]) - want) < 0.05) return true;
+        }
+        return false;
+    };
     // 💡 인치: KTK 모델명(">" 오른쪽)의 4,5,6번째 글자를 가져와 "320" → "32.0" 형식으로 변환
     window.getSummaryInch = function() {
         const raw = String((window.projectMeta || {}).KTK모델명 || '');
@@ -198,6 +213,9 @@
             //    (`..._1641445-ALT1_57.4` vs `..._57.4`). 모양이 갈리면 정렬·검색·중복 판정이 흔들린다.
             //    고객 모델명은 모델 카드에 그대로 남아 있고 Summary·주간보고 본문에서는 계속 보인다.
             //    빈 조각은 "All"을 끼워 넣지 않고 그냥 생략한다.
+            // 📐 [2026-11-25 사용자 요청] `고객사>프로젝트명` 에 이미 그 인치를 적었으면(예: `LNW>OBSIDIAN 27"` + 27.0)
+            //    인치를 또 붙이지 않는다 — `LNW_OBSIDIAN 27_27.0` 처럼 같은 크기가 두 번 나왔다.
+            if (inch && window._textHasInch && window._textHasInch(customer, inch)) inch = '';
             const infoStr = [customer, inch].filter(Boolean).join('_');
             const safeInfoStr = infoStr.replace(/\s*>\s*/g, '_').replace(/[\x00-\x1F\x7F"*/:<>?\\|]/g, ''); 
             

@@ -6629,6 +6629,34 @@ def gw_approval_body_text():
         return jsonify({'ok': False, 'message': str(e)})
 
 
+@app.route('/gw/approval/dev-plan-list', methods=['GET'])
+def gw_approval_dev_plan_list():
+    """📅 새 프로젝트 마법사 — 연구개발과제 발의서·프로젝트코드 등록 신청서 목록(읽기 전용, 2026-11-25)."""
+    try:
+        import gw_bridge
+        r = gw_bridge.approval_dev_plan_list(keyword=(request.args.get('keyword') or '').strip())
+        r['ok'] = True
+        return jsonify(r)
+    except Exception as e:
+        return jsonify({'ok': False, 'message': str(e)})
+
+
+@app.route('/gw/approval/dev-plan', methods=['GET'])
+def gw_approval_dev_plan():
+    """📅 결재 문서 하나에서 개발 계획(일정·프로젝트 코드·과제리더)을 읽는다(읽기 전용, AI 0회).
+    프로젝트코드 등록 신청서는 본문 표, 연구개발과제 발의서는 첨부 엑셀에서 — gw_bridge.approval_dev_plan."""
+    try:
+        import gw_bridge
+        did = (request.args.get('docId') or '').strip()
+        if not did.isdigit():
+            return jsonify({'ok': False, 'message': 'docId(숫자)가 필요합니다.'}), 400
+        r = gw_bridge.approval_dev_plan(did)
+        r['ok'] = True
+        return jsonify(r)
+    except Exception as e:
+        return jsonify({'ok': False, 'message': str(e)})
+
+
 @app.route('/gw/approval/draft-fill', methods=['POST'])
 def gw_approval_draft_fill():
     """이미 열려 있는 작성 화면을 **다시 채운다**(실행 루프용). 원본 문서를 다시 읽지 않는다.

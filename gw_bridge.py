@@ -3269,3 +3269,257 @@ def open_document(doc_id=None, doc_num=None):
         except Exception as e:
             return {'ok': False, 'message': '전용 크롬에 탭을 못 열었습니다: %s' % e, 'url': url}
     return {'ok': True, 'url': url, 'docId': did}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 📅 [2026-11-25 사용자 요청] 새 프로젝트 마법사 — 그룹웨어의 **연구개발과제 발의서 / 프로젝트코드
+#    등록 신청서**에서 개발 계획(일정)·프로젝트 코드·과제리더를 읽어 온다. **읽기 전용·AI 0회.**
+#    실측(2026-11-25, 실문서 10건):
+#      · 프로젝트코드 등록 신청서 — 값이 **본문 표**에 있다. 일정 표는 머리글 줄
+#        `Start End DR Start End DVR Start End PRA`(PROTO/ES/PP) 바로 아래 줄이 값 —
+#        Summary 마일스톤 9칸(기획Start…PRA)과 순서·개수가 **그대로** 같다. 빈 칸은 빈 채로 온다
+#        (Amusnet 은 `26.09.01` 하나뿐) → 글자를 이어 붙인 본문으로 자르면 자리가 밀린다, **칸 단위**로 읽는다.
+#      · 연구개발과제 발의서 — 본문은 "엑셀 발의서를 붙여넣으세요" 한 줄뿐이고 **내용은 첨부 엑셀**
+#        (`개발발의서_*.xlsx` 시트 `1. 발의서`). 머리글 `기획 Start/기획 Finish/Proto DR/DVR/PRA`
+#        아래 줄이 값 — 일정 변경 발의서는 `변경 전/변경 후` 두 줄이라 **마지막 줄**을 쓴다.
+#      · 첨부 받기는 화면 번들에서 확인한 주소 `api/approval/document/{docId}/download/{attachId}`
+#        (2026-11-25, 추측 아님 — 번들 문자열 추출). 로그인된 그룹웨어 탭 안에서 받는다.
+#    ⚠️ 엑셀 첨부가 없는(옛 양식: `제품개발 투자비용_*.xlsx` 만 있는) 발의서는 **비운 채** 사유를 돌려준다.
+# ─────────────────────────────────────────────────────────────────────────────
+DEV_PLAN_FORMS = ('프로젝트코드 등록 신청서', '연구개발과제 발의서')
+
+# 일정 머리글(공백 빼고 소문자) → Summary 마일스톤 단계(data-stage). 데이터 — 양식이 바뀌면 여기만.
+_DEV_PLAN_XLSX_HEADS = {'기획start': '기획Start', '기획finish': '기획Finish', 'protodr': 'ProtoDR',
+                        'esstart': 'ESStart', 'esend': 'ESEnd', 'dvr': 'DVR',
+                        'ppstart': 'PPStart', 'ppend': 'PPEnd', 'pra': 'PRA'}
+_DEV_PLAN_XLSX_LABELS = {'작성자', '등록일자', '프로젝트코드', '과제등급', '개발과제명', '개발모델명',
+                         'buyer', '과제리더', '성명', '직급', '부서'}
+_DEV_PLAN_CODE_STAGES = ('기획Start', '기획Finish', 'ProtoDR', 'ESStart', 'ESEnd', 'DVR',
+                         'PPStart', 'PPEnd', 'PRA')
+
+
+def _dev_plan_date(v):
+    """날짜 한 칸 → 'YYYY-MM-DD'. 못 읽으면 ''(지어내지 않는다).
+    실측 모양: datetime · '2026-01-05' · '2021-10-1' · '26.09.01' · '2021.08.26' · '26/09/01'."""
+    if v is None or v == '':
+        return ''
+    if isinstance(v, (datetime.datetime, datetime.date)):
+        return v.strftime('%Y-%m-%d')
+    s = str(v).strip()
+    m = re.match(r'^(\d{2}|\d{4})\s*[-./]\s*(\d{1,2})\s*[-./]\s*(\d{1,2})', s)
+    if not m:
+        return ''
+    y, mo, d = int(m.group(1)), int(m.group(2)), int(m.group(3))
+    if y < 100:
+        y += 2000
+    try:
+        return datetime.date(y, mo, d).strftime('%Y-%m-%d')
+    except ValueError:
+        return ''
+
+
+def _dev_plan_html_rows(body_html):
+    """본문 HTML → 줄 목록(각 줄 = [(colspan, 글자), …])."""
+    import html as _html
+    rows = []
+    for tr in re.findall(r'<tr[^>]*>(.*?)</tr>', body_html or '', flags=re.S | re.I):
+        cells = []
+        for attrs, inner in re.findall(r'<t[dh]([^>]*)>(.*?)</t[dh]>', tr, flags=re.S | re.I):
+            cm = re.search(r'colspan\s*=\s*"?(\d+)', attrs, flags=re.I)
+            t = re.sub(r'\s+', ' ', _html.unescape(re.sub(r'<[^>]+>', ' ', inner))).strip()
+            cells.append((int(cm.group(1)) if cm else 1, t))
+        if cells:
+            rows.append(cells)
+    return rows
+
+
+def _dev_plan_expand(cells):
+    """colspan 을 펼친 글자 목록(머리글 줄과 값 줄의 자리를 맞추려고)."""
+    out = []
+    for span, t in cells:
+        out.extend([t] + [''] * (max(1, span) - 1))
+    return out
+
+
+def parse_project_code_body(body_html):
+    """프로젝트코드 등록 신청서 본문 → {projectCode, projectName, description, customer, startYear,
+    leader, members, level:[…], schedule:{단계: 날짜}}. 순수 함수(네트워크 없음)."""
+    rows = _dev_plan_html_rows(body_html)
+    texts = [[t for _, t in r] for r in rows]
+    out = {'schedule': {}}
+
+    def right_of(label):
+        for r in texts:
+            for i, t in enumerate(r):
+                if t == label and i + 1 < len(r) and r[i + 1]:
+                    return r[i + 1]
+        return ''
+
+    def under(labels):
+        """머리글 줄(labels 전부 포함) 바로 아래 줄에서 각 머리글 자리 값."""
+        for i, r in enumerate(rows[:-1]):
+            hx = _dev_plan_expand(r)
+            if all(l in hx for l in labels):
+                vx = _dev_plan_expand(rows[i + 1])
+                return {l: (vx[hx.index(l)] if hx.index(l) < len(vx) else '') for l in labels}
+        return {}
+
+    code = right_of('프로젝트 코드')
+    out['projectCode'] = code if re.match(r'^[A-Z0-9-]{4,}$', code or '') else ''
+    out['projectName'] = right_of('프로젝트 명칭')
+    out['description'] = right_of('프로젝트 Description')
+    info = under(['착수년도', '개발비 구분', '고객사'])
+    out['startYear'] = info.get('착수년도', '')
+    out['customer'] = info.get('고객사', '')
+    ppl = under(['개발팀장', '과제리더', '참여연구원'])
+    out['leader'] = ppl.get('과제리더', '')
+    out['teamLeader'] = ppl.get('개발팀장', '')
+    out['members'] = [m for m in re.split(r'[,\s]+', ppl.get('참여연구원', '')) if m]
+    lv = under(['Level 1', 'Level 2', 'Level 3', 'Level 4'])
+    out['level'] = [lv.get('Level %d' % k, '') for k in (1, 2, 3, 4)] if lv else []
+    # 일정 — 머리글 9칸 'Start End DR Start End DVR Start End PRA' 바로 아래 줄
+    for i, r in enumerate(rows[:-1]):
+        hx = [t.lower() for t in _dev_plan_expand(r)]
+        if hx[:9] == ['start', 'end', 'dr', 'start', 'end', 'dvr', 'start', 'end', 'pra']:
+            vx = _dev_plan_expand(rows[i + 1])
+            for k, stage in enumerate(_DEV_PLAN_CODE_STAGES):
+                d = _dev_plan_date(vx[k] if k < len(vx) else '')
+                if d:
+                    out['schedule'][stage] = d
+            break
+    return out
+
+
+def parse_dev_proposal_xlsx(data):
+    """개발발의서 엑셀 바이트 → {projectCode, projectName, model, customer, leader, schedule, scheduleRows}.
+    순수 함수. 시트는 이름에 '발의서'가 든 것(없으면 첫 시트)."""
+    import io
+    import openpyxl
+    wb = openpyxl.load_workbook(io.BytesIO(data), data_only=True, read_only=True)
+    ws = next((w for w in wb.worksheets if '발의서' in w.title), wb.worksheets[0])
+    grid = [list(r) for r in ws.iter_rows(values_only=True)]
+    out = {'sheet': ws.title, 'schedule': {}}
+
+    def norm(v):
+        return re.sub(r'\s+', '', str(v)).lower() if v not in (None, '') else ''
+
+    def right_of(label):
+        for r in grid:
+            for i, v in enumerate(r):
+                if norm(v) == label:
+                    for w in r[i + 1:]:
+                        if w not in (None, ''):
+                            # 값 칸이 비면 옆 라벨('Buyer')을 값으로 집는다(실측 RD3-2108-073) — 라벨이면 빈 값
+                            return '' if norm(w) in _DEV_PLAN_XLSX_LABELS else str(w).strip()
+                    return ''
+        return ''
+
+    out['projectCode'] = right_of('프로젝트코드')
+    out['projectName'] = right_of('개발과제명')
+    out['model'] = right_of('개발모델명')
+    out['customer'] = right_of('buyer')
+    out['leader'] = right_of('과제리더')
+    # 일정 — 머리글(기획 Start…) 줄 아래로 날짜가 든 줄이 이어진다. 변경 전/후면 마지막 줄.
+    for ri, r in enumerate(grid):
+        cols = {ci: _DEV_PLAN_XLSX_HEADS[norm(v)] for ci, v in enumerate(r) if norm(v) in _DEV_PLAN_XLSX_HEADS}
+        if len(cols) < 3:
+            continue
+        found = []
+        for r2 in grid[ri + 1: ri + 4]:
+            vals = {st: _dev_plan_date(r2[ci] if ci < len(r2) else None) for ci, st in cols.items()}
+            if not any(vals.values()):
+                break
+            found.append({k: v for k, v in vals.items() if v})
+        if found:
+            out['schedule'] = found[-1]
+            out['scheduleRows'] = len(found)
+        break
+    try:
+        wb.close()
+    except Exception:
+        pass
+    return out
+
+
+def _gw_download_attach(doc_id, attach_id, timeout=120):
+    """결재 문서 첨부 한 개를 바이트로(로그인된 그룹웨어 탭 안에서, 읽기 전용)."""
+    import base64
+    js = ("(async()=>{const r=await fetch('/api/approval/document/%s/download/%s',{credentials:'same-origin'});"
+          "if(!r.ok)return {status:r.status};const b=new Uint8Array(await r.arrayBuffer());let s='';"
+          "for(let i=0;i<b.length;i+=32768)s+=String.fromCharCode.apply(null,b.subarray(i,i+32768));"
+          "return {status:r.status,b64:btoa(s)};})()" % (int(doc_id), int(attach_id)))
+    r = eval_in_gw(js, timeout) or {}
+    if r.get('status') != 200 or not r.get('b64'):
+        raise RuntimeError('첨부를 받지 못했습니다(HTTP %s).' % r.get('status'))
+    return base64.b64decode(r['b64'])
+
+
+def approval_dev_plan(doc_id):
+    """결재 문서 하나에서 개발 계획을 읽는다(읽기 전용). 양식은 문서가 말한다(formName)."""
+    if not str(doc_id or '').strip().isdigit():
+        raise ValueError('문서 id(숫자)가 필요합니다.')
+    j = gw_get('/api/approval/document/%s' % str(doc_id).strip(), timeout=30) or {}
+    d = ((j.get('data') or {}).get('document')) or {}
+    form = d.get('formName') or ''
+    res = {'docId': str(doc_id), 'docNum': d.get('docNum') or '', 'formName': form,
+           'title': re.sub(r'<[^>]+>', '', d.get('title') or '').strip(),
+           'drafter': d.get('drafterName') or '', 'draftedAt': d.get('draftedAt') or '',
+           'source': '', 'note': '', 'schedule': {}}
+    if '프로젝트코드' in form.replace(' ', ''):
+        res.update(parse_project_code_body(d.get('docBodyContent') or ''))
+        res['source'] = 'body'
+        if not res['schedule']:
+            res['note'] = '본문 일정 표가 비어 있습니다.'
+        return res
+    if '발의서' in form:
+        xl = [a for a in (d.get('attaches') or []) if isinstance(a, dict)
+              and str(a.get('extention') or '').lower() == 'xlsx']
+        # 개발발의서 이름이 든 것 먼저(설계입력기준서·투자비용 표가 같이 붙는다)
+        xl.sort(key=lambda a: 0 if '발의서' in (a.get('name') or '') else 1)
+        if not xl:
+            res['note'] = '엑셀(.xlsx) 첨부가 없습니다 — 첨부: ' + ', '.join(
+                str(a.get('name') or '') for a in (d.get('attaches') or []) if isinstance(a, dict))
+            return res
+        errs = []
+        for a in xl[:2]:
+            try:
+                p = parse_dev_proposal_xlsx(_gw_download_attach(doc_id, a.get('id')))
+            except Exception as e:
+                errs.append('%s: %s' % (a.get('name'), e))
+                continue
+            if p.get('schedule') or p.get('projectCode'):
+                res.update(p)
+                res['source'] = 'xlsx'
+                res['attachName'] = a.get('name') or ''
+                if (p.get('scheduleRows') or 0) > 1:
+                    res['note'] = '일정 변경 발의서 — 마지막 줄(변경 후)을 썼습니다.'
+                elif not p.get('schedule'):
+                    res['note'] = '첨부 엑셀에 일정 표가 없습니다.'
+                return res
+        res['note'] = '첨부 엑셀에서 일정을 찾지 못했습니다' + (' (' + '; '.join(errs) + ')' if errs else '.')
+        return res
+    res['note'] = '이 양식(%s)은 개발 계획을 읽는 대상이 아닙니다.' % form
+    return res
+
+
+def approval_dev_plan_list(keyword='', limit=40):
+    """두 양식의 문서 목록(전 문서함, 최신순). keyword 가 있으면 제목에 낱말이 전부 든 것만(공백 무시)."""
+    items, errs = [], []
+    for f in DEV_PLAN_FORMS:
+        try:
+            r = approval_doclist(box='all', limit=limit, searchtype='formName', keyword=f)
+            items.extend(r.get('docs') or [])
+        except Exception as e:
+            errs.append('%s: %s' % (f, e))
+    seen, out = set(), []
+    kw = [k for k in re.split(r'\s+', str(keyword or '').lower()) if k]
+    for x in sorted(items, key=lambda x: x.get('draftedAt') or '', reverse=True):
+        if x.get('id') in seen:
+            continue
+        seen.add(x.get('id'))
+        t = re.sub(r'\s+', '', str(x.get('title') or '')).lower()
+        if kw and not all(k in t for k in kw):
+            continue
+        out.append({k: x.get(k) for k in ('id', 'docNum', 'title', 'formName', 'draftedAt',
+                                           'drafterName', 'status', 'attachCount')})
+    return {'items': out, 'errors': errs}

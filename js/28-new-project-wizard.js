@@ -211,7 +211,27 @@ function _renderStep2(body) {
         'onclick="window.showGenericCalendar && window.showGenericCalendar(this)" ' +
         'ondblclick="this.removeAttribute(\'readonly\'); this.focus();" ' +
         'style="width:100%; box-sizing:border-box; padding:10px 14px; font-size:15px; border:1.5px solid #a5c8f0; border-radius:8px; background:#f8fbff; cursor:pointer;">' +
-        '<div style="font-size:11px; color:#aaa; margin-top:8px;">클릭: 달력에서 선택 / 더블클릭: 직접 입력</div>';
+        '<div style="font-size:11px; color:#aaa; margin-top:8px;">클릭: 달력에서 선택 / 더블클릭: 직접 입력</div>' +
+        // 📅 [2026-11-25 사용자 요청] 그룹웨어의 연구개발과제 발의서 / 프로젝트코드 등록 신청서에서 개발 계획을 가져온다
+        '<div style="margin-top:12px; padding-top:10px; border-top:1px dashed #dde;">' +
+        '<button type="button" onclick="window._npwDevPlanOpen()" class="ep-theme-hover-btn" ' +
+        'style="padding:6px 13px; background:#e0f5f7; color:#00707d; border:1px solid #a3d9e0; border-radius:7px; font-size:12px; font-weight:bold; cursor:pointer;">🏢 ' +
+        _t('그룹웨어에서 개발 계획 가져오기', 'Import the development plan from Groupware') + '</button>' +
+        '<div style="font-size:11px; color:#aaa; margin-top:5px;">' +
+        _t('연구개발과제 발의서 · 프로젝트코드 등록 신청서의 일정(PROTO~PRA)·프로젝트 코드·과제리더를 채웁니다 — 결재 문서는 읽기만 합니다.',
+           'Fills the schedule (PROTO–PRA), project code and leader from the R&D proposal / project-code request — read-only.') +
+        '</div>' + _npwDevPlanSummaryHtml() + '</div>';
+}
+// 가져온 개발 계획을 2단계 아래에 한 줄 표로 보여 준다(무엇이 Summary 에 들어갈지 미리 보이게)
+function _npwDevPlanSummaryHtml() {
+    const p = window._npwData && window._npwData.devPlan;
+    if (!p || !p.schedule) return '';
+    const keys = Object.keys(window.NPW_DEV_PLAN_STAGES || {}).filter(function (k) { return p.schedule[k]; });
+    return '<div style="margin-top:8px; padding:7px 9px; background:#f4fafb; border:1px solid #d5ecef; border-radius:6px; font-size:11.5px; color:#335; line-height:1.6;">' +
+        '📅 <b>' + (p.docNum || '') + '</b> ' + (p.formName || '') + ' — ' +
+        (keys.length ? keys.map(function (k) { return window.NPW_DEV_PLAN_STAGES[k] + ' ' + p.schedule[k]; }).join(' · ')
+                     : _t('일정 없음', 'no schedule')) +
+        '<br><span style="color:#888;">' + _t('완료하면 Summary ▸ 마일스톤 계획에 들어갑니다.', 'Goes into Summary ▸ milestone plan on finish.') + '</span></div>';
 }
 function _collectStep2() {
     const el = document.getElementById('npw-date');
@@ -237,7 +257,7 @@ function _renderStep3(body) {
         //    입력**할 수 있다. <select>로 막으면 새 거래처를 등록할 방법이 사라진다.
         //    목록은 window.getCustomerOptions()(js/04a CUSTOMER_CATALOG + 기존 프로젝트 + 주소록) —
         //    기존 자동완성(_npwCustAC)이 쓰던 주소록 출처도 그 안에 합쳐져 있어 빠지는 게 없다.
-        '<input id="npw-customer" type="text" list="customer-options" placeholder="' + _t('목록에서 고르거나 직접 입력', 'pick from the list or type a new one') + '" value="' + val + '" autocomplete="off" ' +
+        '<input id="npw-customer" type="text" list="customer-options" placeholder="' + _t('고객사>프로젝트명 (예: LNW>STELLAR32)', 'Customer>Project (e.g. LNW>STELLAR32)') + '" value="' + val + '" autocomplete="off" oninput="window._npwCustPicked(this, event)" ' +
         'style="width:100%; box-sizing:border-box; padding:10px 14px; font-size:15px; border:1.5px solid #a5c8f0; border-radius:8px;">' +
         '<div style="font-size:11px; color:#aaa; margin-top:6px;">' +
         _t('▾ 를 누르면 등록된 고객사 목록이 나옵니다. 목록에 없으면 그냥 입력하세요. 고른 뒤 <b>&gt;프로젝트명</b>을 이어 적어주세요.',
@@ -283,11 +303,38 @@ function _collectStep3() {
     window._npwData.customer = el ? el.value.trim() : '';
 }
 function _validateStep3() {
-    const v = (document.getElementById('npw-customer') || {}).value || '';
-    if (!v.trim()) { alert(_t('고객사>프로젝트명을 입력해주세요. (예: LNW>STELLAR32)',
-                              'Please enter Customer>Project. (e.g. LNW>STELLAR32)')); return false; }
+    const el = document.getElementById('npw-customer');
+    const v = ((el || {}).value || '').trim();
+    if (!v) { alert(_t('고객사>프로젝트명을 입력해주세요. (예: LNW>STELLAR32)',
+                       'Please enter Customer>Project. (e.g. LNW>STELLAR32)')); return false; }
+    // 📛 [2026-11-25 사용자 제보 "고객사 명만 표시하니까 프로젝트명을 누락하는 경우가 많음"]
+    //    목록(datalist)에는 고객사 이름만 있어서, 고르고 그대로 [다음]을 누르면 `LNW` 한 단어가 파일명이 됐다
+    //    (같은 고객사의 다른 프로젝트와 파일명이 겹친다). → `>` 뒤 프로젝트명이 없으면 막는다.
+    const gt = v.lastIndexOf('>');
+    if (gt <= 0 || !v.slice(gt + 1).trim()) {
+        alert(_t('프로젝트명이 빠졌습니다 — 고객사 뒤에 >프로젝트명을 이어 적어주세요. (예: ' + (gt > 0 ? v.slice(0, gt) : v) + '>STELLAR32)',
+                 'The project name is missing — append >Project after the customer. (e.g. ' + (gt > 0 ? v.slice(0, gt) : v) + '>STELLAR32)'));
+        if (el) {
+            if (gt < 0) el.value = v + '>';
+            el.focus();
+            try { el.setSelectionRange(el.value.length, el.value.length); } catch (e) { /* 일부 입력칸은 지원 안 함 */ }
+        }
+        return false;
+    }
     return true;
 }
+// 📛 [2026-11-25] 목록에서 고객사를 **고른 순간** `>` 를 붙여 커서를 뒤에 둔다 — 프로젝트명을 이어 적으라는 신호.
+//    타이핑(insertText) 중에는 건드리지 않는다(쓰는 도중 글자가 끼어들면 안 된다).
+window._npwCustPicked = function (el, ev) {
+    if (!el || (ev && ev.inputType && ev.inputType !== 'insertReplacementText')) return;
+    const v = String(el.value || '').trim();
+    if (!v || v.indexOf('>') !== -1) return;
+    const opts = document.getElementById('customer-options');
+    const hit = opts && [].some.call(opts.options || [], function (o) { return String(o.value || '').trim() === v; });
+    if (!hit) return;
+    el.value = v + '>';
+    try { el.setSelectionRange(el.value.length, el.value.length); } catch (e) { /* 무시 */ }
+};
 
 // ─── Step 4: 고객 모델명 + KTK PN ─────────────────────────────────────
 function _renderStep4(body) {
@@ -469,6 +516,20 @@ function _fillSummaryFields() {
         }
     }
 
+    // 📅 [2026-11-25] 그룹웨어에서 가져온 개발 계획 → Summary 마일스톤 **계획** 줄(기획Start 는 위에서 이미).
+    //    실적 줄은 건드리지 않는다. 빈 단계는 비운 채로 둔다(지어내지 않는다).
+    if (d.devPlan && d.devPlan.schedule) {
+        Object.keys(d.devPlan.schedule).forEach(function (stage) {
+            if (stage === '기획Start' && d.startDate) return;   // 사람이 2단계에서 고친 시작일이 이긴다
+            const el = document.querySelector('#sum-milestone-body input[data-stage="' + stage + '"][data-field="date"]');
+            if (!el) return;
+            el.value = d.devPlan.schedule[stage];
+            el.dispatchEvent(new Event('input', { bubbles: true }));
+            el.dispatchEvent(new Event('change', { bubbles: true }));
+        });
+        if (window.sumRecalcDevDays) window.sumRecalcDevDays();
+    }
+
     // 프로젝트 상태 (DV or MP(EC))
     // 💡 [2026-10-21 신규] KTK PN을 비운 채 끝냈으면 DV(정식)로 둘 수 없다 — 그대로 두면
     //    바로 아래 자동저장이 "KTK PN_모델명 필수"로 막혀 프로젝트가 아예 안 만들어진다.
@@ -566,6 +627,11 @@ function _applyToSummary() {
 }
 
 // ─── 공개 API ─────────────────────────────────────────────────────────
+// 📅 [2026-11-25] 그룹웨어 개발 계획 가져오기(아래 _npwDevPlanOpen)가 쓰는 입구 둘 —
+//    지금 단계 칸을 먼저 담고(사람이 친 값이 날아가지 않게) 값을 얹은 뒤 다시 그린다.
+window._npwCollectNow = function () { _collect(); };
+window._npwRerender = function () { _renderStep(); };
+
 /**
  * 위자드 열기
  * @param {object} prefill - AI 추출 등으로 pre-fill할 데이터 { customer, model, startDate, assignee, keywords, mcUnits, ktkpn }
@@ -757,7 +823,7 @@ window._sapPnFind = function (target, hint) {
         ov.innerHTML =
             '<div id="sap-pn-find-box" style="pointer-events:all; position:fixed; left:50%; top:50%; transform:translate(-50%,-50%); width:560px; max-width:94vw; max-height:80vh; display:flex; flex-direction:column; background:#fff; border-radius:10px; box-shadow:0 10px 30px rgba(0,0,0,.25); overflow:hidden;">'
           +   '<div id="sap-pn-find-drag" style="padding:13px 18px; cursor:grab; display:flex; align-items:center; justify-content:space-between; font-weight:bold; font-size:14px;">'
-          +     '<span>🏭 ' + T('SAP 에서 KTK PN_모델명 찾기', 'Find KTK PN_Model in SAP') + '</span>'
+          +     '<span>🏭 ' + T('KTK PN_모델명 찾기 — Project list → SAP', 'Find KTK PN_Model — Project list → SAP') + '</span>'
           +     '<button type="button" onclick="document.getElementById(\'sap-pn-find-overlay\').style.display=\'none\'" style="width:28px; height:28px; border:1px solid #ddd; border-radius:6px; background:#fff; cursor:pointer; font-size:16px;">✕</button>'
           +   '</div>'
           +   '<div style="padding:12px 16px; display:flex; flex-direction:column; gap:8px; min-height:0; flex:1;">'
@@ -768,7 +834,7 @@ window._sapPnFind = function (target, hint) {
           //    내역에 6자리 숫자가 섞여 있으면 자동 판단이 코드로 가 버린다.
           +       '<button type="button" id="sap-pn-find-desc" class="concept-add-row-btn" style="margin:0; height:31px; padding:0 12px;" title="' + T('자재내역(MAKTX)에 이 글자가 든 자재를 찾습니다 — 띄어 쓴 낱말은 순서대로 모두 든 것', 'Materials whose description contains these words, in order') + '">📝 ' + T('내역으로', 'By description') + '</button>'
           +     '</div>'
-          +     '<div style="font-size:11.5px; color:#777; line-height:1.5;">' + T('6자리 KTK PN 이면 그 자재를, 글자면 <b>자재내역</b>에 그 글자가 든 자재를 찾습니다(예: <code>KTS320</code>, <code>MAIN KTS320 LNW</code> — 띄어 쓴 낱말은 순서대로 모두). 내역만으로 찾으려면 📝 내역으로. SAP 을 읽기만 합니다.',
+          +     '<div style="font-size:11.5px; color:#777; line-height:1.5;">' + T('📒 <b>Project list</b> 를 먼저 찾고, 없으면 🏭 SAP 에서 찾습니다. 6자리 KTK PN 이면 그 자재를, 글자면 <b>자재내역</b>에 그 글자가 든 자재를 찾습니다(예: <code>KTS320</code>, <code>MAIN KTS320 LNW</code> — 띄어 쓴 낱말은 순서대로 모두). 내역만으로 찾으려면 📝 내역으로. SAP 을 읽기만 합니다.',
                   'A 6-digit KTK PN finds that material; text finds materials whose <b>description</b> contains it (e.g. <code>MAIN KTS320 LNW</code> — words in order). Use 📝 to force a description search. Read-only.') + '</div>'
           +     '<div id="sap-pn-find-status" style="font-size:12px; color:#555;"></div>'
           +     '<div id="sap-pn-find-list" style="overflow-y:auto; min-height:0; flex:1; border:1px solid #eef1f4; border-radius:6px;"></div>'
@@ -802,9 +868,55 @@ window._sapPnFind = function (target, hint) {
         var body = String(s).replace(/^\d{6}_/, '').replace(/^\*+|\*+$/g, '').trim().replace(/\s+/g, '*');
         return '*' + (upper ? body.toUpperCase() : body) + '*';
     };
+    // 📒 [2026-11-25 사용자 요청] "Project list 를 먼저 찾고 없으면 SAP 에서" — 사내 제품 목록(js/55 `_plData.rows`)
+    //    에는 이미 KTK PN·SAP 내역(`desc`, 예 TPR>KTK238DGS02,LNW)·프로젝트 코드가 있다. 거기서 걸리면 SAP 을
+    //    부르지 않는다(SAP 은 수십 초 + 로그인 필요). 낱말 규칙은 앱 공용 검색(_searchMatchAll — 기호 무시·AND).
+    //    걸린 게 있어도 [🏭 SAP 에서 찾기] 로 SAP 까지 갈 수 있다(목록에 아직 안 오른 새 자재).
+    var plFind = function (s, mode) {
+        var rows = ((window._plData || {}).rows || []).filter(function (r) { return r && String(r.ktkPn || '').trim(); });
+        if (!rows.length) return [];
+        var code = mode === 'desc' ? null : (s.match(/^\D*(\d{6})(?!\d)/) || [])[1];
+        var body = String(s).replace(/^\d{6}_/, '');
+        var toks = window._searchTokens ? window._searchTokens(body) : body.toLowerCase().split(/\s+/).filter(Boolean);
+        var seen = {};
+        return rows.filter(function (r) {
+            var pn = String(r.ktkPn).trim();
+            if (seen[pn + '|' + r.desc]) return false;
+            var hit = code ? pn === code
+                : (window._searchMatchAll ? window._searchMatchAll([pn, r.desc, r.desc2, r.desc3, r.project, r.customer, r.cabinet, r.type, r.pn].join(' '), toks)
+                                          : false);
+            if (hit) seen[pn + '|' + r.desc] = 1;
+            return hit;
+        }).map(function (r) { return { MATNR: String(r.ktkPn).trim(), MAKTX: String(r.desc || '').trim(), _pl: r }; });
+    };
     var run = async function (mode) {
         var s = String(q.value || '').trim();
         if (!s) return;
+        if (mode !== 'sap') {
+            try { if (window.plEnsureLoaded) await Promise.race([window.plEnsureLoaded(false), new Promise(function (r) { setTimeout(r, 4000); })]); } catch (e) { /* 목록을 못 불러와도 SAP 으로 간다 */ }
+            var pls = plFind(s, mode);
+            if (pls.length) {
+                window._sapPnFindRows = pls;
+                status.style.color = '#2b8a3e';
+                status.innerHTML = '📒 ' + T('Project list 에서 ', 'Project list: ') + pls.length + T('건 — 맞는 것을 눌러 넣으세요. 없으면 ', ' found — click one. Not there? ')
+                    + '<a href="#" id="sap-pn-find-tosap" style="color:#00707d; font-weight:bold;">🏭 ' + T('SAP 에서 찾기', 'Search SAP') + '</a>';
+                document.getElementById('sap-pn-find-tosap').onclick = function (e) { e.preventDefault(); run(mode === 'desc' ? 'sapdesc' : 'sap'); };
+                list.innerHTML = pls.slice(0, 200).map(function (m, i) {
+                    var r = m._pl, sub = [r.cabinet, r.customer, r.project, r.type].filter(function (x) { return String(x || '').trim(); }).join(' · ');
+                    return '<div data-i="' + i + '" style="padding:7px 10px; border-bottom:1px solid #f0f0f0; cursor:pointer; font-size:12.5px; display:flex; gap:10px;"'
+                        + ' onmouseover="this.style.background=\'#f4f8fc\'" onmouseout="this.style.background=\'\'">'
+                        + '<b style="font-family:monospace; color:#00707d; flex-shrink:0;">' + esc(m.MATNR) + '</b>'
+                        + '<span style="flex:1; min-width:0;">' + esc(m.MAKTX) + '</span>'
+                        + '<span style="flex-shrink:0; color:#999; font-size:11px;">' + esc(sub) + '</span></div>';
+                }).join('');
+                list.onclick = function (e) {
+                    var row = e.target.closest('[data-i]');
+                    if (row) pick(window._sapPnFindRows[+row.getAttribute('data-i')]);
+                };
+                return;
+            }
+        }
+        if (mode === 'sapdesc') mode = 'desc';
         var code = mode === 'desc' ? null : (s.match(/^\D*(\d{6})(?!\d)/) || [])[1];
         var patUp = descPattern(s, true), patRaw = descPattern(s, false);
         var url = code ? ('http://127.0.0.1:5000/sap-material-rows?materials=' + encodeURIComponent(code))
@@ -830,8 +942,8 @@ window._sapPnFind = function (target, hint) {
             var mats = (d.materials || []).filter(function (m) { return m && m.MATNR; });
             if (!mats.length) {
                 status.style.color = '#b1432f';
-                status.textContent = code ? T('그 코드의 자재가 SAP 에 없습니다.', 'No such material in SAP.')
-                                          : T('내역에 그 글자가 든 자재가 없습니다 — 다른 글자로 찾아보세요.', 'No material description contains that text.');
+                status.textContent = code ? T('Project list 에도, SAP 에도 그 코드의 자재가 없습니다.', 'Not in the Project list nor in SAP.')
+                                          : T('Project list 에도, SAP 자재내역에도 그 글자가 없습니다 — 다른 글자로 찾아보세요.', 'Not in the Project list nor in SAP descriptions.');
                 return;
             }
             status.textContent = mats.length + T('건 — 맞는 것을 눌러 넣으세요', ' found — click one to fill');
@@ -855,4 +967,169 @@ window._sapPnFind = function (target, hint) {
     document.getElementById('sap-pn-find-desc').onclick = function () { run('desc'); };
     q.onkeydown = function (e) { if (e.key === 'Enter') { e.preventDefault(); run('auto'); } else if (e.key === 'Escape') ov.style.display = 'none'; };
     if (code0) run('auto');   // 칸에 이미 6자리 코드가 있으면 바로 찾는다(조회만, 넣는 건 사람이 고른다)
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 📅 [2026-11-25 사용자 요청] "그룹웨어에서 연구개발과제 발의서 또는 프로젝트코드 등록신청서를 찾아서
+//    개발 계획을 가져올 수 있는 기능" — 새 프로젝트 마법사 2단계의 🏢 버튼.
+//    AI 0회, 그룹웨어는 **읽기만**(백엔드 `/gw/approval/dev-plan-list` · `/gw/approval/dev-plan`, gw_bridge.approval_dev_plan):
+//      · 프로젝트코드 등록 신청서 → 본문 표 9칸(PROTO Start~PRA)·프로젝트 코드·명칭·과제리더·고객사
+//      · 연구개발과제 발의서   → 첨부 `개발발의서_*.xlsx` 의 기획 Start/Finish·Proto DR·DVR·PRA
+//    고르면 미리보기를 보여 주고 **사람이 [적용]** 을 눌러야 들어간다(남의 프로젝트 일정이 조용히 들어가면 안 된다).
+//    이미 적은 칸(고객사>프로젝트명·담당자)은 **덮어쓰지 않는다** — 빈 칸만 채운다. 시작일·일정은 문서 값으로.
+// ─────────────────────────────────────────────────────────────────────────────
+// 일정 단계(Summary 마일스톤 data-stage) → 화면 이름. 데이터 — 백엔드 _DEV_PLAN_CODE_STAGES 와 같은 순서.
+window.NPW_DEV_PLAN_STAGES = window.NPW_DEV_PLAN_STAGES || {
+    '기획Start': 'PROTO Start', '기획Finish': 'PROTO End', 'ProtoDR': 'DR',
+    'ESStart': 'ES Start', 'ESEnd': 'ES End', 'DVR': 'DVR',
+    'PPStart': 'PP Start', 'PPEnd': 'PP End', 'PRA': 'PRA'
+};
+window._npwDevPlanOpen = function () {
+    var en = window._currentLang === 'en';
+    var T = function (k, e) { return en ? e : k; };
+    var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
+    var BASE = 'http://127.0.0.1:5000';
+    var ov = document.getElementById('npw-devplan-overlay');
+    if (!ov) {
+        ov = document.createElement('div');
+        ov.id = 'npw-devplan-overlay';
+        ov.style.cssText = 'position:fixed; inset:0; z-index:100200; pointer-events:none; display:none;';
+        ov.innerHTML =
+            '<div id="npw-devplan-box" style="pointer-events:all; position:fixed; left:50%; top:50%; transform:translate(-50%,-50%); width:620px; max-width:94vw; max-height:82vh; display:flex; flex-direction:column; background:#fff; border-radius:10px; box-shadow:0 10px 30px rgba(0,0,0,.25); overflow:hidden;">'
+          +   '<div id="npw-devplan-drag" style="padding:13px 18px; cursor:grab; display:flex; align-items:center; justify-content:space-between; font-weight:bold; font-size:14px;">'
+          +     '<span>🏢 ' + T('그룹웨어에서 개발 계획 가져오기', 'Import development plan from Groupware') + '</span>'
+          +     '<button type="button" id="npw-devplan-close" title="' + T('닫기', 'Close') + '" style="width:28px; height:28px; border:1px solid #ddd; border-radius:6px; background:#fff; cursor:pointer; font-size:16px;">✕</button>'
+          +   '</div>'
+          +   '<div style="padding:12px 16px; display:flex; flex-direction:column; gap:8px; min-height:0; flex:1; overflow-y:auto;">'
+          +     '<div style="display:flex; gap:6px;">'
+          +       '<input id="npw-devplan-q" type="text" placeholder="' + T('제목에 든 말 (예: S32, OBSIDIAN) — 비우면 최근 문서', 'Words in the title (empty = recent)') + '" style="flex:1; min-width:0; height:31px; box-sizing:border-box; padding:0 10px; border:1px solid #cfd8e3; border-radius:6px; font-size:13px;">'
+          +       '<button type="button" id="npw-devplan-go" class="concept-add-row-btn" style="margin:0; height:31px; padding:0 12px;">🔍 ' + T('찾기', 'Search') + '</button>'
+          +     '</div>'
+          +     '<div style="font-size:11.5px; color:#777; line-height:1.5;">' + T('연구개발과제 발의서(첨부 엑셀) · 프로젝트코드 등록 신청서(본문 표)에서 일정을 읽습니다. 결재 문서는 읽기만 합니다.',
+                  'Reads the schedule from the R&D proposal (attached Excel) or the project-code request (body table). Read-only.') + '</div>'
+          +     '<div id="npw-devplan-status" style="font-size:12px; color:#555;"></div>'
+          +     '<div id="npw-devplan-list" style="overflow-y:auto; min-height:80px; max-height:34vh; border:1px solid #eef1f4; border-radius:6px;"></div>'
+          +     '<div id="npw-devplan-preview" style="display:none;"></div>'
+          +   '</div>'
+          + '</div>';
+        document.body.appendChild(ov);
+        document.getElementById('npw-devplan-close').onclick = function () { ov.style.display = 'none'; };
+        if (window._makeDraggable) window._makeDraggable('npw-devplan-box', 'npw-devplan-drag');
+        if (window._bindClickToFront) window._bindClickToFront('npw-devplan-overlay');
+    }
+    var q = document.getElementById('npw-devplan-q'), go = document.getElementById('npw-devplan-go');
+    var status = document.getElementById('npw-devplan-status'), list = document.getElementById('npw-devplan-list');
+    var prev = document.getElementById('npw-devplan-preview');
+    // 검색어 기본값 — 이미 적은 `고객사>프로젝트명` 의 프로젝트 쪽(없으면 비움 = 최근 문서)
+    var d0 = window._npwData || {};
+    var cust = String(d0.customer || '').trim();
+    q.value = cust.indexOf('>') !== -1 ? cust.slice(cust.lastIndexOf('>') + 1).trim() : '';
+    status.textContent = ''; list.innerHTML = ''; prev.style.display = 'none'; prev.innerHTML = '';
+    ov.style.display = 'block';
+    if (window.bringModalToFront) window.bringModalToFront('npw-devplan-overlay');
+    setTimeout(function () { q.focus(); q.select(); }, 30);
+
+    var setErr = function (msg) { status.style.color = '#b1432f'; status.textContent = msg; };
+    var oldBackend = function (r) {
+        return r.status === 404 ? T('⚠️ 백엔드가 이 기능을 아직 모릅니다 — kortek_backend 를 재시작해 주세요(업데이트 후 1회).',
+                                    '⚠️ The backend does not know this yet — restart kortek_backend once after updating.') : '';
+    };
+    var ensureLogin = async function () {
+        if (!window._gwEnsureLogin) return { ok: true };
+        return await window._gwEnsureLogin(function (m) { status.style.color = '#555'; status.textContent = m; });
+    };
+    var search = async function () {
+        list.innerHTML = ''; prev.style.display = 'none';
+        status.style.color = '#555';
+        status.textContent = '⏳ ' + T('그룹웨어 결재함 조회 중…', 'Searching groupware approvals…');
+        go.disabled = true;
+        try {
+            var lg = await ensureLogin();
+            if (!lg.ok) { setErr(lg.message || T('그룹웨어 로그인이 필요합니다.', 'Groupware sign-in required.')); return; }
+            var r = await fetch(BASE + '/gw/approval/dev-plan-list?keyword=' + encodeURIComponent(String(q.value || '').trim()));
+            if (!r.ok) { setErr(oldBackend(r) || ('⚠️ HTTP ' + r.status)); return; }
+            var d = await r.json();
+            if (!d.ok) { setErr('⚠️ ' + (d.message || T('조회 실패', 'Failed'))); return; }
+            var items = d.items || [];
+            if (!items.length) {
+                setErr(T('그 말이 제목에 든 발의서·프로젝트코드 신청서가 없습니다 — 다른 말로 찾거나 비우고 찾아보세요.',
+                         'No matching document — try other words or leave it empty.'));
+                return;
+            }
+            status.style.color = '#555';
+            status.textContent = items.length + T('건 — 문서를 누르면 일정을 읽어 미리 보여 줍니다', ' found — click one to preview')
+                + ((d.errors || []).length ? '  ⚠️ ' + d.errors.join(' / ') : '');
+            window._npwDevPlanItems = items;
+            list.innerHTML = items.slice(0, 120).map(function (x, i) {
+                var isCode = String(x.formName || '').indexOf('프로젝트') !== -1;
+                return '<div data-i="' + i + '" style="padding:7px 10px; border-bottom:1px solid #f0f0f0; cursor:pointer; font-size:12.5px; display:flex; gap:8px; align-items:baseline;"'
+                    + ' onmouseover="this.style.background=\'#f4f8fc\'" onmouseout="this.style.background=\'\'">'
+                    + '<span style="flex-shrink:0; font-size:10.5px; padding:0 6px; border-radius:8px; line-height:16px; background:' + (isCode ? '#e7f5ff' : '#fff4e6') + '; color:' + (isCode ? '#1c7ed6' : '#d9480f') + ';">'
+                    + (isCode ? T('코드신청', 'Code req.') : T('발의서', 'Proposal')) + '</span>'
+                    + '<span style="flex:1; min-width:0;">' + esc(x.title || '') + '</span>'
+                    + '<span style="flex-shrink:0; color:#888; font-size:11px;">' + esc(x.drafterName || '') + ' · ' + esc(String(x.draftedAt || '').slice(0, 10)) + '</span></div>';
+            }).join('');
+            list.onclick = function (e) {
+                var row = e.target.closest('[data-i]');
+                if (row) load(window._npwDevPlanItems[+row.getAttribute('data-i')]);
+            };
+        } catch (e) {
+            setErr('⚠️ ' + T('백엔드에 연결하지 못했습니다 — kortek_backend 가 켜져 있는지 확인해 주세요.', 'Could not reach the backend.'));
+        } finally { go.disabled = false; }
+    };
+    var load = async function (x) {
+        if (!x) return;
+        status.style.color = '#555';
+        status.textContent = '⏳ ' + (x.title || '') + ' — ' + T('읽는 중… (발의서는 첨부 엑셀을 받아 읽어 몇 초 걸립니다)', 'reading… (proposals download the Excel, a few seconds)');
+        prev.style.display = 'none';
+        try {
+            var r = await fetch(BASE + '/gw/approval/dev-plan?docId=' + encodeURIComponent(x.id));
+            if (!r.ok) { setErr(oldBackend(r) || ('⚠️ HTTP ' + r.status)); return; }
+            var p = await r.json();
+            if (!p.ok) { setErr('⚠️ ' + (p.message || T('읽기 실패', 'Read failed'))); return; }
+            showPreview(p);
+        } catch (e) { setErr('⚠️ ' + T('백엔드에 연결하지 못했습니다.', 'Backend unreachable.')); }
+    };
+    var showPreview = function (p) {
+        var S = window.NPW_DEV_PLAN_STAGES, sch = p.schedule || {};
+        var n = Object.keys(S).filter(function (k) { return sch[k]; }).length;
+        status.style.color = n ? '#2b8a3e' : '#b1432f';
+        status.textContent = n ? ('✅ ' + T('일정 ', 'Schedule ') + n + T('칸을 읽었습니다 — 확인 후 [적용]을 누르세요', ' dates read — check and press Apply'))
+                               : ('⚠️ ' + T('이 문서에서 일정을 읽지 못했습니다', 'No schedule found in this document') + (p.note ? ' — ' + p.note : ''));
+        var head = '<table style="border-collapse:collapse; width:100%; font-size:12px; margin-top:6px;"><tr>'
+            + Object.keys(S).map(function (k) { return '<th style="border:1px solid #dde3ea; padding:3px 4px; background:#f1f6f8; font-weight:600;">' + esc(S[k]) + '</th>'; }).join('') + '</tr><tr>'
+            + Object.keys(S).map(function (k) { return '<td style="border:1px solid #dde3ea; padding:3px 4px; text-align:center; color:' + (sch[k] ? '#222' : '#bbb') + ';">' + esc(sch[k] || '—') + '</td>'; }).join('') + '</tr></table>';
+        var info = [
+            [T('문서', 'Document'), (p.docNum || '') + ' ' + (p.formName || '') + (p.attachName ? ' (' + p.attachName + ')' : '')],
+            [T('프로젝트 코드', 'Project code'), p.projectCode], [T('프로젝트명', 'Project'), p.projectName],
+            [T('고객사', 'Customer'), p.customer], [T('과제리더', 'Leader'), p.leader], [T('개발 모델명', 'Model'), p.model]
+        ].filter(function (a) { return a[1]; });
+        prev.innerHTML = '<div style="border:1px solid #d5ecef; background:#f8fcfd; border-radius:8px; padding:9px 11px;">'
+            + info.map(function (a) { return '<div style="font-size:12px; line-height:1.6;"><span style="color:#888; display:inline-block; min-width:84px;">' + esc(a[0]) + '</span>' + esc(a[1]) + '</div>'; }).join('')
+            + head
+            + (p.note ? '<div style="font-size:11.5px; color:#a0522d; margin-top:5px;">ℹ️ ' + esc(p.note) + '</div>' : '')
+            + '<div style="display:flex; justify-content:flex-end; gap:6px; margin-top:8px;">'
+            + '<button type="button" id="npw-devplan-apply" class="concept-add-row-btn" style="margin:0; height:31px; padding:0 14px;"' + (n || p.projectCode ? '' : ' disabled') + '>✅ ' + T('적용', 'Apply') + '</button>'
+            + '</div></div>';
+        prev.style.display = 'block';
+        document.getElementById('npw-devplan-apply').onclick = function () { apply(p); };
+    };
+    var apply = function (p) {
+        if (window._npwCollectNow) window._npwCollectNow();     // 지금 단계에 친 값부터 담는다
+        var d = window._npwData = window._npwData || {};
+        var sch = p.schedule || {};
+        d.devPlan = { schedule: sch, docNum: p.docNum || '', formName: p.formName || '', docId: p.docId || '' };
+        if (sch['기획Start']) d.startDate = sch['기획Start'];
+        if (p.projectCode) d.projectCode = p.projectCode;
+        if (p.projectName && !d.projectName) d.projectName = p.projectName;
+        // 빈 칸만 채운다 — 사람이 적은 값은 문서가 덮지 않는다
+        if (!String(d.customer || '').trim() && String(p.projectName || '').indexOf('>') !== -1) d.customer = p.projectName.trim();
+        if (!String(d.pm || '').trim() && p.leader) d.pm = p.leader;
+        ov.style.display = 'none';
+        if (window._npwRerender) window._npwRerender();
+        if (window.showToast) window.showToast('📅 ' + (p.docNum || '') + T(' 개발 계획을 넣었습니다 — 완료하면 Summary 마일스톤에 들어갑니다.', ' plan applied — goes into Summary milestones on finish.'), 'success');
+    };
+    go.onclick = search;
+    q.onkeydown = function (e) { if (e.key === 'Enter') { e.preventDefault(); search(); } else if (e.key === 'Escape') ov.style.display = 'none'; };
+    search();
 };
