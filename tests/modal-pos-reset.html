@@ -51,8 +51,8 @@ f.onload = async function () {
     // ⑨ 화면 전체를 쓰는 페이지(간트·프로젝트 목록)에선 비키지 않는다, 돌아오면 다시 비킨다
     W.localStorage.removeItem(KEY); W.switchTab('briefspec'); await sleep(300); W._mcOpen(); await sleep(700);
     var p1 = M.style.paddingRight; W.switchTab('gantt'); await sleep(300); var p2 = M.style.paddingRight;
-    W.switchTab('projectlist'); await sleep(300); var p3 = M.style.paddingRight; W.switchTab('calendar'); await sleep(300); var p3c = M.style.paddingRight; W.switchTab('briefspec'); await sleep(300); var p4 = M.style.paddingRight;
-    chk(p1 !== '' && p2 === '' && p3 === '' && p3c === '' && p4 === p1, '⑨ 간트·프로젝트 목록·캘린더에선 안 비킨다 — 고객사양 "' + p1 + '" · 간트 "' + p2 + '" · 목록 "' + p3 + '" · 다시 고객사양 "' + p4 + '"');
+    W.switchTab('projectlist'); await sleep(300); var p3 = M.style.paddingRight; W.switchTab('calendar'); await sleep(300); var p3c = M.style.paddingRight; W.switchTab('weekly'); await sleep(300); var p3w = M.style.paddingRight; W.switchTab('briefspec'); await sleep(300); var p4 = M.style.paddingRight;
+    chk(p1 !== '' && p2 === '' && p3 === '' && p3c === '' && p3w === '' && p4 === p1, '⑨ 간트·프로젝트 목록·캘린더·주간 보고에선 안 비킨다 — 고객사양 "' + p1 + '" · 간트 "' + p2 + '" · 목록 "' + p3 + '" · 다시 고객사양 "' + p4 + '"');
     hide('matcart-modal'); await sleep(300);
     // ⑩ 붙은 채 프로젝트 탭 줄이 생기면(프로젝트 열기) 그 아래로 다시 붙는다, 사라지면 원래 위로
     W.localStorage.removeItem(KEY); W._mcOpen(); await sleep(700);
