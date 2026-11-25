@@ -1077,7 +1077,7 @@
         var th = cols.map(function (c) {
             var sticky = '';                     // 고정 열 규칙은 위 stickyCss 가 열 단위로 내보낸다
             var s = _view.sort || {};
-            var mark = s.k === c.k ? (s.dir > 0 ? ' ▲' : ' ▼') : '';
+            var mark = s.k === c.k ? window._uiSortMark(s.dir > 0) : '';
             // 말풍선엔 **원래 이름**을 먼저 — 줄임말만 보고는 무슨 열인지 모르기 때문(사용자 요청).
             var tip = _headFull(c) + '\n' + _t('클릭: 정렬 · 우클릭: 이 열 숨기기', 'Click: sort · Right-click: hide this column');
             return '<th data-k="' + c.k + '" title="' + _esc(tip) + '"'

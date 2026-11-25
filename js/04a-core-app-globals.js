@@ -245,6 +245,12 @@ ${mailText}`;
     window._uiBadgeStyle = function () {
         return 'display:inline-block; font-size:10.5px; line-height:16px; padding:0 7px; border-radius:8px; white-space:nowrap; vertical-align:middle;';
     };
+    /** ⇅ [2026-11-25 "정렬 화살표 통일"] 표 머리글 정렬 표시 한 벌 — 오름차순 ▲ · 내림차순 ▼, **정렬 중인 열에만**.
+     *  모양은 styles.css `.ui-sort-mark`(10px·테마색·왼쪽 3px). 실측: 주소록 10px 테마색 · BOM 고정 청록 · Project list 글자 그대로 ·
+     *  Project Review 고정 파랑 + 안 고른 열 ↕ · JIRA 10px + 안 고른 열 흐린 ⇅ 로 제각각이었다. */
+    window._uiSortMark = function (asc) {
+        return '<span class="ui-sort-mark">' + (asc ? '▲' : '▼') + '</span>';
+    };
     /** 입력칸(검색 등) — 칩과 같은 높이. */
     window._uiInputStyle = function () {
         return 'padding:0 9px; border:1px solid #cfd8e3; background:#fff;' + _UI_BOX;

@@ -97,8 +97,8 @@ window._updateAddrSortHeaderUI = function() {
     document.querySelectorAll('#tab-address thead th[data-sort-field]').forEach(function(th) {
         const indicator = th.querySelector('.addr-sort-indicator');
         if (!indicator) return;
-        indicator.textContent = (th.dataset.sortField === window._addrSortState.field)
-            ? (window._addrSortState.dir === 'asc' ? ' ▲' : ' ▼') : '';
+        indicator.innerHTML = (th.dataset.sortField === window._addrSortState.field)
+            ? window._uiSortMark(window._addrSortState.dir === 'asc') : '';
     });
 };
 

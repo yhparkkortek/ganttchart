@@ -1287,7 +1287,7 @@
         var th = function (id, label, w) {
             var on = _psTbl.sort === id;
             return '<th onclick="window._psTblSort(\'' + id + '\')" style="position:sticky; top:0; z-index:20; cursor:pointer; user-select:none; white-space:nowrap; padding:5px 6px; background:#eef6f7; color:#2c5f8a; border-right:1px solid #cdd9e6; border-bottom:1px solid #cdd9e6; font-size:11.5px; text-align:left;' + (w ? ' width:' + w + ';' : '') + '" title="' + esc(T('눌러서 정렬 (오름↔내림)', 'Click to sort (asc/desc)')) + '">' +
-                   esc(label) + ' <span style="color:' + (on ? '#1971c2' : '#b8c4d0') + ';">' + (on ? (_psTbl.dir > 0 ? '▲' : '▼') : '↕') + '</span></th>';
+                   esc(label) + (on ? window._uiSortMark(_psTbl.dir > 0) : '') + '</th>';
         };
         var td = 'padding:5px 6px; border-right:1px solid #e3e8ee; border-bottom:1px solid #e3e8ee; vertical-align:top; font-size:12px;';
         // 🦓 [2026-11-24] 다른 페이지와 같은 흰색 + 팔레트 제브라 — 색은 **tr** 에(td 에 칠하면

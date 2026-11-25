@@ -435,8 +435,8 @@
 
     function sortArrow(colKey, tbl) {
         var S = tblState(tbl);
-        if (S.sortCol !== colKey) return '<span style="opacity:.3;">⇅</span>';
-        return S.sortDir === 'asc' ? '▲' : '▼';
+        if (S.sortCol !== colKey) return '';
+        return window._uiSortMark(S.sortDir === 'asc');
     }
 
     function headerCell(colKey, widthPct, align, tbl) {
@@ -446,7 +446,7 @@
         return '<th style="padding:6px 8px; text-align:' + align + '; width:' + widthPct + '%; background:#eef6f7; border-bottom:2px solid #cfe3e5; white-space:nowrap;"'
             + (col.title ? (' title="' + esc(col.title) + '"') : '') + '>'
             + '<span onclick="window._jiraSetSort(' + qa(colKey, tbl) + ')" style="cursor:pointer;" title="' + esc(T('클릭해서 정렬', 'Click to sort')) + '">'
-            + esc(col.label) + ' <span style="font-size:10px; color:#00707d;">' + sortArrow(colKey, tbl) + '</span></span>'
+            + esc(col.label) + sortArrow(colKey, tbl) + '</span>'
             + (col.noFilter ? '' : (' <span data-jira-filter-btn onclick="window._jiraToggleColFilter(this, ' + qa(colKey, tbl) + ')"'
                 + ' style="cursor:pointer; font-size:13px; padding:0 3px; color:' + (filterActive ? '#00707d' : '#bbb') + ';" title="' + esc(T('필터', 'Filter')) + '">▾</span>'))
             + (col.action && (tbl || 'main') === 'main' ? (' <span data-jira-col-action onclick="event.stopPropagation();' + col.action.onclick + '"'

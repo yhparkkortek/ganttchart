@@ -941,7 +941,7 @@
 
         var sortInd = function (c) {
             if (!st || !st._sort || st._sort.key !== c.key) return '';
-            return '<span style="color:#00707d;">' + (st._sort.dir === 'asc' ? ' ▲' : ' ▼') + '</span>';
+            return window._uiSortMark(st._sort.dir === 'asc');
         };
         var sorted = st ? !!st._sort : false;
         thead.innerHTML = '<tr>'
@@ -1652,7 +1652,7 @@
 
         var sortInd = function (c) {
             if (!st || !st._sort || st._sort.key !== c.key) return '';
-            return '<span style="color:#00707d;">' + (st._sort.dir === 'asc' ? ' ▲' : ' ▼') + '</span>';
+            return window._uiSortMark(st._sort.dir === 'asc');
         };
         var colCount = BOM_COLUMNS.length + 2;
         thead.innerHTML = '<tr>'
