@@ -211,7 +211,8 @@
         'parts.r1.c3': 'vendor', 'parts.r2.c3': 'vendor', 'parts.r3.c3': 'vendor', 'parts.r5.c3': 'vendor',
         'tgen.r2.c2': 'vendor',
         'parts.r4.c1': 'noneDash', 'parts.r5.c1': 'noneDash', 'parts.r5.c2': 'noneDash', 'parts.r2.c2': 'noneDash',
-        'tgen.r3.c2': 'noneDash', panelVendor: 'oneLine'
+        'tgen.r3.c2': 'noneDash', panelVendor: 'oneLine',
+        'cover.r1.c1': 'modelName'
     };
     // 제조사 이름 → 문서에 쓰는 짧은 이름(데이터). 표지 Vendor 칸이 좁아서 'KORTEK Corporation' 이 두 줄로
     //   접히면 표지가 길어져 **문서 전체가 한 쪽 밀린다**(실측 22→23쪽). 없는 이름은 그대로 둔다.
@@ -238,6 +239,7 @@
             return m ? 'x=' + m[1] + ', y=' + m[2] : v;
         },
         signless: function (v) { return String(v).replace(/^\s*\+/, '').trim(); },
+        modelName: function (v) { return _modelName(v) || v; },
         noneDash: function (v) { return _isNone(v) ? '-' : v; },
         vendor: function (v) {
             var hit = (window.PS_VENDOR_SHORT || []).filter(function (x) { return x.re.test(v); })[0];
@@ -544,7 +546,12 @@
             var d = String(r.OJTXP || '').trim(), gt = d.indexOf('>');
             var sep = gt > 0 ? d.slice(0, gt).trim().toUpperCase() : '';
             if (!(window.PS_BOM_CONN_SEPS || []).some(function (x) { return sep === x || sep.indexOf(x + ' ') === 0; })) continue;
-            var eb = String(r.EBORT || '').split(/[,\s]+/).filter(Boolean);
+            // 설치지점이 **커넥터·스위치 자리 이름**(J·SW·CN·P… — `PS_DESIGNATOR_RE`, 데이터)인 것만.
+            //   2026-11-25 실측(SHUFFLER 4.3): 'SWC PUSH-BTN>…SQ-21G' 가 EMI1~4 자리로 A/D 연결표에 들어갔다 —
+            //   스위치 묶음(SWC)은 OSD 키(SW1~4) 때문에 받는데, EMI 자리는 원본 사양서에 없다.
+            var eb = String(r.EBORT || '').split(/[,\s]+/).filter(function (e) {
+                return e && (window.PS_DESIGNATOR_RE || /^(J|SW|CN|P)\d+$/i).test(e);
+            });
             if (!eb.length) continue;
             var nm = window._bomPartNameOf ? window._bomPartNameOf(d) : null;
             // 자재그룹 규칙에 이름 자리가 없거나 틀리면(실측: USB 잭) **품번처럼 생긴 첫 낱말**(영문+숫자 5자 이상) —
@@ -696,9 +703,22 @@
         });
         return best;
     };
+    // 인치 글자 — 따옴표를 떼고 숫자면 앞 0 도 뗀다('04.3' → '4.3'; 실측 SHUFFLER 의 Project list·파일 이름이 04.3 으로 적는다)
+    var _inchNorm = function (s) {
+        var t = String(s == null ? '' : s).replace(/["”]/g, '').trim();
+        return /^\d+(\.\d+)?$/.test(t) ? String(parseFloat(t)) : t;
+    };
     var _inch = function (ctx) {
         var row = _plRow(ctx) || {};
-        return String(row.panelInch || (ctx.meta && ctx.meta.인치) || '').replace(/["”]/g, '').trim();
+        return _inchNorm(row.panelInch || (ctx.meta && ctx.meta.인치) || '');
+    };
+    // KTK 모델명 — SAP 자재 내역 모양('PTD>KTL043DPS01,LNW@VINA')이면 구분자 머리·공장 꼬리를 뗀다(데이터).
+    //   실측 원본 사양서는 'KTL043DPS01,LNW'. 머리·꼬리가 없는 이름은 그대로.
+    window.PS_MODEL_NAME_TRIM = window.PS_MODEL_NAME_TRIM || [/^[^>]*>\s*/, /\s*@[^@]*$/];
+    var _modelName = function (s) {
+        var t = String(s == null ? '' : s).trim();
+        (window.PS_MODEL_NAME_TRIM || []).forEach(function (re) { t = t.replace(re, ''); });
+        return t.trim();
     };
     var _split = function (v, i) {
         var parts = String(v || '').split(/\s*(?:~|\/|,|to)\s*/i).filter(function (x) { return x !== ''; });
@@ -1063,8 +1083,8 @@
         },
         scope: function (ctx) {
             // Scope 는 **제품 인치**(Summary, 예 32”) — 원본이 그렇다. 패널 실치수(31.5”)는 Features 쪽이다.
-            var inch = String((ctx.meta && ctx.meta.인치) || _inch(ctx)).replace(/["”]/g, '').trim();
-            var model = (ctx.meta && ctx.meta.KTK모델명) || '';
+            var inch = _inchNorm((ctx.meta && ctx.meta.인치) || _inch(ctx));
+            var model = _modelName(ctx.meta && ctx.meta.KTK모델명);
             if (!model) return { v: '', src: _t('Summary ▸ KTK 모델명 없음', 'no model name') };
             return { v: window.PS_TEXT.scope.replace('{inch}', inch).replace('{model}', model),
                      src: 'Summary ▸ KTK ' + _t('모델명·인치', 'model/inch') };
@@ -1246,7 +1266,7 @@
             }
             if (!r) return { v: '', src: _t('패널 해상도·지원 해상도 없음', 'no resolution') };
             var row = _plRow(ctx) || {};
-            var inch = String(row.panelInch || _inch(ctx)).replace(/["”]/g, '');
+            var inch = _inchNorm(row.panelInch || _inch(ctx));
             return { v: window.PS_TEXT.feat1.replace('{res}', r.w + ' x ' + r.h).replace('{hz}', r.hz).replace('{inch}', inch),
                      src: src };
         },
@@ -1255,7 +1275,8 @@
             if (!row) return { v: '', src: _t('Project list 에 이 KTK PN 없음', 'not in Project list') };
             var v = String(row[a[0]] || '').trim();
             if (!v) return { v: '', src: 'Project list' };
-            return { v: /^(x|no|n|-)$/i.test(v) ? 'X' : (/^o$/i.test(v) ? 'O' : 'O'), src: 'Project list ▸ ' + a[0] };
+            // '없음'은 '-' — 2026-11-25 실측: LNW 사양서 인증 칸은 'O' 304 · '-' 16 · 'X' 0(Project list 가 '없음'을 X 로 적을 뿐)
+            return { v: /^(x|no|n|-)$/i.test(v) ? '-' : 'O', src: 'Project list ▸ ' + a[0] };
         },
         xyPair: function (ctx) {
             var s = _specVal(ctx, SPEC.xy.slice(5).split('|'));

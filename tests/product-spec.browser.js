@@ -50,7 +50,7 @@ window.__psTest = async function (opt) {
         var p = window._psPayload();
         var want = { hdrKtkPn: '999001', docRev: 'V00', custPnLabel: 'SG PN', 'cover.r1.c2': '1234567-ALT9',
                      'parts.r1.c3': 'TESTVENDOR', 'parts.r2.c2': 'ADFW-T1', 'parts.r5.c2': 'V9.9',
-                     'cie.r2.c1': '0.305', 'cie.r2.c2': '0.335', 'cert.r2.c3': 'X', 'scr.r12.c1': 'x=0.305, y=0.335',
+                     'cie.r2.c1': '0.305', 'cie.r2.c2': '0.335', 'cert.r2.c3': '-', 'cert.r2.c0': 'O', 'scr.r12.c1': 'x=0.305, y=0.335',
                      vcpTitle: 'LNW VCP Specification', 'rev.r1.c1': '00', 'rev.r1.c2': 'All', 'tglass.r2.c2': '1.00T' };
         Object.keys(want).forEach(function (k) { check(p.values[k] === want[k], '자동값 ' + k + ' = ' + JSON.stringify(p.values[k]) + ' (기대 ' + want[k] + ')'); });
         // Scope 는 제품 인치(Summary 32), Features 는 패널 실치수(Project list 31.5) — 원본이 그렇다
@@ -366,6 +366,26 @@ window.__psTest = async function (opt) {
         delete window.tabData.documents['product-spec#LOWER'].revisions.R2;
         window._psRef.set([]);
         check(window._psPayload().family === 'stellar', '참고 사양서가 없으면 다시 stellar');
+
+        // 🩹 14차 실측(2026-11-25, SHUFFLER 4.3 — 불러오기 없이 원본저장)에서 찾은 잘못
+        //   ① 스위치 묶음(SWC)이라도 설치지점이 커넥터·스위치 자리 이름(J/SW…)이 아니면(EMI1~4) A/D 연결표에 안 넣는다
+        window.tabData.bomByUnit = { LOWER: { rows: [
+            { _level: 1, IDNRK: '777010', OJTXP: 'PBA-AD>VIDEO,ADB-TEST,R1,V00', WGBEZ60: 'BD 반제품/PBA' },
+            { _level: 2, IDNRK: '700009', OJTXP: 'SWC PUSH-BTN>S,SQ-99G,SR,1P', WGBEZ60: '회로자재/SWITCH', EBORT: 'EMI1,EMI2,EMI3,EMI4', MFRPN: 'EMI STOP' },
+            { _level: 2, IDNRK: '700002', OJTXP: 'SWC TACT>S,9999SB9,SR,4P', WGBEZ60: '회로자재/SWITCH', EBORT: 'SW1,SW2,SW3,SW4', MFRPN: 'CT 전자' },
+            { _level: 2, IDNRK: '700001', OJTXP: 'CON>D,NOR,ABC200-04,4P1MS,200', WGBEZ60: '회로자재/CONNECTOR', EBORT: 'J1', MFRPN: '연호전자' }] } };
+        var cE = window._dgCollect(), HE = window.DOC_AUTO_HOOKS.ps;
+        var syms = [1, 2, 3].map(function (n) { return HE(cE, 'adc.r' + n + '.c0').v; });
+        check(syms.join(',') === 'J1,SW1~4,' , 'EMI 자리 스위치는 A/D 연결표에서 빠지고 OSD 키(SW1~4)·커넥터는 남는다 (' + syms.join(',') + ')');
+        delete window.tabData.bomByUnit;
+        //   ② 모델명 SAP 내역 모양('PTD>…@VINA') → 머리·꼬리 뗌(표지·Scope 둘 다)  ③ 인치 '04.3' → '4.3'
+        var cardM = window.tabData.projectModels[0], mName0 = cardM.KTK모델명, pmName0 = window.projectMeta.KTK모델명, inch0 = window.projectMeta.인치;
+        cardM.KTK모델명 = 'PTD>KTS999TEST01,LNW@VINA'; window.projectMeta.KTK모델명 = cardM.KTK모델명; window.projectMeta.인치 = '04.3';
+        var cM = window._dgCollect();
+        var cv = HE(cM, 'cover.r1.c1').v, sc = HE(cM, 'scope').v;
+        check(cv === 'KTS999TEST01,LNW' && /specification of 4\.3” TFT/.test(sc) && /\. KTS999TEST01,LNW is a High/.test(sc),
+              '모델명 머리·꼬리 떼기·인치 앞 0 떼기 (' + cv + ' / ' + sc.slice(0, 90) + ')');
+        cardM.KTK모델명 = mName0; window.projectMeta.KTK모델명 = pmName0; window.projectMeta.인치 = inch0;
 
         // 📥 불러오기 섞임 3가지(2026-11-25, OBSIDIAN 27 사양서를 OBSIDIAN27 DB 에 불러와 Word 로 보고 찾음) — 합성 문서로 늘 돈다
         //   ① A/D 연결표는 원본 줄을 Symbol 로 BOM 줄에 맞춘다(순서로 넣으면 'J2 = DC JACK') · BOM 에 없는 설치지점은 뺀다
