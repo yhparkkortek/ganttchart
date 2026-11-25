@@ -936,7 +936,7 @@
              // 🔍 업무 검색 — 일일보고와 같은 모양(입력칸 + 🔍), Enter 나 🔍 로 적용(타자마다 다시 그리면 포커스가 날아간다).
              '<input id="ps-q" value="' + esc(F.q || '') + '" placeholder="' + esc(T('업무 검색', 'Search tasks')) + '" onkeydown="if(event.key===\'Enter\') window._psSetFilter({q:this.value.trim()})" style="' + window._uiInputStyle() + ' width:130px;' + '">' +
              '<button onclick="window._psSetFilter({q:(document.getElementById(\'ps-q\')||{}).value.trim()})" title="' + esc(T('업무 검색', 'Search tasks')) + '" style="' + window._uiBtnStyle('accent') + '">🔍</button>' +
-             (col && col.filtered ? '<button onclick="window._psSetFilter({pm:\'\', who:\'\', proj:\'\', q:\'\'})" title="' + esc(T('필터 해제', 'Clear filters')) + '" style="' + window._uiBtnStyle('danger') + ' font-size:12px;' + '">↺</button>' : '') +
+             (col && col.filtered ? '<button onclick="window._psSetFilter({pm:\'\', who:\'\', proj:\'\', q:\'\'})" title="' + esc(T('필터 해제', 'Clear filters')) + '" style="' + window._uiBtnStyle('danger') + '">↺</button>' : '') +
              (sc.busy ? '<span style="font-size:11px; color:#aaa;">' + esc(T('개발팀 전체 ' + sc.done + '/' + sc.total + ' 확인 중…', 'Scanning ' + sc.done + '/' + sc.total + '…')) + '</span>' : '') +
              ((sc.errs && sc.errs.length) ? '<span style="font-size:11px; color:#b1432f;">⚠️ ' + esc(T('못 읽은 프로젝트 ' + sc.errs.length + '건', sc.errs.length + ' unreadable')) + '</span>' : '');
 
@@ -1068,14 +1068,20 @@
     function viewRows() {
         var rows = (_psLast && _psLast.shown && _psLast.shown.rows) || [];
         var anyCat = Object.keys(_psTbl.cats).some(function (k) { return _psTbl.cats[k]; });
-        var q = String(_psTbl.q || '').trim().toLowerCase();
+        // 🔍 [2026-11-25] 표 찾기는 다른 페이지와 **같은 공용 규칙**(js/04a: 낱말 AND/OR·쉼표·날짜 기간) — 예전엔 글자 그대로 부분일치 하나뿐이었다.
+        var toks = (window._searchTokens && String(_psTbl.q || '').trim()) ? window._searchTokens(_psTbl.q) : [];
         var out = rows.filter(function (r) {
             if (anyCat && !_psTbl.cats[r.cat]) return false;
             if (_psTbl.common && !r.common) return false;
             if (_psTbl.pinned && !rowPinned(r)) return false;
             if (_psTbl.proj && r.projects.indexOf(_psTbl.proj) < 0) return false;
             if (_psTbl.who && peopleOf(r).indexOf(_psTbl.who) < 0) return false;
-            if (q && (r.text + ' ' + r.projects.join(' ') + ' ' + r.people.join(' ') + ' ' + r.refs.map(function (x) { return x.task; }).join(' ')).toLowerCase().indexOf(q) < 0) return false;
+            if (toks.length) {
+                var hay = r.text + ' ' + r.projects.join(' ') + ' ' + r.people.join(' ') + ' ' + r.refs.map(function (x) { return x.task; }).join(' ');
+                // 📅 날짜는 글로 안 싣고 따로 넘긴다(숫자 낱말 오탐 방지 — js/04a 주석)
+                var span = (window._searchSpan && r.date) ? window._searchSpan(new Date(r.date + 'T00:00:00').getTime()) : null;
+                if (!window._searchMatchAll(hay, toks, span)) return false;
+            }
             return true;
         });
         var catIdx = {}; P.summaryCats.forEach(function (c, i) { catIdx[c.id] = i; });
@@ -1298,6 +1304,7 @@
                 '<td style="' + td + ' color:#222;">' + esc(r.text) + '</td>' +
                 '<td style="' + td + ' font-size:11px;">' + uniqRefs(r.refs).map(function (x) { return refHtml(x, r.common, ai); }).join(r.common ? '<br>' : ' ') + '</td></tr>';
         }).join('');
+        findSync(rows.length, all.length);   // 🔍 헤더 찾기 버튼의 개수·입력칸을 지금 표와 맞춘다
         if (!rows.length) body = '<tr><td colspan="7" style="' + td + ' text-align:center; color:#999; padding:14px;">' + esc(all.length ? T('조건에 맞는 행이 없습니다', 'No rows match') : T('근거 있는 항목이 없었습니다 — 아래 사실 목록을 보세요', 'No grounded items')) + '</td></tr>';
         // ⭕ [2026-11-24] 모서리 둥글게 — sticky 머리글이라 overflow:hidden 상자로 못 감싼다 → 표·모서리 칸에 R(.ui-round-tbl)
         return '<table class="ui-round-tbl" style="width:100%; border-collapse:separate; border-spacing:0; border-left:1px solid #cdd9e6; border-top:1px solid #cdd9e6; table-layout:auto; background:#fff;"><thead><tr>' +
@@ -1357,8 +1364,7 @@
             pinFilterHtml(all.filter(rowPinned).length) +
             '<select onchange="window._psTblSet({proj:this.value})" title="' + esc(T('프로젝트', 'Project')) + '" style="' + selS + '">' + opt(projs, _psTbl.proj, T('프로젝트 전체', 'All projects')) + '</select>' +
             '<select onchange="window._psTblSet({who:this.value})" title="' + esc(T('업무 담당자', 'Assignee')) + '" style="' + selS + '">' + opt(people, _psTbl.who, T('담당자 전체', 'All assignees')) + '</select>' +
-            '<input id="ps-tbl-q" value="' + esc(_psTbl.q) + '" oninput="window._psTblSearch(this.value)" placeholder="🔍 ' + esc(T('내용 검색', 'Search')) + '" style="' + window._uiInputStyle() + ' width:120px;' + '">' +
-            '<button onclick="window._psTblSet({reset:1})" title="' + esc(T('표 필터·정렬 초기화', 'Reset table filters')) + '" style="' + window._uiBtnStyle('danger') + ' font-size:12px;">↺</button>' +
+            '<button onclick="window._psTblSet({reset:1})" title="' + esc(T('표 필터·정렬 초기화', 'Reset table filters')) + '" style="' + window._uiBtnStyle('danger') + '">↺</button>' +
             '<span style="flex:1;"></span>' +
             (s.archiveView ? '' : '<button onclick="window._psRegenerate()" style="' + smallBtn + '" title="' + esc(T('보관본을 두고 AI 로 새로 만든다', 'Generate again with AI')) + '">🔄 ' + esc(T('새로 생성', 'Regenerate')) + '</button>') +
             archiveSelectHtml() +
@@ -1411,6 +1417,32 @@
         if (_psTbl.sort === col) _psTbl.dir = -_psTbl.dir; else { _psTbl.sort = col; _psTbl.dir = (col === 'date') ? -1 : 1; }
         var t = document.getElementById('ps-ai-tbl'); if (t) t.innerHTML = tableHtml();
     };
+    // 🔍 [2026-11-25 "기간·검색 통합"] 표 찾기를 **헤더의 🔍 버튼 하나**로 — 주간 보고(js/20)·일일 보고·캘린더와 같은 공용 위젯(js/22b `_hdrFindWidget`).
+    //    예전엔 표 위 줄에 입력칸이 따로 있었다(2026-11-24 "검색 UI 를 헤더로" 규칙에서 빠져 있던 곳).
+    //    ⚠️ 이건 **화면만 거르는** 찾기다. 표 위 줄의 `업무 검색`(#ps-q, Enter)은 **요약 범위를 바꾸는 조건**(AI 요약 캐시 열쇠에 들어간다)이라 그대로 둔다.
+    var _psFind = null;
+    function findEnsure() {
+        if (_psFind) return _psFind;
+        var tab = document.getElementById('tab-psummary');
+        var hdr = tab ? tab.querySelector('.concept-header-box') : null;
+        if (!hdr || !window._hdrFindWidget) return null;
+        var en = window._currentLang === 'en';
+        _psFind = window._hdrFindWidget({ inputId: 'ps-tbl-q', countId: 'ps-tbl-count', dates: true,
+            ko: '🔍 찾기 — 내용·프로젝트·담당자…', en: '🔍 Find — content, project, assignee…',
+            inputTitle: en ? 'Filters the table on screen only (the summary itself is not regenerated)' : '표만 화면에서 거릅니다 — 요약은 다시 만들지 않습니다' });
+        window._hdrFindMount(hdr, _psFind.el);
+        _psFind.input.addEventListener('input', function () { window._psTblSearch(_psFind.input.value); });
+        _psFind.input.addEventListener('keydown', function (e) { if (e.key === 'Escape' && _psFind.input.value) { _psFind.input.value = ''; window._psTblSearch(''); _psFind.sync(); } });
+        return _psFind;
+    }
+    /** 표가 다시 그려질 때 — 개수 표시 + (초기화 ↺ 등으로) 표의 찾기어가 바뀐 경우 입력칸도 같이 비운다. */
+    function findSync(n, total) {
+        var f = findEnsure(); if (!f) return;
+        if (document.activeElement !== f.input && f.input.value !== _psTbl.q) f.input.value = _psTbl.q;
+        var on = !!String(_psTbl.q || '').trim();
+        f.count.textContent = on ? (n + ' / ' + total + (window._currentLang === 'en' ? '' : '건')) : '';
+        f.sync();
+    }
     window._psTblSearch = function (v) {
         _psTbl.q = String(v || '');
         var t = document.getElementById('ps-ai-tbl'); if (t) t.innerHTML = tableHtml();   // 입력칸은 그대로 둔다(포커스 유지)
@@ -1650,6 +1682,7 @@
     }
     /** 🗂 탭 진입(js/23 switchTab) — 다시 그린다. */
     window._psOnTabShown = function () {
+        findEnsure();
         if (window._renderAiProjectSummaryBody) window._renderAiProjectSummaryBody();
     };
     /** 옛 진입로(🤖 AI 도구 ▸ AI 요약)는 페이지로 보낸다 — 화면이 두 벌이면 id 가 겹친다. 일정 현황(legacy)을 켠 경우만 모달. */

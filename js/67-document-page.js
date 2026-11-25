@@ -4986,11 +4986,11 @@
                 + '<div id="doc-round-actions-panel" class="' + (_docRoundMgOpen ? 'doc-round-actions-open' : '') + '">'
                 + '<button onclick="window._docRoundRename(\'' + _esc(_docRoundCur) + '\')" title="'
                 + _esc(_t('회차 이름(단계) 바꾸기', 'Rename this round (stage)')) + '"'
-                + ' style="margin:0 2px 0 6px; padding:6px 8px; min-width:auto; border:none; border-radius:4px; background:#e0f5f7; color:#00707d; cursor:pointer; font-size:14px;">✏️</button>'
+                + ' style="margin:0 2px 0 6px; padding:6px 8px; min-width:auto; border:none; border-radius:4px; background:#e0f5f7; color:#00707d; cursor:pointer; font-size:13px;">✏️</button>'
                 + '<button onclick="window._docRoundAdd()" title="' + _esc(_t('회차 추가 — 새 문서가 생깁니다', 'Add a round')) + '"'
-                + ' style="margin:0 2px; padding:6px 8px; min-width:auto; border:none; background:none; color:#2c5f8a; cursor:pointer; font-size:14px;">➕</button>'
+                + ' style="margin:0 2px; padding:6px 8px; min-width:auto; border:none; background:none; color:#2c5f8a; cursor:pointer; font-size:13px;">➕</button>'
                 + '<button onclick="window._docRoundDelete(\'' + _esc(_docRoundCur) + '\')" title="' + _esc(_t('현재 회차 삭제(출고 이력)', 'Delete this round (shipping record)')) + '"'
-                + ' style="margin:0 2px; padding:6px 8px; min-width:auto; border:none; background:none; color:#e03131; cursor:pointer; font-size:14px;">🗑️</button>'
+                + ' style="margin:0 2px; padding:6px 8px; min-width:auto; border:none; background:none; color:#e03131; cursor:pointer; font-size:13px;">🗑️</button>'
                 + '</div></div>';
         }
         // 🏷🏷 [2026-11-17 2차, "MC TABLE 기능 상속해줘"] 리비전 바(R1/R2/R3…) — M.C 의
@@ -5016,11 +5016,11 @@
                 + '<div id="doc-rev-actions-panel" class="' + (_docRevMgOpen ? 'doc-rev-actions-open' : '') + '">'
                 + '<button onclick="window._docRevRename(\'' + _esc(form.id) + '\',\'' + _esc(_docRevCur) + '\')" title="'
                 + _esc(_t('리비전 번호 바꾸기', 'Rename this revision')) + '"'
-                + ' style="margin:0 2px 0 6px; padding:6px 8px; min-width:auto; border:none; border-radius:4px; background:#e0f5f7; color:#00707d; cursor:pointer; font-size:14px;">✏️</button>'
+                + ' style="margin:0 2px 0 6px; padding:6px 8px; min-width:auto; border:none; border-radius:4px; background:#e0f5f7; color:#00707d; cursor:pointer; font-size:13px;">✏️</button>'
                 + '<button onclick="window._docRevAdd(\'' + _esc(form.id) + '\')" title="' + _esc(_t('리비전 추가 — R 번호가 하나 늘어납니다', 'Add a revision')) + '"'
-                + ' style="margin:0 2px; padding:6px 8px; min-width:auto; border:none; background:none; color:#2c5f8a; cursor:pointer; font-size:14px;">➕</button>'
+                + ' style="margin:0 2px; padding:6px 8px; min-width:auto; border:none; background:none; color:#2c5f8a; cursor:pointer; font-size:13px;">➕</button>'
                 + '<button onclick="window._docRevDelete(\'' + _esc(form.id) + '\')" title="' + _esc(_t('현재 리비전 삭제', 'Delete this revision')) + '"'
-                + ' style="margin:0 2px; padding:6px 8px; min-width:auto; border:none; background:none; color:#e03131; cursor:pointer; font-size:14px;">🗑️</button>'
+                + ' style="margin:0 2px; padding:6px 8px; min-width:auto; border:none; background:none; color:#e03131; cursor:pointer; font-size:13px;">🗑️</button>'
                 + '</div>';
             if (_docRevWithData.length >= 2) {
                 th += '<button onclick="window._docRevVsOpen(\'' + _esc(form.id) + '\')" title="'

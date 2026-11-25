@@ -784,7 +784,7 @@ window.mcRenderUnitTabs = function() {
         // 아직 제품구분자를 안 쓰는 상태 — 관리할 게 없으니 연필 패널 없이 "시작하기" ➕만 노출
         if (!hasDefaultData) { bar.style.display = 'none'; bar.innerHTML = ''; return; }
         bar.style.display = 'flex';
-        bar.innerHTML = '<button id="mc-add-unit-btn" onclick="window.mcAddUnit()" title="제품구분자 추가" style="margin:0 8px 0 0; padding:6px 8px; min-width:auto; border:none; background:none; color:#2c5f8a; cursor:pointer; font-size:14px;">➕</button>';
+        bar.innerHTML = '<button id="mc-add-unit-btn" onclick="window.mcAddUnit()" title="제품구분자 추가" style="margin:0 8px 0 0; padding:6px 8px; min-width:auto; border:none; background:none; color:#2c5f8a; cursor:pointer; font-size:13px;">➕</button>';
         return;
     }
 
@@ -799,9 +799,9 @@ window.mcRenderUnitTabs = function() {
         + escapeHtml(cur) + '</button>'
         + '<button id="mc-unit-actions-toggle" onclick="window.mcToggleUnitActions()" title="' + (isOpen ? '접기' : '제품구분자 관리(이름변경/추가/삭제)') + '" style="margin:0 2px; padding:6px 8px; min-width:auto; border:none; background:' + (isOpen ? '#e9ecef' : 'none') + '; color:#555; cursor:pointer; font-size:12px;">' + (isOpen ? '◀' : '▶') + '</button>'
         + '<div id="mc-unit-actions-panel" class="' + (isOpen ? 'mc-unit-actions-open' : '') + '">'
-        + '<button id="mc-unit-rename-btn" onclick="window.mcRenameUnit(\'' + escapeHtml(cur).replace(/'/g, "\\'") + '\')" title="이름 바꾸기" style="margin:0 2px 0 6px; padding:6px 8px; min-width:auto; border:none; border-radius:4px; background:#e0f5f7; color:#00707d; cursor:pointer; font-size:14px;">✏️</button>'
-        + '<button id="mc-add-unit-btn" onclick="window.mcAddUnit()" title="제품구분자 추가" style="margin:0 2px; padding:6px 8px; min-width:auto; border:none; background:none; color:#2c5f8a; cursor:pointer; font-size:14px;">➕</button>'
-        + '<button id="mc-remove-unit-btn" onclick="window.mcRemoveUnit(window.mcActiveUnit)" title="현재 제품구분자 제거" style="margin:0 2px; padding:6px 8px; min-width:auto; border:none; background:none; color:#e03131; cursor:pointer; font-size:14px;">🗑️</button>'
+        + '<button id="mc-unit-rename-btn" onclick="window.mcRenameUnit(\'' + escapeHtml(cur).replace(/'/g, "\\'") + '\')" title="이름 바꾸기" style="margin:0 2px 0 6px; padding:6px 8px; min-width:auto; border:none; border-radius:4px; background:#e0f5f7; color:#00707d; cursor:pointer; font-size:13px;">✏️</button>'
+        + '<button id="mc-add-unit-btn" onclick="window.mcAddUnit()" title="제품구분자 추가" style="margin:0 2px; padding:6px 8px; min-width:auto; border:none; background:none; color:#2c5f8a; cursor:pointer; font-size:13px;">➕</button>'
+        + '<button id="mc-remove-unit-btn" onclick="window.mcRemoveUnit(window.mcActiveUnit)" title="현재 제품구분자 제거" style="margin:0 2px; padding:6px 8px; min-width:auto; border:none; background:none; color:#e03131; cursor:pointer; font-size:13px;">🗑️</button>'
         + '</div>';
 };
 

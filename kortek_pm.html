@@ -1219,7 +1219,7 @@
             <!-- 🔍 [2026-11-25] AND/OR 전환(js/04a, 앱 전체 한 값) -->
             <button type="button" class="search-mode-btn" data-for="pl-search" data-run="plSearchNow" onclick="event.stopPropagation(); window._searchToggleMode()" style="height:31px; box-sizing:border-box; padding:0 9px; min-width:44px; border:1px solid #cfd8e3; border-radius:16px; background:#fff; color:var(--ui-accent,#00707d); font-size:12px; font-weight:bold; cursor:pointer; margin-right:4px;">AND</button>
             <button id="pl-btn-search" class="concept-add-row-btn" onclick="window.plSearchNow()"
-                style="margin:0 6px 0 0; height:31px; box-sizing:border-box; padding:0 12px; display:inline-flex; align-items:center; border:none; border-radius:6px; white-space:nowrap;">🔍</button>
+                style="margin:0 6px 0 0; height:31px; box-sizing:border-box; padding:0 12px; display:inline-flex; align-items:center; border:none; border-radius:6px; white-space:nowrap; font-size:13px;">🔍</button>
             <span id="pl-count" style="font-size:12px; color:#888; margin-right:8px;"></span>
             <div class="btn-group" style="margin-left:auto;">
                 <button id="pl-btn-check" class="concept-add-row-btn" onclick="window.plCheckAgainstProjects && window.plCheckAgainstProjects()" style="margin:0 4px 0 0; padding:6px 12px; border:none; border-radius:6px; font-size:13px; white-space:nowrap;"></button>
@@ -1555,7 +1555,7 @@
                  패널 안 이름변경/추가/삭제) 그려준다. -->
             <div id="mc-unit-bar" style="display:none; align-items:center; gap:4px; margin-right:4px;"></div>
             <span style="display:inline-block; width:1px; height:16px; background:#ddd; margin:0 8px;"></span>
-            <button id="mc-add-rev-btn" onclick="window.mcAddNewRevision()" onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';" title="새 리비전 추가 (금액이 입력된 리비전 기준 다음 번호로 이동 — 금액 없는 빈 리비전은 실수로 여러 번 눌러도 건너뛰지 않고 재사용됨)" data-i18n-title="revision-add-hint" style="margin:0 4px 0 0; padding:6px 8px; min-width:auto; border:none; background:#e0f5f7; color:#00707d; border-radius:5px; cursor:pointer; font-size:12.5px; font-weight:bold; transition:background .15s;">➕</button>
+            <button id="mc-add-rev-btn" onclick="window.mcAddNewRevision()" onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';" title="새 리비전 추가 (금액이 입력된 리비전 기준 다음 번호로 이동 — 금액 없는 빈 리비전은 실수로 여러 번 눌러도 건너뛰지 않고 재사용됨)" data-i18n-title="revision-add-hint" style="margin:0 4px 0 0; height:31px; box-sizing:border-box; padding:0 8px; display:inline-flex; align-items:center; min-width:auto; border:none; background:#e0f5f7; color:#00707d; border-radius:5px; cursor:pointer; font-size:13px; font-weight:bold; transition:background .15s;">➕</button>
             <button id="mc-rev-cycle-btn" class="mc-rev-btn unit-cycle-btn" data-rev="R1" onclick="window.mcCycleRevision()" title="클릭할 때마다 금액이 입력된 리비전끼리 순환 (완전히 새 리비전은 ➕로 추가)" data-i18n-title="revision-cycle-hint"
                 style="padding:6px 10px; min-width:auto; border-radius:5px; cursor:pointer; font-size:12px; font-weight:bold;">R1</button>
             <button id="mc-comparison-btn" class="mc-comparison-btn" onclick="window.mcShowComparison && window.mcShowComparison()" title="Comparison"
@@ -2738,7 +2738,7 @@
 <script src="js/22e-summary-mctable-core4.js?v=2026112735"></script>
 <script src="js/22f-address-book.js?v=2026112631"></script>
 <script src="js/22g-name-autocomplete.js?v=2026112741"></script>
-<script src="js/22h-brief-mc-common-1.js?v=2026112641"></script>
+<script src="js/22h-brief-mc-common-1.js?v=2026112701"></script>
 <script src="js/22i-brief-mc-common-2.js?v=2026112735"></script>
 
 <script src="js/23-sidebar-tabs.js?v=2026112582"></script>
@@ -2795,7 +2795,7 @@
     <script src="js/59-daily-report.js?v=2026112743a"></script>
     <script src="js/60-telegram-qa-bridge.js?v=20261124a4"></script>
     <script src="js/61-mail-evidence.js?v=20261125a1"></script>
-    <script src="js/62-period-summary.js?v=2026112737a"></script>
+    <script src="js/62-period-summary.js?v=2026112701a"></script>
     <script src="js/78-report-tabs.js?v=20261125a"></script>
     <script src="js/63-daily-draft-qa.js?v=20261124a4"></script>
     <script src="js/64-user-switch.js?v=20261124a4"></script>
@@ -2805,7 +2805,7 @@
     <script src="js/68-doc-checksheets.js?v=20261124a4"></script>
     <script src="js/69-resolution-spec.js?v=2026112505a"></script>
     <script src="js/70-jira-tab.js?v=2026112571"></script>
-    <script src="js/67-document-page.js?v=2026112505a"></script>
+    <script src="js/67-document-page.js?v=2026112701a"></script>
     <script src="js/72-labelspec-import.js?v=20261124a4"></script>
     <script src="js/64-qa-route-log.js?v=20261124a4"></script>
     <script src="js/71-selection-to-ai.js?v=20261124a4"></script>
