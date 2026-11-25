@@ -360,6 +360,8 @@ window.bringModalToFront('outer-wrap-id');                  // 열릴 때 즉시
 - **📅 오늘 버튼은 네 곳 한 벌**(2026-11-25 사용자 결정 — 아이콘 든 간트 버튼이 기준): Gantt·Calendar·Weekly·Daily 의 `📅 오늘`
   = `padding:6px 12px; font-size:13px; background:#e0f5f7; color:#00707d; border-radius:6px` + 팔레트 hover(`_cpRoleHex`). 실측 네 곳 다 69×31.
   글자는 i18n `btn-today`(세 곳)·`gantt-today-btn`(간트) — 한쪽만 고치면 영문 전환 때 갈린다.
+  같은 날 **◀ 이전·다음 ▶**(Calendar·주간·일일 6개)도 같은 한 벌로(31px). 폭이 늘어 Calendar 머리줄의 `📤 내보내기/동기화` 가
+  1400px 창에서 두 줄로 깨져 그 버튼에 `white-space:nowrap` 을 줬다(1180~1400px 넘침 0·높이 50 실측).
 
 #### 페이지 여백 — 틀은 한 벌 (2026-11-24)
 - 실측(1400×900) 전 페이지 같다: 헤더 왼쪽 235px(사이드바 뒤)·오른쪽 15px·위 118px · 헤더↔본문 상자 2px · 본문 상자 안 여백 12px 18px
