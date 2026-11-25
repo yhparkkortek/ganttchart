@@ -1278,7 +1278,7 @@
         var title = esc((x.p ? x.p + ' · ' : '') + (x.task || '') + ' — ' + T('눌러서 상세 보기', 'click for details'));
         var lf = factForRef(x);
         var key = lf ? factKey(lf) : fnv8(refKeyRaw(x));   // 행 번호가 밀렸어도 그 업무의 카드로
-        return '<a href="javascript:void(0)" onclick="window._psGoFact(\'' + key + '\', ' + rowI + ')" title="' + title + '" style="color:#1971c2; text-decoration:underline dotted; white-space:nowrap; cursor:pointer;">' +
+        return '<a href="javascript:void(0)" onclick="window._psGoFact(\'' + key + '\', ' + rowI + ')" title="' + title + '" style="color:var(--ui-accent, #00707d); text-decoration:underline dotted; white-space:nowrap; cursor:pointer;">' +
                (showProj ? esc(x.p || '?') + ' ' : '') + '#' + esc(x.row != null ? x.row : x.g) + '</a>';
     }
     function tableHtml() {

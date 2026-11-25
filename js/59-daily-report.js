@@ -1260,7 +1260,7 @@
             '🪐 ' + esc(T('오늘 변경된 연결 JIRA 이슈(참고용 — 보고에 직접 옮겨 적으세요): ',
                           'JIRA issues linked to this project, changed today (reference — copy into your report yourself): ')) +
             issues.map(function (iss) {
-                return '<a href="' + esc(iss.url || '#') + '" target="_blank" rel="noopener" style="color:#1971c2;">' + esc(iss.key) + '</a> ' +
+                return '<a href="' + esc(iss.url || '#') + '" target="_blank" rel="noopener" style="color:var(--ui-accent, #00707d);">' + esc(iss.key) + '</a> ' +
                        esc(iss.summary || '') + (iss.status ? ' <span style="color:#aaa;">(' + esc(iss.status) + ')</span>' : '');
             }).join(' · ') + '</div>';
     };
