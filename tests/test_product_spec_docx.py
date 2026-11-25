@@ -173,6 +173,92 @@ for family in FAM_SCHEMA:
             left = sum(1 for dr in e.iter(qn('w:drawing')) if dr.find(qn('wp:anchor')) is not None)
     check(left == 0, '%s: OSD 키 그림이 비면 제목 문단의 상자도 지워져야 (%d)' % (family, left))
 
+# ── 1-e. 빈 뼈대 지우기 (2026-11-25 14차 실측: 앱 정보만으로 낸 SHUFFLER 4.3 에 커넥터 10장·빈 VCP·컨버터 장이 빈 틀로) ──
+print('1-e. 빈 뼈대')
+W_SECT = qn('w:sectPr')
+
+
+def _paras(d):
+    return [''.join(x.text or '' for x in p.iter(qn('w:t'))).strip() for p in d.element.body.iterchildren(qn('w:p'))]
+
+
+def _blank_sections(d):
+    """구역 나눔 사이가 빈 줄뿐인 구역 수(첫 구역 제외)."""
+    els = list(d.element.body.iterchildren())
+    at = [i for i, el in enumerate(els) if el.tag == qn('w:p') and el.find('.//' + W_SECT) is not None]
+    n = 0
+    for a, b in zip(at, at[1:]):
+        seg = els[a + 1:b + 1]
+        if all(el.tag == qn('w:p') and not ''.join(x.text or '' for x in el.iter(qn('w:t'))).strip()
+               and not list(el.iter(qn('w:drawing'))) and not list(el.iter(qn('w:pict'))) for el in seg):
+            n += 1
+    return n
+
+
+HEADS = {'conv': r'^(Converter Board Specification|LED Driver Specification)$', 'osd': r'^Function\(OSD\) Menu Actions$',
+         'vcp': r'VCP (Specification|Code Table)$'}
+for family in FAM_SCHEMA:
+    sc = FAM_SCHEMA[family]
+    variant = 'base' if TOUCH_PROBE[family] is None else 'touch'
+    tpl = Document(kb._PS_FAMILIES[family]['templates'][variant])
+    n_adp_tpl = sum(1 for t in _paras(tpl) if re.search(r'\{\{adH\d+\}\}', t))
+    few = {'cover.r1.c0': 'X1', 'adH1': 'J1 : TEST HEAD', 'adp1.r1.c0': 'PIN1', 'vcpTitle': 'LNW VCP Specification',
+           'adc.r1.c0': 'J1', 'adc.r2.c0': 'J2'}
+    r = client.post('/doc/product-spec-docx', json={'name': 'x', 'family': family, 'variant': variant, 'values': few, 'images': {}})
+    d = Document(io.BytesIO(r.data))
+    ps = _paras(d)
+    adc_t = [t for t in d.tables if t.rows and t.rows[0].cells[0].text.strip() == 'Symbol']
+    check(len(adc_t) == 1 and len(adc_t[0].rows) == 3 and adc_t[0].rows[2].cells[0].text.strip() == 'J2',
+          '%s: A/D 연결표는 값 있는 줄만 (%s줄)' % (family, len(adc_t[0].rows) if adc_t else None))
+    joined = '\n'.join(ps)
+    check('J1 : TEST HEAD' in joined and 'PIN1' in '\n'.join(c.text for t in d.tables for row in t.rows for c in row.cells),
+          '%s: 값 있는 커넥터 장은 남는다' % family)
+    heads_left = [k for k, rx in HEADS.items() if any(re.search(rx, p) for p in ps)]
+    check(not heads_left, '%s: 빈 컨버터·OSD 표·VCP 장은 빠진다 (%s)' % (family, heads_left))
+    pin_tables = sum(1 for t in d.tables if t.rows and re.match(r'^(PIN|Pin)', t.rows[0].cells[0].text.strip())
+                     and not ''.join(c.text for row in t.rows[1:] for c in row.cells).strip())
+    check(pin_tables == 0, '%s: 빈 핀 표가 남지 않는다 (%d)' % (family, pin_tables))
+    check(_blank_sections(d) == _blank_sections(tpl), '%s: 빈 구역(빈 가로 쪽)이 새로 생기지 않는다 (%d → %d)' % (
+        family, _blank_sections(tpl), _blank_sections(d)))
+    for must in ('A/D Board', 'User Interface', 'Incoming Inspection Standard'):
+        check(any(p == must or p.endswith(' ' + must) for p in ps), '%s: 다른 장(%s)은 그대로' % (family, must))
+    if variant == 'touch':
+        check(any(re.match(r'^(Touch Controller|Touch Integrations)$', p) for p in ps), '%s: 터치 장은 그대로' % family)
+    # 장 번호 — 빠진 장(컨버터 8·VCP 10) 뒤의 **시작 번호를 정해 둔 번호**·손 번호가 당겨졌나(Word 로 찍어 본 값과 같게)
+    nums_, _a = kb._ps_numbering_maps(d)
+
+    def _start_of(text):
+        for p in d.element.body.iterchildren(qn('w:p')):
+            if ''.join(x.text or '' for x in p.iter(qn('w:t'))).strip() == text:
+                nid, il = kb._ps_num_of(p)
+                return nums_.get(nid, (None, {}))[1].get('0') if nid else None
+        return None
+    if family == 'stellar':
+        check(any(p.startswith('10. Incoming Inspection Standard') for p in ps) and _start_of('OSD Key Description') == 8
+              and _start_of('Touch Controller') == 9,
+              'stellar: 손 번호 12→10 · UI 소제목 9→8 · Touch 11→9 (%s, %s)' % (_start_of('OSD Key Description'), _start_of('Touch Controller')))
+    if family == 'obsidian':
+        check(_start_of('OSD Key Description') == 8, 'obsidian: UI 소제목 9→8 (%s)' % _start_of('OSD Key Description'))
+    # 빈 쪽 — 쪽·구역 나눔 바로 앞에 빈 줄이 없다(그림 없는 쪽 맞춤 빈 줄이 넘쳐 빈 쪽을 만들었다)
+    els_ = list(d.element.body.iterchildren())
+
+    def _isbrk(el):
+        return el.tag == qn('w:p') and (el.find('.//' + W_SECT) is not None
+                                       or any(b.get(qn('w:type')) == 'page' for b in el.iter(qn('w:br'))))
+    before_brk = sum(1 for i, el in enumerate(els_[1:], 1) if _isbrk(el) and els_[i - 1].tag == qn('w:p')
+                     and not _isbrk(els_[i - 1]) and not ''.join(x.text or '' for x in els_[i - 1].iter(qn('w:t'))).strip()
+                     and not list(els_[i - 1].iter(qn('w:drawing'))) and not list(els_[i - 1].iter(qn('w:pict')))
+                     and not list(els_[i - 1].iter(qn('w:object'))))
+    check(before_brk == 0, '%s: 나눔 바로 앞 빈 줄 0 (%d)' % (family, before_brk))
+    # 값이 다 있으면 아무것도 안 지운다(커넥터 제목 수 = 양식)
+    full = {c['key']: 'V_' + c['key'] for pre, t in sc['tables'].items() for row in t['rows'] for c in row['cells'] if c.get('key')}
+    full.update({k: 'P_' + k for k in sc['paras']})
+    r = client.post('/doc/product-spec-docx', json={'name': 'x', 'family': family, 'variant': variant, 'values': full, 'images': {}})
+    d = Document(io.BytesIO(r.data))
+    n_adp = sum(1 for p in _paras(d) if re.match(r'^P_adH\d+$', p))
+    check(n_adp == n_adp_tpl and any(re.search(HEADS['osd'], p) for p in _paras(d)),
+          '%s: 값이 다 있으면 그대로 (커넥터 제목 %d/%d)' % (family, n_adp, n_adp_tpl))
+
 schema = FAM_SCHEMA['stellar']      # 아래 1-b 는 STELLAR 양식으로
 
 # ── 1-c. 빈 표 칸의 번호 목록 서식 (2026-11-25 실측: OBSIDIAN 개정 이력 빈 줄 요약 칸에 '①' 만 찍혔다) ──

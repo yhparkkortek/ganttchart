@@ -10159,6 +10159,318 @@ def _ps_keep_headings(doc):
     return n
 
 
+# 🧹 빈 뼈대 지우기(데이터, 2026-11-25) — 앱 정보만으로 낸 사양서(14차 실측 SHUFFLER 4.3, 커넥터 5개)에 STELLAR 양식의
+#   커넥터 10장·빈 VCP 표·컨버터 장(컨버터 없음)·빈 OSD 표가 **빈 틀로** 찍혔다. 묶음마다:
+#   start = 시작 문단(글 정규식, 또는 'mark' = 그 칸 표식이 든 문단) · end = 끝(그 문단 앞까지, 없으면 'table' = 첫 표까지)
+#   keys = 이 묶음이 비었는지 가르는 칸·그림 열쇠(정규식, {n} 은 표식에서 잡은 번호). 묶음 안에 그 칸이 하나도 없으면 안 지운다.
+#   ⚠️ 쪽 나눔·구역 나눔이 든 문단은 지우지 않는다(다음 장이 새 쪽에서 시작해야 한다). 내용이 다 빠진 구역은 통째로 뺀다.
+#   ⚠️ 불러온 사양서의 쪽 맞춤(layout)을 쓰는 출력엔 안 한다 — 원본 모양 그대로가 그쪽의 약속이다.
+_PS_DROP_EMPTY = [
+    {'id': 'adp', 'mark': r'adH(\d+)', 'end': 'table', 'keys': r'^(adH{n}|adp{n}\..*)$'},
+    {'id': 'pwrpin', 'start': r'pinout in the table below', 'end': 'table', 'keys': r'^(pwrpin\..*|img_pwrconn)$'},
+    {'id': 'conv', 'start': r'^(Converter Board Specification|LED Driver Specification)$', 'end': r'^User Interface$',
+     'keys': r'^(cvi\..*|cvo\..*|convIn|convOut|img_conv)$', 'chapter': r'(Converter Board|LED Driver) Specification'},
+    {'id': 'osd', 'start': r'^Function\(OSD\) Menu Actions$', 'end': 'table', 'keys': r'^(osd\..*|img_osdfig\d+)$'},
+    {'id': 'vcp', 'mark': r'vcpTitle', 'start': r'^VCP Code Table$',
+     'end': r'^(Touch Controller|Touch Integrations|Incoming Inspection Standard)$', 'keys': r'^vcp\..*$', 'chapter': r'VCP'},
+]
+# 칸이 전부 빈 **줄**을 빼는 표(데이터) — 줄 수가 제품마다 다른 목록 표만(개정 이력처럼 빈 줄을 일부러 두는 표는 넣지 않는다)
+_PS_TRIM_EMPTY_ROWS = ['adc']
+# 'chapter' = 그 장의 번호를 칸 목록 화면 묶음 제목('8. Converter Board Specification')에서 찾는 정규식.
+#   번호 목록 정의에서 셈하지 않는다 — 계열마다 장 번호 매기는 방식이 달라(STELLAR 0단계 · OBSIDIAN 한 목록의 1단계) 틀리기 쉽다.
+# 장(chapter) 하나를 빼면 뒤 장 번호를 당긴다 — 양식은 장 번호를 셋으로 적는다(실측 STELLAR): 이어지는 자동 번호(n16: 컨버터·UI·VCP),
+#   **시작 번호를 정해 둔** 자동 번호(UI 소제목 9.x · Touch 11 · 11.x), 손으로 쓴 번호('12. Incoming…', '11.5 General…', '13').
+#   앞 둘 중 시작 번호를 정해 둔 것과 손 번호만 고친다(이어지는 번호는 Word 가 알아서 당긴다).
+_PS_HAND_NO_RE = re.compile(r'^(\s*)(\d{1,2})(?=(\.\d|\.\s|\.$|\s|$))')
+
+
+def _ps_numbering_maps(doc):
+    """numId → (abstractNumId, {ilvl: 시작값(startOverride 우선)})."""
+    from docx.oxml.ns import qn
+    try:
+        numbering = doc.part.numbering_part.element
+    except Exception:
+        return {}, {}
+    abs_start = {}
+    for an in numbering.findall(qn('w:abstractNum')):
+        lv = {}
+        for l in an.findall(qn('w:lvl')):
+            st = l.find(qn('w:start'))
+            lv[l.get(qn('w:ilvl'))] = int(st.get(qn('w:val'))) if st is not None else 1
+        abs_start[an.get(qn('w:abstractNumId'))] = lv
+    nums = {}
+    for n in numbering.findall(qn('w:num')):
+        a = n.find(qn('w:abstractNumId'))
+        if a is None:
+            continue
+        lv = dict(abs_start.get(a.get(qn('w:val')), {}))
+        for ov in n.findall(qn('w:lvlOverride')):
+            so = ov.find(qn('w:startOverride'))
+            if so is not None:
+                lv[ov.get(qn('w:ilvl'))] = int(so.get(qn('w:val')))
+        nums[n.get(qn('w:numId'))] = (a.get(qn('w:val')), lv)
+    return nums, abs_start
+
+
+def _ps_num_of(el):
+    from docx.oxml.ns import qn
+    np_ = el.find(qn('w:pPr') + '/' + qn('w:numPr')) if el.tag == qn('w:p') else None
+    if np_ is None or np_.find(qn('w:numId')) is None:
+        return None, None
+    il = np_.find(qn('w:ilvl'))
+    return np_.find(qn('w:numId')).get(qn('w:val')), (il.get(qn('w:val')) if il is not None else '0')
+
+
+def _ps_chapter_no(doc, start_el):
+    """장 제목 문단이 찍히는 번호 — 그 번호 목록의 0단계 시작값 + 앞에 같은 번호 목록 0단계 문단 수."""
+    nums, _a = _ps_numbering_maps(doc)
+    nid, il = _ps_num_of(start_el)
+    if nid is None or il != '0' or nid not in nums:
+        return None
+    n = nums[nid][1].get('0', 1)
+    for el in doc.element.body.iterchildren():
+        if el is start_el:
+            return n
+        if _ps_num_of(el) == (nid, '0'):
+            n += 1
+    return None
+
+
+def _ps_renumber_after(doc, dropped_nos, after_el):
+    """빠진 장 번호들(dropped_nos) 뒤의 시작 번호 정해 둔 번호 목록·손 번호를 당긴다. after_el = 첫 빠진 장 자리 뒤 첫 요소."""
+    from docx.oxml.ns import qn
+    if not dropped_nos:
+        return 0
+    lo = min(dropped_nos)
+
+    def shift(v):
+        return sum(1 for d in dropped_nos if d < v)
+    els = list(doc.element.body.iterchildren())
+    try:
+        at = els.index(after_el)
+    except ValueError:
+        return 0
+    nums, abs_start = _ps_numbering_maps(doc)
+    numbering = doc.part.numbering_part.element
+    used = set()
+    n = 0
+    for el in els[at:]:
+        nid, il = _ps_num_of(el)
+        if nid is not None:
+            used.add(nid)
+        if el.tag != qn('w:p'):
+            continue
+        ts = list(el.iter(qn('w:t')))
+        if not ts:
+            continue
+        m = _PS_HAND_NO_RE.match(ts[0].text or '')
+        full = ''.join(t.text or '' for t in ts).strip()
+        # '13 Mechanical…' 처럼 점 없이 띄운 번호는 **짧은 제목 문단**일 때만('10 pcs …' 같은 글을 번호로 읽지 않게)
+        if m and not (ts[0].text or '')[m.end():m.end() + 1] == '.' and len(full) > 60:
+            m = None
+        if m and int(m.group(2)) > lo and int(m.group(2)) <= 40:
+            v = int(m.group(2))
+            ts[0].text = m.group(1) + str(v - shift(v)) + (ts[0].text or '')[m.end():]
+            n += 1
+    # 시작 번호를 정해 둔 목록(0단계 시작값이 빠진 장보다 큰 것)만 — 이어지는 목록(시작 ≤ lo)은 Word 가 당긴다
+    for num in numbering.findall(qn('w:num')):
+        nid = num.get(qn('w:numId'))
+        if nid not in used or nid not in nums:
+            continue
+        for ov in num.findall(qn('w:lvlOverride')):
+            so = ov.find(qn('w:startOverride'))
+            if so is not None and ov.get(qn('w:ilvl')) == '0' and int(so.get(qn('w:val'))) > lo:
+                so.set(qn('w:val'), str(int(so.get(qn('w:val'))) - shift(int(so.get(qn('w:val'))))))
+                n += 1
+    absids = {nums[nid][0] for nid in used if nid in nums}
+    # 같은 추상 목록을 빠진 장 **앞**에서도 쓰면 건드리지 않는다(앞쪽 번호까지 바뀐다)
+    before = {nums[nid][0] for nid in (_ps_num_of(el)[0] for el in els[:at]) if nid in nums}
+    for an in numbering.findall(qn('w:abstractNum')):
+        aid = an.get(qn('w:abstractNumId'))
+        if aid not in absids or aid in before:
+            continue
+        for lvl in an.findall(qn('w:lvl')):
+            st = lvl.find(qn('w:start'))
+            fmt = lvl.find(qn('w:numFmt'))
+            if lvl.get(qn('w:ilvl')) == '0' and st is not None and int(st.get(qn('w:val'))) > lo \
+                    and (fmt is None or fmt.get(qn('w:val')) == 'decimal'):
+                v = int(st.get(qn('w:val')))
+                st.set(qn('w:val'), str(v - shift(v)))
+                n += 1
+    return n
+
+
+def _ps_trim_before_breaks(doc):
+    """쪽 나눔·구역 나눔 **바로 앞**의 빈 줄을 뺀다(앱 정보만으로 낼 때만). 양식의 빈 줄은 원본 그림 높이에 맞춘
+    쪽 맞춤이라, 그림이 없으면 남은 빈 줄이 다음 쪽으로 넘쳐 **빈 쪽**이 생겼다(실측 OBSIDIAN·P4 1~2쪽). 나눔 뒤는
+    어차피 새 쪽이라 빼도 모양이 안 바뀐다. 반환: 뺀 줄 수."""
+    from docx.oxml.ns import qn
+    body = doc.element.body
+
+    def is_break(el):
+        if el.tag != qn('w:p'):
+            return False
+        if el.find('.//' + qn('w:sectPr')) is not None:
+            tp = el.find('.//' + qn('w:sectPr') + '/' + qn('w:type'))
+            return tp is None or tp.get(qn('w:val')) in ('nextPage', 'oddPage', 'evenPage')
+        return any(b.get(qn('w:type')) == 'page' for b in el.iter(qn('w:br')))
+
+    def blank(el):
+        return (el.tag == qn('w:p') and not ''.join(t.text or '' for t in el.iter(qn('w:t'))).strip()
+                and not list(el.iter(qn('w:drawing'))) and not list(el.iter(qn('w:pict')))
+                and not list(el.iter(qn('w:object'))) and el.find('.//' + qn('w:sectPr')) is None
+                and not any(b.get(qn('w:type')) == 'page' for b in el.iter(qn('w:br'))))
+    n = 0
+    els = list(body.iterchildren())
+    for i, el in enumerate(els):
+        if not is_break(el):
+            continue
+        j = i - 1
+        while j >= 0 and blank(els[j]) and els[j].getparent() is not None:
+            body.remove(els[j])
+            n += 1
+            j -= 1
+    return n
+
+
+def _ps_drop_empty_blocks(doc, values, images, groups=None):
+    """빈 묶음(제목+표·장)을 지운다 — 표식이 남은 **채우기 전** 양식에서 부른다. 반환: 지운 묶음 id 목록."""
+    from docx.oxml.ns import qn
+    body = doc.element.body
+    V, O = 'urn:schemas-microsoft-com:vml', 'urn:schemas-microsoft-com:office:office'
+
+    def txt(el):
+        return ''.join(t.text or '' for t in el.iter(qn('w:t'))).strip()
+
+    def keep_el(el):            # 쪽 나눔·구역 나눔은 남긴다
+        return el.tag == qn('w:p') and (el.find('.//' + qn('w:sectPr')) is not None
+                                        or any(b.get(qn('w:type')) == 'page' for b in el.iter(qn('w:br'))))
+
+    def blank(el):
+        return (el.tag == qn('w:p') and not txt(el) and not list(el.iter(qn('w:drawing')))
+                and not list(el.iter(qn('w:pict'))) and not keep_el(el))
+
+    def keys_in(els):
+        ks = set()
+        for el in els:
+            for m in _PS_MARK_RE.finditer(''.join(t.text or '' for t in el.iter(qn('w:t')))):
+                ks.add(m.group(2))
+            for dp in el.iter(qn('wp:docPr')):
+                if (dp.get('descr') or '').startswith('slot:'):
+                    ks.add(dp.get('descr')[5:])
+            for im in el.iter('{%s}imagedata' % V):
+                t = im.get('{%s}title' % O) or ''
+                if t.startswith('slot:'):
+                    ks.add(t[5:])
+        return ks
+
+    def empty_key(k):
+        if k.startswith('img_'):
+            v = images.get(k)
+            return not (v if isinstance(v, list) else ([v] if v else []))
+        return not str(values.get(k) if values.get(k) is not None else '').strip()
+
+    dropped, touched, chapters = [], set(), []
+    # 표 안 빈 줄 — 칸이 전부 빈 줄은 뺀다(실측: A/D 연결표가 커넥터 6개인데 양식 10줄이라 빈 줄 4개가 남았다)
+    for tbl in list(body.iterchildren(qn('w:tbl'))):
+        tt = ''.join(t.text or '' for t in tbl.iter(qn('w:t')))
+        pre = next((p for p in _PS_TRIM_EMPTY_ROWS if '{{' + p + '.' in tt), None)
+        if not pre:
+            continue
+        for tr in list(tbl.findall(qn('w:tr'))):
+            ks = [m.group(2) for m in _PS_MARK_RE.finditer(''.join(t.text or '' for t in tr.iter(qn('w:t'))))]
+            if ks and all(k.startswith(pre + '.') and empty_key(k) for k in ks):
+                tbl.remove(tr)
+                dropped.append(pre + '-row')
+
+    def chapter_no(rx):            # 칸 목록 화면 묶음 제목('8. Converter Board Specification')의 번호
+        for g in groups or []:
+            m = re.match(r'^\s*(\d+)\.\s*(.*)$', str(g.get('title') or ''))
+            if m and re.search(rx, m.group(2)):
+                return int(m.group(1))
+        return None
+    for rule in _PS_DROP_EMPTY:
+        els = list(body.iterchildren())
+        starts = []
+        for i, el in enumerate(els):
+            if el.tag != qn('w:p'):
+                continue
+            t = txt(el)
+            n = None
+            if rule.get('mark'):
+                m = re.search(r'\{\{\??(' + rule['mark'] + r')\}\}', t)
+                if m:
+                    # ⚠️ lastindex 는 '마지막에 닫힌' 묶음(바깥)이라 1 이다 — 안쪽 번호는 묶음 수로 본다
+                    n = (m.group(2) or '') if m.re.groups >= 2 else ''
+                    starts.append((i, n))
+                    continue
+            if rule.get('start') and re.search(rule['start'], t):
+                starts.append((i, ''))
+        for i, n in reversed(starts):      # 뒤에서부터 — 앞 묶음을 지워도 뒤 번호가 안 밀린다
+            els = list(body.iterchildren())
+            j = i + 1
+            if rule['end'] == 'table':
+                while j < len(els) and els[j].tag != qn('w:tbl'):
+                    if els[j].tag == qn('w:p') and txt(els[j]) and j > i + 2:
+                        break               # 표 전에 다른 글이 나오면 이 묶음 모양이 아니다
+                    j += 1
+                if j >= len(els) or els[j].tag != qn('w:tbl'):
+                    continue
+                j += 1
+                while j < len(els) and blank(els[j]):
+                    j += 1
+            else:
+                while j < len(els) and not (els[j].tag == qn('w:p') and re.search(rule['end'], txt(els[j]))):
+                    j += 1
+                if j >= len(els):
+                    continue
+            block = els[i:j]
+            kre = re.compile(rule['keys'].replace('{n}', re.escape(n or '')))
+            ks = [k for k in keys_in(block) if kre.match(k)]
+            if not ks or not all(empty_key(k) for k in ks):
+                continue
+            if rule.get('chapter'):
+                cno = chapter_no(rule['chapter'])
+                if cno:
+                    chapters.append((cno, els[j] if j < len(els) else None))
+            for k2 in range(j, len(els)):          # 이 묶음이 든 구역(끝 나눔 문단) — 빈 구역 정리는 여기만 본다
+                if els[k2].tag == qn('w:p') and els[k2].find('.//' + qn('w:sectPr')) is not None:
+                    touched.add(els[k2])
+                    break
+            for el in block:
+                if not keep_el(el):
+                    body.remove(el)
+                elif el.find('.//' + qn('w:sectPr')) is not None:
+                    touched.add(el)
+            dropped.append(rule['id'] + (n or ''))
+    if dropped:
+        # 내용이 다 빠진 구역(실측: 가로 쪽 VCP 구역) — 빈 줄과 그 구역 나눔 문단까지 뺀다(빈 가로 쪽이 남지 않게)
+        #   (첫 구역은 표지라 안 본다 · 구역 나눔 문단에 글·그림이 있으면 안 뺀다)
+        while True:
+            els = list(body.iterchildren())
+            sect_at = [i for i, el in enumerate(els) if el.tag == qn('w:p') and el.find('.//' + qn('w:sectPr')) is not None]
+            hit = None
+            for a, b in zip(sect_at, sect_at[1:]):
+                seg = els[a + 1:b + 1]
+                last = seg[-1]
+                if last in touched and all(blank(el) for el in seg[:-1]) and not txt(last) \
+                        and not list(last.iter(qn('w:drawing'))):
+                    hit = seg
+                    break
+            if not hit:
+                break
+            for el in hit:
+                body.remove(el)
+    if chapters:
+        first = min(chapters, key=lambda x: x[0])
+        anchor = first[1]
+        while anchor is not None and anchor.getparent() is None:   # 그 자리 요소가 빈 구역 정리로 빠졌으면 다음 것
+            anchor = None
+        if anchor is not None:
+            _ps_renumber_after(doc, [c for c, _e in chapters], anchor)
+    return dropped
+
+
 def _ps_fill_images(doc, images):
     """`slot:<열쇠>` 그림의 바이트만 바꾼다. 원래 상자(cx,cy) 안에 **비율을 지켜** 맞춘다 —
     같은 계열 사양서에서 불러온 그림이면 비율이 같아 원본과 똑같은 크기가 된다.
@@ -10301,6 +10613,10 @@ def doc_product_spec_docx():
         doc = Document(tpl)
         # ⚠️ 빈 줄 맞추기를 **먼저** — 글 채우기가 빈 선택 줄(Features)을 지우면 내용 요소 수가 바뀐다.
         layout_ok = _ps_apply_layout(doc, req.get('layout')) if req.get('layout') else None
+        if not req.get('layout'):
+            # 빈 뼈대(커넥터 장·VCP·컨버터…) — 불러온 원본 모양을 따를 땐 안 한다. 장 번호는 칸 목록 묶음 제목에서
+            _ps_drop_empty_blocks(doc, values, images, (_ps_load_schema(family) or {}).get('groups'))
+            _ps_trim_before_breaks(doc)     # 나눔 앞 빈 줄 — 그림 없을 때 다음 쪽으로 넘쳐 빈 쪽이 생겼다
         _ps_fill_text(doc, values)
         _ps_fill_images(doc, images)
         _ps_keep_headings(doc)        # 쪽 끝에 장 제목만 남지 않게(글·빈 줄은 안 바꾼다)
