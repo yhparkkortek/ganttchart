@@ -828,8 +828,8 @@ window.checkAndSendAlarms = async function(isManual) {
     }
 
     if (isManual) {
-        const msg = (sentCount > 0 ? `${sentCount}건의 알람 메일을 발송했습니다.` : '발송할 알람이 없습니다. (이미 발송됐거나 해당 없음)')
-            + (skippedNoRecipient > 0 ? `\n\n⚠ 발신인·수신인을 주소록에서 찾지 못한 ${skippedNoRecipient}건은 보내지 않았습니다 — 알람 탭의 ⚠ 표시를 확인해 주세요.` : '');
+        const msg = (sentCount > 0 ? window._t(`${sentCount}건의 알람 메일을 발송했습니다.`, `Sent ${sentCount} alarm mail(s).`) : window._t('발송할 알람이 없습니다. (이미 발송됐거나 해당 없음)', 'No alarms to send. (already sent or not applicable)'))
+            + (skippedNoRecipient > 0 ? window._t(`\n\n⚠ 발신인·수신인을 주소록에서 찾지 못한 ${skippedNoRecipient}건은 보내지 않았습니다 — 알람 탭의 ⚠ 표시를 확인해 주세요.`, `\n\n⚠ ${skippedNoRecipient} item(s) were not sent because the sender/recipient was not found in the address book — check the ⚠ marks on the Alarm tab.`) : '');
         if (window.bmAlertModal) window.bmAlertModal(msg); else alert(msg);
     } else if (sentCount > 0) {
         console.log(`[알람] 자동 발송 ${sentCount}건 완료`);

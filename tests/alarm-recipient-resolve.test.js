@@ -28,6 +28,9 @@ global.localStorage = { getItem: k => (k in store ? store[k] : null), setItem: (
 let fakeRows = [];
 global.document = { querySelectorAll: sel => (sel === '#table-body tr' ? fakeRows : []), getElementById: () => null };
 global.window = global;
+// 앱 전역(js/04j) — 한/영 고르기. 22a·22c 의 안내 문구가 이걸 부른다(2026-11-25)
+window._currentLang = 'ko';
+window._t = function (ko, en) { return window._currentLang === 'en' ? en : ko; };
 window.KORTEK_INTERNAL_DOMAIN = 'kortek.co.kr';
 window.loadAlarmSettings = () => ({ allowedExternalDomains: [], ccList: [] });
 window.collectTabData = () => {};

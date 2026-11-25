@@ -777,7 +777,7 @@ window.saveAlarmSchedule = function() {
     const checked = Array.from(document.querySelectorAll('.alarm-sched-cb:checked')).map(cb => Number(cb.value));
     const finalDays = Array.from(new Set([...checked, ...(window._asCustomDays || [])])).sort((a, b) => b - a);
     if (!finalDays.length) {
-        const msg = '최소 1개 이상의 알람 시점을 선택해주세요.';
+        const msg = window._t('최소 1개 이상의 알람 시점을 선택해주세요.', 'Pick at least one alarm timing.');
         if (window.bmAlertModal) window.bmAlertModal(msg); else alert(msg);
         return;
     }
@@ -1048,7 +1048,7 @@ window.sendAllPendingAlarms = async function() {
     }
 
     window.renderAlarmTab();
-    const msg = sentCount > 0 ? `${sentCount}건 발송 완료!` : '발송 실패. 메일 서버를 확인해 주세요.';
+    const msg = sentCount > 0 ? window._t(`${sentCount}건 발송 완료!`, `${sentCount} sent!`) : window._t('발송 실패. 메일 서버를 확인해 주세요.', 'Send failed. Check the mail server.');
     if (window.bmAlertModal) window.bmAlertModal(msg); else alert(msg);
 };
 
