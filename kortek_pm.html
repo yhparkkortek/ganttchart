@@ -862,6 +862,7 @@
             style="padding:6px 12px; background:#e0f5f7; border:none; color:#00707d; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s; white-space:nowrap; margin-left:4px;">🔍 AI검색</button>
         <button id="gantt-today-btn"
             onclick="window.ganttSearchToday && window.ganttSearchToday()"
+            onmouseover="this.style.background=(window._cpRoleHex?window._cpRoleHex('hoverBg'):'#a3d9e0');" onmouseout="this.style.background=(window._cpRoleHex?window._cpRoleHex('bg'):'#e0f5f7');"
             title="오늘 날짜 업무만 펼쳐서 보기 (한 번 더 누르면 해제)" data-i18n-title="gantt-today-hint"
             style="padding:6px 12px; background:#e0f5f7; border:none; color:#00707d; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s; white-space:nowrap; margin-left:4px;">📅 오늘</button>
     </div>
@@ -1903,7 +1904,7 @@
                 <button data-i18n="btn-prev" onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';" style="display:flex; align-items:center; justify-content:center; height:28px; padding:0 8px; margin:0; box-sizing:border-box; background:#e0f5f7; border:none; color:#00707d; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer; transition:background .15s;" onclick="window.calChangePeriod(-1)">◀ 이전</button>
                 <span id="cal-header-label" style="font-size:13px; font-weight:bold; color:#444; padding:0 4px; min-width:80px; text-align:center;"></span>
                 <button data-i18n="btn-next" onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';" style="display:flex; align-items:center; justify-content:center; height:28px; padding:0 8px; margin:0; box-sizing:border-box; background:#e0f5f7; border:none; color:#00707d; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer; transition:background .15s;" onclick="window.calChangePeriod(1)">다음 ▶</button>
-                <button data-i18n="btn-today" onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';" style="display:flex; align-items:center; justify-content:center; height:28px; padding:0 8px; margin:0; box-sizing:border-box; background:#e0f5f7; border:none; color:#00707d; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer; transition:background .15s;" onclick="window.calGoToday()">오늘</button>
+                <button data-i18n="btn-today" onmouseover="this.style.background=(window._cpRoleHex?window._cpRoleHex('hoverBg'):'#a3d9e0');" onmouseout="this.style.background=(window._cpRoleHex?window._cpRoleHex('bg'):'#e0f5f7');" style="padding:6px 12px; background:#e0f5f7; border:none; color:#00707d; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s; white-space:nowrap;" onclick="window.calGoToday()">📅 오늘</button>
             </div>
             <!-- 🙈 [2026-11-06 사용자 요청] 버튼 왼쪽 안내 스팬(#gw-cal-status)을 없앴다 —
                  `white-space:nowrap` 이라 긴 문구(백엔드 꺼짐 안내는 45자)가 줄바꿈도 못 하고
@@ -1937,7 +1938,7 @@
                 <button data-i18n="btn-prev-week" onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';" style="display:flex; align-items:center; justify-content:center; height:28px; padding:0 8px; margin:0; box-sizing:border-box; background:#e0f5f7; border:none; color:#00707d; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer; transition:background .15s;" onclick="window.wrShiftWeek(-1)">◀ 이전주</button>
                 <span id="wr-week-label" style="font-size:13px; font-weight:bold; color:#444; padding:0 4px; min-width:140px; text-align:center;"></span>
                 <button data-i18n="btn-next-week" onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';" style="display:flex; align-items:center; justify-content:center; height:28px; padding:0 8px; margin:0; box-sizing:border-box; background:#e0f5f7; border:none; color:#00707d; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer; transition:background .15s;" onclick="window.wrShiftWeek(1)">다음주 ▶</button>
-                <button data-i18n="btn-today" onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';" style="display:flex; align-items:center; justify-content:center; height:28px; padding:0 8px; margin:0; box-sizing:border-box; background:#e0f5f7; border:none; color:#00707d; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer; transition:background .15s;" onclick="window.wrShiftWeek(0)">오늘</button>
+                <button data-i18n="btn-today" onmouseover="this.style.background=(window._cpRoleHex?window._cpRoleHex('hoverBg'):'#a3d9e0');" onmouseout="this.style.background=(window._cpRoleHex?window._cpRoleHex('bg'):'#e0f5f7');" style="padding:6px 12px; background:#e0f5f7; border:none; color:#00707d; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s; white-space:nowrap;" onclick="window.wrShiftWeek(0)">📅 오늘</button>
             </div>
             <div style="display:flex; align-items:center; gap:6px;">
                 <!-- 💡 [2026-08-30 통합 → 재수정] 별도 "🎨 PPT 색상" 피커는 없애되, 기본값(#19c3d6)은
@@ -1959,7 +1960,7 @@
                 <button data-i18n="btn-prev-day" onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';" style="display:flex; align-items:center; justify-content:center; height:28px; padding:0 8px; background:#e0f5f7; border:none; color:#00707d; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer;" onclick="window.dailyShiftDay(-1)">◀ 이전날</button>
                 <span id="daily-day-label" style="font-size:13px; font-weight:bold; color:#444; padding:0 4px; min-width:150px; text-align:center;"></span>
                 <button data-i18n="btn-next-day" onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';" style="display:flex; align-items:center; justify-content:center; height:28px; padding:0 8px; background:#e0f5f7; border:none; color:#00707d; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer;" onclick="window.dailyShiftDay(1)">다음날 ▶</button>
-                <button data-i18n="btn-today" onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';" style="display:flex; align-items:center; justify-content:center; height:28px; padding:0 8px; background:#e0f5f7; border:none; color:#00707d; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer;" onclick="window.dailyShiftDay(0)">오늘</button>
+                <button data-i18n="btn-today" onmouseover="this.style.background=(window._cpRoleHex?window._cpRoleHex('hoverBg'):'#a3d9e0');" onmouseout="this.style.background=(window._cpRoleHex?window._cpRoleHex('bg'):'#e0f5f7');" style="padding:6px 12px; background:#e0f5f7; border:none; color:#00707d; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s; white-space:nowrap;" onclick="window.dailyShiftDay(0)">📅 오늘</button>
             </div>
             <button id="daily-write-btn" data-i18n="btn-daily-write" onclick="window.dailyOpenModal()" onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';" style="padding:6px 12px; background:#e0f5f7; border:none; color:#00707d; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer;">✏️ 내 보고 쓰기</button>
             <button data-i18n="btn-daily-roster" onclick="window.dailyOpenRoster()" title="명단을 채워야 미작성 표시와 텔레그램 입력이 동작합니다" onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';" style="padding:6px 12px; background:#e0f5f7; border:none; color:#00707d; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; margin-left:8px;">👥 명단</button>
@@ -2078,7 +2079,7 @@
 <script src="js/04g-core-app-upload-utils-2.js?v=2026112631"></script>
 <script src="js/04h-core-app-upload-utils-3.js?v=2026112701"></script>
 <script src="js/04i-core-app-upload-utils-4.js?v=2026112641"></script>
-<script src="js/04j-core-app-upload-utils-5.js?v=2026112501"></script>
+<script src="js/04j-core-app-upload-utils-5.js?v=2026112521"></script>
 <script src="js/04k-core-app-filter-export.js?v=2026112501k"></script>
 
 <script src="js/05-drive-sync-optimize.js?v=20261124a4"></script>

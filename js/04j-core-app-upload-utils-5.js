@@ -250,7 +250,7 @@
                 'btn-sync-gantt':     '🔄 Gantt 실적 연동',
                 'btn-prev':           '◀ 이전',
                 'btn-next':           '다음 ▶',
-                'btn-today':          '오늘',
+                'btn-today':          '📅 오늘',
                 // 📔 일일 업무보고 (js/59) — HTML 에 키만 있고 맵에 없어서 영문 모드에서 한글로 남아 있었다
                 'btn-prev-day':       '◀ 이전날',
                 'btn-next-day':       '다음날 ▶',
@@ -555,7 +555,7 @@
                 'btn-sync-gantt':     '🔄 Sync from Gantt',
                 'btn-prev':           '◀ Prev',
                 'btn-next':           'Next ▶',
-                'btn-today':          'Today',
+                'btn-today':          '📅 Today',
                 // 📔 Daily report (js/59)
                 'btn-prev-day':       '◀ Prev Day',
                 'btn-next-day':       'Next Day ▶',
