@@ -190,8 +190,39 @@
             if (wIn) {
                 wIn.focus(); await sleep(20);
                 var wSrc = wIn.parentNode.querySelector('.doc-src-field');
-                ok('[작성] 칸에 커서가 가면 그 칸의 출처가 뜬다', !!wSrc && wSrc.offsetHeight > 0);
-                wIn.blur();
+                // ✍️ 2단계: 폭이 되면 출처는 **오른쪽 여백 메모**로, 안 되면 칸 아래 쪽지로 뜬다 — 둘 중 하나.
+                var hasMemo = body.classList.contains('doc-has-memo');
+                var wMemo = body.querySelector('.doc-memo');
+                LOG.push('  ℹ️ 본문 폭 ' + body.clientWidth + 'px → ' + (hasMemo ? (body.classList.contains('doc-has-outline') ? '목차+여백' : '여백만') : '쪽지(1단계)'));
+                if (hasMemo) {
+                    ok('[작성] 칸에 커서가 가면 여백 메모에 그 칸 출처가 뜬다', !!wMemo && wMemo.style.display === 'block'
+                       && wMemo.innerText.indexOf((wSrc.textContent || '').replace(/\u00a0/g, '').trim().slice(0, 6)) !== -1, wMemo && wMemo.innerText);
+                    ok('[작성] 여백 메모가 있을 땐 칸 아래 쪽지는 안 뜬다', wSrc.offsetHeight === 0);
+                } else {
+                    ok('[작성] 칸에 커서가 가면 그 칸의 출처가 뜬다', !!wSrc && wSrc.offsetHeight > 0);
+                }
+                // 칸을 고치고 나가면 그 자리에서 '직접 고침' 표시와 모아보기 숫자가 바뀐다(다시 그리지 않고)
+                var wKey = wIn.getAttribute('data-doc-key');
+                wIn.value = '하네스값-작성보기'; wIn.dispatchEvent(new Event('input', { bubbles: true }));
+                wIn.blur(); await sleep(20);
+                ok('[작성] 고치고 나가면 그 칸에 own 표시가 붙는다', wIn.classList.contains('own'));
+                if (hasMemo) {
+                    var sumOwn = body.querySelector('.doc-mg-sum [data-doc-jump="own"] b');
+                    ok('[작성] 여백 모아보기의 직접 고친 칸 숫자가 1 이상', !!sumOwn && Number(sumOwn.textContent) >= 1, sumOwn && sumOwn.textContent);
+                }
+                window._docResetField(window._docState.formId, wKey); await sleep(20);
+                body = document.getElementById('doc-page-body');
+            }
+            // 목차 — 종이 안 장 제목과 같은 수(+ '문서 처음' 1줄), 누르면 그 장으로 간다
+            var olItems = body.querySelectorAll('.doc-outline .doc-ol-item');
+            var paperSecs = body.querySelectorAll('.doc-paper .doc-sec');
+            ok('[작성] 목차 줄 = 장 제목 수 + 1', olItems.length === paperSecs.length + 1, olItems.length + ' vs ' + paperSecs.length);
+            if (body.classList.contains('doc-has-outline') && paperSecs.length > 2) {
+                var lastI = paperSecs.length - 1;
+                body.querySelector('.doc-outline [data-doc-ol="' + lastI + '"]').click(); await sleep(30);
+                var dy = paperSecs[lastI].getBoundingClientRect().top - body.getBoundingClientRect().top;
+                ok('[작성] 목차를 누르면 그 장이 위로 온다', dy < 60 || body.scrollTop + body.clientHeight >= body.scrollHeight - 2, Math.round(dy));
+                body.scrollTop = 0;
             }
             window._docSetView(_viewKeep); await sleep(30);
             // 색이 **클래스**로 와야 팔레트가 덮을 수 있다 — 주입 <style> 이 남아 있으면 안 된다

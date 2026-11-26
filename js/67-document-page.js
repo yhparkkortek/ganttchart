@@ -4863,13 +4863,17 @@
             + '<input type="' + (isDate ? 'date' : 'text') + '" value="' + _esc(value) + '"'
             + (isDate ? _dateAttrs() : ' placeholder="' + _esc(hint || '') + '"')
             + ' data-doc-key="' + _esc(key) + '" class="doc-in' + (own ? ' own' : '') + '">'
-            + '<div class="doc-src doc-src-field' + (own ? ' own' : '') + '">'
-            + (own
-                ? '✏️ ' + _esc(_t('직접 적음', 'edited'))
-                  + ' <a href="#" class="doc-noprint" onclick="window._docResetField(\'' + _esc(id) + '\',\'' + _esc(key) + '\');return false;"'
-                  + ' style="color:var(--ui-accent, #00707d);">↺ ' + _esc(_t('앱 값으로', 'reset')) + '</a>'
-                : (src ? (/없음|empty|not in/.test(src) ? '⚠️ ' : '📘 ') + _esc(src) : '&nbsp;'))
+            + '<div class="doc-src doc-src-field' + (own ? ' own' : '') + '" data-doc-src="' + _esc(src || '') + '">'
+            + _srcFieldHtml(id, key, own, src)
             + '</div>' + _cellCheckHtml(id, key, value) + '</td>';
+    };
+    // ✍️ [2026-11-26] 칸 아래 출처 글 — 그릴 때와 **고친 직후**(여백 메모 갱신, `_docDeskSetup`)가 같은 글을 쓴다.
+    var _srcFieldHtml = function (id, key, own, src) {
+        return own
+            ? '✏️ ' + _esc(_t('직접 적음', 'edited'))
+              + ' <a href="#" class="doc-noprint" onclick="window._docResetField(\'' + _esc(id) + '\',\'' + _esc(key) + '\');return false;"'
+              + ' style="color:var(--ui-accent, #00707d);">↺ ' + _esc(_t('앱 값으로', 'reset')) + '</a>'
+            : (src ? (/없음|empty|not in/.test(src) ? '⚠️ ' : '📘 ') + _esc(src) : '&nbsp;');
     };
     // 🔌 [2026-11-24] 칸 값 대조 — 서식 파일이 `DOC_CELL_CHECK[서식id](칸, 값)` 으로 경고 글을 돌려주면 칸 아래에 붙인다
     //    (js/76 PRODUCT SPEC: 적힌 커넥터 품번·제조사가 BOM 과 다르면 BOM 값을 보여 준다). 고치지는 않는다 — 사람이 본다.
@@ -4880,6 +4884,168 @@
         try { w = fn(key, value) || ''; } catch (e) { w = ''; }
         return w ? '<div class="doc-src doc-warn doc-noprint" style="color:#b1432f;">⚠️ ' + _esc(w) + '</div>' : '';
     };
+
+    // ── ✍️ 2단계 [2026-11-26 사용자 요청] 작성 보기의 책상 — 왼쪽 목차 · 종이 · 오른쪽 여백 메모 ──
+    //   목차 = 종이 안 장 제목(.doc-sec)을 **그린 뒤 DOM 에서** 읽어 만든다(서식 데이터를 따로 훑지 않는다 —
+    //          점검표 시트 제목처럼 kind 마다 다르게 그려지는 제목도 그대로 잡힌다). 누르면 그 장으로 이동,
+    //          ▸/▾ 는 그 장 제목의 접기 버튼을 **그대로 누른다**(접기 상태는 기존 `_docState` 한 곳).
+    //   여백 메모 = 커서가 들어간 칸의 출처(.doc-src-field)·칸 경고(.doc-warn)를 **복사해** 그 칸 높이에 띄운다.
+    //          ↺ 앱 값으로 링크도 같은 HTML 이라 그대로 동작한다. 칸 안의 원본 글은 숨겨 둘 뿐 지우지 않는다.
+    //   폭이 모자라면 목차부터 빼고, 더 모자라면 여백도 빼서 1단계(칸 아래 쪽지)로 돌아간다 — 클래스 둘
+    //   (`doc-has-outline`·`doc-has-memo`)만 바꾸고 다시 그리지 않는다.
+    //   ⚠️ 점검 보기에선 목차·여백을 CSS 로 숨긴다(예전 화면 그대로).
+    var DOC_DESK = { outlineW: 176, memoW: 224, gap: 14, paperMin: 860 };   // 수치는 데이터 — 화면 폭 판정에만 쓴다
+    var _docDeskFit = function (body) {
+        if (!body) return;
+        var write = body.classList.contains('doc-mode-write');
+        var w = body.clientWidth - 32;
+        var memo = write && w >= DOC_DESK.paperMin + DOC_DESK.gap + DOC_DESK.memoW;
+        var outl = memo && w >= DOC_DESK.paperMin + DOC_DESK.gap * 2 + DOC_DESK.memoW + DOC_DESK.outlineW;
+        body.classList.toggle('doc-has-memo', memo);
+        body.classList.toggle('doc-has-outline', outl);
+    };
+    var _docSecText = function (sec) {
+        var sp = sec.querySelector('span');
+        if (!sp) return (sec.textContent || '').trim();
+        return ((sp.firstChild && sp.firstChild.nodeType === 3) ? sp.firstChild.textContent : sp.textContent).trim();
+    };
+    var _docDeskSetup = function (body, formId) {
+        var paper = body.querySelector('.doc-paper');
+        var nav = body.querySelector('.doc-outline');
+        var margin = body.querySelector('.doc-margin');
+        if (!paper || !nav || !margin) return;
+        _docDeskFit(body);
+
+        // ── 목차 ──
+        var secs = [].slice.call(paper.querySelectorAll('.doc-sec'));
+        var oh = '<div class="doc-ol-head">' + _esc(_t('목차', 'Contents')) + '</div>'
+               + '<div class="doc-ol-row"><span class="doc-ol-caret"></span>'
+               + '<a href="#" class="doc-ol-item doc-ol-top" data-doc-ol="-1">' + _esc(_t('문서 처음', 'Top')) + '</a></div>';
+        secs.forEach(function (sec, i) {
+            sec.setAttribute('data-doc-sec-i', String(i));
+            var sub = sec.classList.contains('doc-sec-sub');
+            var col = sec.classList.contains('doc-sec-collapsed');
+            var hasBtn = !!sec.querySelector('button');
+            oh += '<div class="doc-ol-row' + (sub ? ' sub' : '') + '">'
+                + (hasBtn ? '<button class="doc-ol-caret" data-doc-ol-fold="' + i + '" title="'
+                    + _esc(col ? _t('펼치기', 'Expand') : _t('접기', 'Collapse')) + '">' + (col ? '▶' : '▼') + '</button>'
+                          : '<span class="doc-ol-caret"></span>')
+                + '<a href="#" class="doc-ol-item' + (col ? ' collapsed' : '') + '" data-doc-ol="' + i + '">'
+                + _esc(_docSecText(sec)) + '</a></div>';
+        });
+        nav.innerHTML = oh;
+        nav.onclick = function (e) {
+            var f = e.target.closest && e.target.closest('[data-doc-ol-fold]');
+            if (f) {
+                e.preventDefault();
+                var s = secs[Number(f.getAttribute('data-doc-ol-fold'))];
+                var b = s && s.querySelector('button');
+                if (b) b.click();             // 기존 접기 함수 그대로(다시 그리면 목차도 새로 만들어진다)
+                return;
+            }
+            var a = e.target.closest && e.target.closest('[data-doc-ol]');
+            if (!a) return;
+            e.preventDefault();
+            var n = Number(a.getAttribute('data-doc-ol'));
+            if (n < 0) { body.scrollTop = 0; return; }
+            var t = secs[n];
+            if (t) body.scrollTop += t.getBoundingClientRect().top - body.getBoundingClientRect().top - 12;
+        };
+        var markActive = function () {
+            var top = body.getBoundingClientRect().top + 40, cur = -1;
+            for (var i = 0; i < secs.length; i++) {
+                if (secs[i].getClientRects().length && secs[i].getBoundingClientRect().top <= top) cur = i;
+            }
+            [].forEach.call(nav.querySelectorAll('.doc-ol-item'), function (a) {
+                a.classList.toggle('active', Number(a.getAttribute('data-doc-ol')) === cur);
+            });
+        };
+        body.onscroll = markActive;       // 이 본문 상자의 스크롤은 여기 한 곳만 쓴다
+        markActive();
+
+        // ── 여백 메모 ──
+        var memo = margin.querySelector('.doc-memo');
+        var ownCells = function () {
+            return [].slice.call(paper.querySelectorAll('.doc-in.own')).filter(function (el) { return el.getClientRects().length > 0; });
+        };
+        var warnCells = function () {
+            return [].slice.call(paper.querySelectorAll('.doc-warn')).map(function (w) { return w.closest('td'); })
+                .filter(function (td) { return td && td.getClientRects().length > 0; });
+        };
+        var renderSummary = function () {
+            var no = ownCells().length, nw = warnCells().length;
+            var sh = '<div class="doc-mg-sum">'
+                + '<a href="#" data-doc-jump="own"' + (no ? '' : ' class="off"') + ' title="' + _esc(_t('누를 때마다 다음 칸으로', 'Next on each click')) + '">✏️ '
+                + _esc(_t('직접 고친 칸', 'Edited')) + ' <b>' + no + '</b></a>'
+                + '<a href="#" data-doc-jump="warn"' + (nw ? '' : ' class="off"') + ' title="' + _esc(_t('누를 때마다 다음 칸으로', 'Next on each click')) + '">⚠️ '
+                + _esc(_t('확인할 칸', 'Warnings')) + ' <b>' + nw + '</b></a>'
+                + '</div>';
+            var old = margin.querySelector('.doc-mg-sum');
+            if (old) old.outerHTML = sh; else margin.insertAdjacentHTML('afterbegin', sh);
+        };
+        renderSummary();
+        var jumpIdx = { own: -1, warn: -1 };
+        margin.onclick = function (e) {
+            var j = e.target.closest && e.target.closest('[data-doc-jump]');
+            if (!j) return;
+            e.preventDefault();
+            var kind = j.getAttribute('data-doc-jump');
+            var list = kind === 'own' ? ownCells() : warnCells();
+            if (!list.length) return;
+            jumpIdx[kind] = (jumpIdx[kind] + 1) % list.length;
+            var el = list[jumpIdx[kind]];
+            var inp = (el.matches && el.matches('input,textarea')) ? el : el.querySelector('input,textarea');
+            body.scrollTop += el.getBoundingClientRect().top - body.getBoundingClientRect().top - body.clientHeight / 3;
+            if (inp) { try { inp.focus({ preventScroll: true }); } catch (er) { inp.focus(); } }
+        };
+        var showMemo = function (td) {
+            var src = td.querySelector('.doc-src-field');
+            var warns = [].slice.call(td.querySelectorAll('.doc-warn'));
+            var srcHtml = src ? src.innerHTML.replace(/&nbsp;/g, '').trim() : '';
+            if (!srcHtml && !warns.length) { memo.style.display = 'none'; return; }
+            var prev = td.previousElementSibling;
+            var lab = (prev && prev.classList.contains('doc-lab')) ? (prev.textContent || '').trim() : '';
+            if (!lab) {                       // 표 칸이면 같은 열 머리글
+                var tbl = td.closest('table'), tr0 = tbl && tbl.rows[0];
+                var th = tr0 && tr0.cells[td.cellIndex];
+                if (th && th.tagName === 'TH') lab = (th.textContent || '').trim();
+            }
+            memo.innerHTML = (lab ? '<div class="doc-memo-lab">' + _esc(lab) + '</div>' : '')
+                + (srcHtml ? '<div class="doc-memo-src' + (src.classList.contains('own') ? ' own' : '') + '">' + srcHtml + '</div>' : '')
+                + warns.map(function (w) { return '<div class="doc-memo-warn">' + w.innerHTML + '</div>'; }).join('');
+            memo.style.display = 'block';
+            var y = td.getBoundingClientRect().top - margin.getBoundingClientRect().top;
+            var sum = margin.querySelector('.doc-mg-sum');
+            memo.style.top = Math.max(sum ? sum.offsetHeight + 10 : 0, y) + 'px';
+        };
+        memo.style.display = 'none';
+        // ⚠️ `paper.onfocusin = …` 은 크롬에서 **안 불린다**(focusin 은 on- 속성이 없다, 실측) — addEventListener 로.
+        //    종이는 그릴 때마다 새 요소라 리스너가 겹치지 않는다.
+        paper.addEventListener('focusin', function (e) {
+            if (!body.classList.contains('doc-has-memo')) return;
+            var td = e.target.closest && e.target.closest('td');
+            if (td && paper.contains(td)) showMemo(td);
+        });
+        //    칸을 고치고 나가면 그 칸의 '직접 고침' 표시(노란 줄·출처 글)를 **그 자리에서** 다시 칠하고 숫자를 다시 센다
+        //    — 고칠 때마다 문서 전체를 다시 그리면 다음 칸으로 간 커서가 날아간다.
+        paper.addEventListener('focusout', function (e) {
+            var el = e.target, k = el && el.getAttribute && el.getAttribute('data-doc-key');
+            if (k && formId) {
+                var own = _hasOwn(formId, k);
+                if (el.classList.contains('own') !== own) {
+                    el.classList.toggle('own', own);
+                    var sd = el.parentNode && el.parentNode.querySelector('.doc-src-field');
+                    if (sd) { sd.classList.toggle('own', own); sd.innerHTML = _srcFieldHtml(formId, k, own, sd.getAttribute('data-doc-src') || ''); }
+                }
+            }
+            setTimeout(renderSummary, 0);
+        });
+        if (!window._docDeskResizeBound) {
+            window._docDeskResizeBound = true;
+            window.addEventListener('resize', function () { _docDeskFit(document.getElementById('doc-page-body')); });
+        }
+    };
+    window._docDeskFit = _docDeskFit;
 
     window._docRender = function () {
         var body = document.getElementById('doc-page-body');
@@ -5037,7 +5203,8 @@
         // ⚠️ [2026-11-09 사용자 요청] 프로젝트 경로 줄(`📁 고객사 > 모델`)과 서식 안내(ℹ️)는
         //    **두지 않는다** — 문서 위에 앱 안내가 얹히면 문서처럼 안 보인다.
         //    프로젝트가 안 열렸을 때만 한 줄 경고한다(그건 값이 안 채워지는 이유라 숨기면 안 된다).
-        var h = '<div class="doc-paper">';
+        // ✍️ 2단계: 종이를 책상(.doc-desk)으로 감싼다 — 왼쪽 목차·오른쪽 여백은 `_docDeskSetup` 이 그린 뒤 채운다.
+        var h = '<div class="doc-desk"><nav class="doc-outline doc-noprint"></nav><div class="doc-paper">';
         if (!ctx.meta.고객사 && !ctx.meta.모델명) {
             h += '<div class="doc-noprint" style="margin:0 0 8px; font-size:12px; color:#b1432f;">⚠️ '
                + _esc(_t('프로젝트가 열려 있지 않습니다 — 자동으로 채울 값이 없습니다.', 'No project open.')) + '</div>';
@@ -5944,10 +6111,11 @@
             h += '</table>';
             h += '</div>'; // .doc-sec-wrap 닫기 — 섹션 전체 접기/펴기가 이 한 줄에 달려 있다
         });
-        h += '</div>';
+        h += '</div><aside class="doc-margin doc-noprint"><div class="doc-memo"></div></aside></div>';
 
         body.classList.toggle('doc-mode-write', window._docView() === 'write');
         body.innerHTML = h;
+        _docDeskSetup(body, form.id);
         body.oninput = function (e) {
             var el = e.target;
             if (!el || !el.getAttribute) return;

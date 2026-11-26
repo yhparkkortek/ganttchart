@@ -2857,6 +2857,51 @@ tr.jira-zebra-b { background: #e8f2f3; }
     #doc-page-body.doc-mode-write .doc-in.own { box-shadow:none; }
     #doc-page-body.doc-mode-write .doc-sec > button { display:none; }
 }
+/* ✍️ 2단계 [2026-11-26] 작성 보기의 책상 — 왼쪽 목차 · 종이 · 오른쪽 여백 메모 (js/67 `_docDeskSetup`).
+   폭은 js/67 `_docDeskFit` 가 클래스 둘로 정한다: `doc-has-memo`(여백) · `doc-has-outline`(목차). 모자라면 1단계 모양.
+   ⚠️ 점검 보기엔 둘 다 안 붙는다 → 목차·여백은 숨고 종이만(예전 화면). 인쇄엔 늘 종이만. */
+#doc-page-body .doc-outline, #doc-page-body .doc-margin { display:none; }
+/* 책상은 넓어야 한다 — 작성 보기일 때만 페이지 폭 상한(1200px)을 푼다(Project list·Project Review 와 같은 예외).
+   1200 안에선 목차 + 종이 + 여백이 안 들어가 목차가 영영 안 떴다(실측 본문 1,162px). 점검 보기는 예전 폭 그대로. */
+#tab-document > .concept-tab-wrap:has(#doc-page-body.doc-mode-write) { max-width:none !important; }
+#doc-page-body.doc-mode-write.doc-has-memo .doc-desk { display:grid; grid-template-columns:minmax(0,976px) 224px;
+    gap:14px; justify-content:center; align-items:start; }
+#doc-page-body.doc-mode-write.doc-has-memo.doc-has-outline .doc-desk { grid-template-columns:176px minmax(0,976px) 224px; }
+#doc-page-body.doc-mode-write.doc-has-memo .doc-paper { box-sizing:border-box; max-width:none; min-width:0; margin:0 0 22px; }
+#doc-page-body.doc-mode-write.doc-has-memo td:focus-within > .doc-src-field { display:none; }
+/* 목차 */
+#doc-page-body.doc-mode-write.doc-has-outline .doc-outline { display:block; position:sticky; top:0;
+    max-height:calc(100vh - 170px); overflow-y:auto; font-size:12px; padding:2px 0 8px; }
+#doc-page-body .doc-ol-head { font-weight:bold; color:#495057; padding:2px 6px 6px 18px; border-bottom:1px solid #ced4da; margin-bottom:4px; }
+#doc-page-body .doc-ol-row { display:flex; align-items:flex-start; gap:2px; }
+#doc-page-body .doc-ol-row.sub { padding-left:12px; }
+#doc-page-body .doc-ol-caret { width:16px; height:20px; flex-shrink:0; border:none; background:none; padding:0;
+    cursor:pointer; color:#868e96; font-size:8px; line-height:20px; text-align:center; }
+#doc-page-body span.doc-ol-caret { cursor:default; }
+#doc-page-body .doc-outline a.doc-ol-item { flex:1; min-width:0; color:#495057 !important; text-decoration:none !important;
+    padding:2px 6px; border-radius:4px; line-height:16px; word-break:keep-all; overflow-wrap:anywhere; }
+#doc-page-body .doc-outline a.doc-ol-item:hover { background:#dee2e6; }
+#doc-page-body .doc-outline a.doc-ol-item.active { background:#fff; color:#212529 !important; font-weight:bold;
+    box-shadow:inset 2px 0 0 #495057; }
+#doc-page-body .doc-outline a.doc-ol-item.collapsed { color:#adb5bd !important; }
+/* 여백 — 위에 모아보기(따라 내려온다), 아래에 커서 칸 메모(그 칸 높이) */
+#doc-page-body.doc-mode-write.doc-has-memo .doc-margin { display:block; position:relative; align-self:stretch; }
+#doc-page-body .doc-mg-sum { position:sticky; top:0; z-index:2; display:flex; flex-direction:column; gap:4px;
+    padding:8px 10px; background:#f8f9fa; border:1px solid #ced4da; border-radius:6px; font-size:12px; }
+#doc-page-body .doc-mg-sum a { display:flex; justify-content:space-between; color:#495057 !important; text-decoration:none !important; }
+#doc-page-body .doc-mg-sum a:hover { color:#212529 !important; }
+#doc-page-body .doc-mg-sum a.off { color:#adb5bd !important; pointer-events:none; }
+#doc-page-body .doc-memo { position:absolute; left:0; right:0; z-index:3; background:#fff; border:1px solid #ced4da;
+    border-left:3px solid #868e96; border-radius:4px; padding:7px 9px; font-size:11.5px; line-height:1.45;
+    box-shadow:0 2px 6px rgba(0,0,0,.08); }
+#doc-page-body .doc-memo-lab { font-weight:bold; color:#212529; margin-bottom:3px; }
+#doc-page-body .doc-memo-src { color:#495057; overflow-wrap:anywhere; }
+#doc-page-body .doc-memo-src.own { color:#7a5210; }
+#doc-page-body .doc-memo-warn { color:#b1432f; margin-top:4px; }
+@media print {
+    #doc-page-body .doc-desk { display:block !important; }
+    #doc-page-body .doc-outline, #doc-page-body .doc-margin { display:none !important; }
+}
 
 /* 🔍 [2026-11-24] 주소록 검색 — 걸린 칸 강조(js/22f filterAddressRows). 색은 프로젝트 불러오기·Project list 의 <mark> 와 같다(js/04a _searchMarkHtml). */
 #address-table-body input.u-input.search-hit { background-color:#fff3bf !important; }
