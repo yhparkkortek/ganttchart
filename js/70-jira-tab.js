@@ -1355,7 +1355,7 @@
                 + ' style="padding:7px 12px; border-radius:6px; font-size:12px; cursor:pointer; border:none; background:#e0f5f7; color:#00707d; transition:background .15s;">🔍 ' + T('찾기', 'Find') + '</button>'
                 + '</div>'
                 + '<div id="jira-link-project-hits" style="display:none; max-height:130px; overflow-y:auto; border:1px solid #eee; border-radius:6px; margin-bottom:10px;"></div>'
-                + '<div style="border-top:1px dashed #e5e5e5; margin:4px 0 10px;"></div>'
+                + '<div style="border-top:1px dashed var(--ui-cell-line, #cfe3e5); margin:4px 0 10px;"></div>'
                 + '<label style="display:block; margin-bottom:4px; color:#555;">🔗 ' + T('수동 이슈 키 (쉼표로 구분, 예: GABKJ-1, GABKJ-5)', 'Manual issue keys (comma-separated, e.g. GABKJ-1, GABKJ-5)') + '</label>'
                 + '<input id="jira-link-manual" style="width:100%; box-sizing:border-box; padding:7px 9px; border:1px solid #ccc; border-radius:6px; font-size:12px; margin-bottom:10px;">'
                 + '<label style="display:block; margin-bottom:4px; color:#555;">🔍 ' + T('검색어(JQL text 검색, 비우면 모델명 사용)', 'Search keyword (JQL text search; blank uses the model name)') + '</label>'
@@ -1549,7 +1549,7 @@
                 + esc(T('클릭하면 연결 프로그램으로 엽니다', 'Click to open with the associated app')) + '" style="' + commonSt + '">' + inner + nameLine + '</div>';
         }).join('');
         return '<div style="margin-bottom:12px;">'
-            + '<div style="font-weight:bold; color:#555; margin-bottom:6px;">📎 ' + T('첨부파일', 'Attachments') + ' (' + list.length + ')</div>'
+            + '<div style="font-weight:bold; color:var(--modal-hdr-text, #00707d); margin-bottom:6px;">📎 ' + T('첨부파일', 'Attachments') + ' (' + list.length + ')</div>'
             + '<div style="display:flex; flex-wrap:wrap; gap:10px;">' + items + '</div>'
             + '</div>';
     }
@@ -1586,7 +1586,7 @@
             return '<div style="color:#aaa; text-align:center;">' + T('댓글 없음', 'No comments') + '</div>';
         }
         return list.map(function (c, i) {
-            return '<div style="margin-bottom:8px; padding-bottom:8px; border-bottom:1px dashed #e5e5e5;">'
+            return '<div style="margin-bottom:8px; padding-bottom:8px; border-bottom:1px dashed var(--ui-cell-line, #cfe3e5);">'
                 + '<div style="display:flex; align-items:baseline; gap:8px;">'
                 + '<div style="font-size:11px; color:#888; flex:1; min-width:0;">' + esc(c.author || '') + ' · ' + esc((c.created || '').slice(0, 16).replace('T', ' ')) + '</div>'
                 + '<a onclick="window._jiraEditComment(\'' + esc(key) + '\', ' + i + ')" style="font-size:11px; color:var(--ui-accent, #00707d); cursor:pointer; white-space:nowrap;">✏️ ' + T('수정', 'Edit') + '</a>'
@@ -1850,10 +1850,10 @@
         try { prRes = await fetchJson(BASE + '/jira/priorities'); } catch (e) { prRes = { priorities: [] }; }
         var priorities = (prRes && prRes.priorities) || [];
 
-        var shareBtnSt = 'flex-shrink:0; width:28px; height:26px; padding:0; border-radius:5px; font-size:13px; line-height:26px; cursor:pointer; border:none; background:#e0f5f7; color:#00707d;';
-        var shareRow = '<div style="display:flex; align-items:center; gap:5px; margin-bottom:10px; padding:5px 7px; background:#f7fbfb; border:1px solid #d9eceb; border-radius:6px;">'
-            + '<span style="font-size:11px; color:#555; font-weight:bold; flex-shrink:0;">📤 ' + T('공유', 'Share') + '</span>'
-            + '<input id="jira-share-name" placeholder="' + T('이름(비우면 나)', 'name (blank = me)') + '" style="flex:1; min-width:0; padding:4px 6px; border:1px solid #ccc; border-radius:5px; font-size:11px;">'
+        var shareBtnSt = 'flex-shrink:0; width:28px; height:26px; padding:0; border-radius:6px; font-size:13px; line-height:26px; cursor:pointer; border:none; background:#e0f5f7; color:#00707d;';
+        var shareRow = '<div style="display:flex; align-items:center; gap:5px; margin-bottom:10px; padding:5px 7px; background:var(--ui-zebra, #e8f2f3); border:1px solid var(--ui-cell-line, #cfe3e5); border-radius:6px;">'   // 🎨 [2026-11-26] 고정 청회색 → 팔레트
+            + '<span style="font-size:11px; color:var(--modal-hdr-text, #00707d); font-weight:bold; flex-shrink:0;">📤 ' + T('공유', 'Share') + '</span>'
+            + '<input id="jira-share-name" placeholder="' + T('이름(비우면 나)', 'name (blank = me)') + '" style="flex:1; min-width:0; padding:4px 6px; border:1px solid var(--ui-cell-line, #cfe3e5); border-radius:4px; font-size:11px;">'
             + '<button onclick="window._jiraShareCopy(\'' + esc(key) + '\')" title="' + T('클립보드로 복사', 'Copy to clipboard') + '"' + btnHover + ' style="' + shareBtnSt + '">📋</button>'
             + '<button onclick="window._jiraShareSendTg(\'' + esc(key) + '\')" title="' + T('텔레그램으로 보내기', 'Send via Telegram') + '"' + btnHover + ' style="' + shareBtnSt + '">💬</button>'
             + '<button onclick="window._jiraShareSendMail(\'' + esc(key) + '\')" title="' + T('이메일로 보내기', 'Send via email') + '"' + btnHover + ' style="' + shareBtnSt + '">✉️</button>'
@@ -1897,15 +1897,15 @@
             + '<div style="display:flex; justify-content:flex-end; margin-bottom:12px;">'
             + '<button onclick="window._jiraUploadAttachment(\'' + esc(key) + '\')"' + btnHover + ' style="' + btnSt + ' font-weight:bold;">⬆ ' + T('첨부 저장', 'Save attachment') + '</button>'
             + '</div>'
-            + '<div style="border-top:1px dashed #e5e5e5; margin:4px 0 12px;"></div>'
+            + '<div style="border-top:1px dashed var(--ui-cell-line, #cfe3e5); margin:4px 0 12px;"></div>'
             + fieldRow(T('상태 전환', 'Transition'), (transitions.length
                 ? ('<select id="jira-f-transition" style="' + inputSt + '">'
                     + transitions.map(function (t) { return '<option value="' + esc(t.id) + '">' + esc(t.name) + (t.to ? (' → ' + esc(t.to)) : '') + '</option>'; }).join('')
                     + '</select><button onclick="window._jiraDoTransition(\'' + esc(key) + '\')"' + btnHover + ' style="' + btnSt + ' margin-left:8px;">▶ ' + T('전환', 'Go') + '</button>')
                 : ('<span style="color:#999;">(' + T('현재 상태: ', 'current: ') + esc(issue.status) + T(' — 전환 가능한 상태 없음)', ' — no transitions available)') + '</span>')))
-            + '<div style="border-top:1px dashed #e5e5e5; margin:4px 0 12px;"></div>'
-            + '<div style="font-weight:bold; color:#555; margin-bottom:6px;">💬 ' + T('댓글(대응)', 'Comments') + '</div>'
-            + '<div id="jira-comments-list" style="max-height:160px; overflow-y:auto; border:1px solid #eee; border-radius:6px; padding:8px; margin-bottom:8px; background:#fafafa;">'
+            + '<div style="border-top:1px dashed var(--ui-cell-line, #cfe3e5); margin:4px 0 12px;"></div>'
+            + '<div style="font-weight:bold; color:var(--modal-hdr-text, #00707d); margin-bottom:6px;">💬 ' + T('댓글(대응)', 'Comments') + '</div>'
+            + '<div id="jira-comments-list" style="max-height:160px; overflow-y:auto; border:1px solid var(--ui-cell-line, #cfe3e5); border-radius:6px; padding:8px; margin-bottom:8px; background:#fff;">'
             + renderComments(issue.comments, key)
             + '</div>'
             + '<textarea id="jira-comment-input" rows="2" style="width:100%; box-sizing:border-box; padding:6px 8px; border:1px solid #ccc; border-radius:6px; font-size:12px; resize:vertical;" placeholder="' + T('댓글을 입력하세요...', 'Write a comment...') + '"></textarea>'

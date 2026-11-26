@@ -70,6 +70,10 @@ a[onclick]:not([href]) { cursor: pointer; text-decoration: underline; }
 /* ↔ [2026-11-25] 표 머리글은 가운데 — 위 전역 `th, td` 기본이 left 라, 정렬을 안 적은 모달 표 머리글이 전부 왼쪽이었다.
    thead 안만(왼쪽 항목 이름 열로 쓰는 tbody th 는 그대로). 인라인·클래스로 정한 것은 그쪽이 이긴다. */
 thead th { text-align: center; }
+/* 🪐 [2026-11-26 "모달 통일화"] JIRA 모달(이슈 상세·새 이슈·연결 설정·전체 검색) 입력칸 — 회색 #ccc 선·12px 이던 것을 앱 입력칸과 같게(테마 선·12.5px·6px).
+   공유 줄 이름칸(22px)만 작은 것 4px 은 인라인이 정한다. */
+:is(#jira-issue-box, #jira-create-box, #jira-link-box, #jira-search-box) :is(input:not([type=checkbox]):not([type=radio]):not(#jira-share-name), textarea, select) {
+    border-color: var(--ui-cell-line, #cfe3e5) !important; font-size: 12.5px !important; border-radius: 6px !important; }
 /* 🧩 [2026-11-26 사용자 "알람 공지 … 팔렛트 … 모달 UI 통일"] 모달 안 '접는 구역'(▶ 펼치기 머리 — `_toggleAlarmSection`)
    — 알람 일정·공지 등록·설정 모달들이 같은 틀을 쓰는데 머리가 고정 회청색(#f0f4f8)·틀이 회색(#e0e0e0)·소구역이 고정 하늘(#f0f6ff)이라
    테마를 안 따랐다. 인라인 색을 일일이 고치지 않고 여기 한 곳에서 팔레트로 덮는다(인라인 onmouseover 색도 !important 가 이긴다). */
