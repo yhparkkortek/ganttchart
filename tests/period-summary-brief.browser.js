@@ -8,7 +8,8 @@
     var realKey = window.getActiveAiKey, realCall = window.callAiBackend, realPut = window.nasAppFile && window.nasAppFile.put;
     var saved = JSON.parse(JSON.stringify(window.projectMeta.aiPeriodSummary || {}));
     try {
-        if (window.nasAppFile) window.nasAppFile.put = function () { return Promise.resolve({ ok: true }); };
+        var puts = [];
+        if (window.nasAppFile) window.nasAppFile.put = function (rel, rec) { puts.push({ rel: rel, rec: rec }); return Promise.resolve({ ok: true }); };
         var prompts = [];
         window.getActiveAiKey = function () { return 'fake'; };
         window.callAiBackend = async function (k, prompt) {
@@ -52,6 +53,24 @@
         await window.generatePeriodSummary(window._psMode(), {});
         ok('옛 형식 보관본은 새로 생성한다(AI 호출 +1)', prompts.length === before + 1, prompts.length - before);
         window._psArchiveFind = old;
+        // 💾 보관본 재활용 — 사실 수(n)만 달라진 같은 기간·필터는 "가까운 보관본" 으로 찾는다(AI 0회)
+        var put = puts.filter(function (x) { return /App_Config\/AiSummary\//.test(x.rel); })[0];
+        ok('생성하면 보관함에 저장된다(put 1건 이상)', !!put, puts.length);
+        if (put) {
+            var nm = put.rel.split('/').pop(), pn = window._psArchiveParseName(nm);
+            ok('보관본 이름에 기간·필터 해시가 있다', !!pn && /^[0-9a-f]{8}$/.test(pn.base), nm);
+            ok('옛 이름(해시 하나)도 읽힌다', (function () { var q = window._psArchiveParseName('20261120_101500__0123abcd__주간.json'); return !!q && q.base === '' && q.title === '주간'; })());
+            var rl = window._psArchiveList, rg = window._psArchiveGet;
+            window._psArchiveList = async function () { return [nm]; };
+            window._psArchiveGet = async function () { return put.rec; };
+            try {
+                var sigA = put.rec.sig, sigB = sigA.replace(/\|n=\d+$/, '|n=99999');
+                ok('사실 수가 다르면 정확히 같은 조건은 없다', sigB !== sigA && (await window._psArchiveFind(sigB)) === null);
+                var near = await window._psArchiveFindNear(sigB);
+                ok('같은 기간·필터면 가까운 보관본을 찾는다', !!near && near.sig === sigA);
+                ok('기간이 다르면 못 찾는다', (await window._psArchiveFindNear('다른기간' + sigA)) === null);
+            } finally { window._psArchiveList = rl; window._psArchiveGet = rg; }
+        }
     } catch (e) { ok('실행', false, e && e.message); }
     finally {
         window.getActiveAiKey = realKey; window.callAiBackend = realCall; if (window.nasAppFile && realPut) window.nasAppFile.put = realPut;

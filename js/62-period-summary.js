@@ -705,15 +705,17 @@
     function fnv8(s) { var h = 0x811c9dc5; s = String(s); for (var i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = (h + ((h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24))) >>> 0; } return ('0000000' + h.toString(16)).slice(-8); }
     function useNas() { return !!(window.nasAppFile && window._storageMode && window._storageMode() === 'nas'); }
     function stamp(d) { return d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate()) + '_' + pad(d.getHours()) + pad(d.getMinutes()) + pad(d.getSeconds()); }
+    /** 보관본 열쇠에서 **사실 수(n)·JIRA(j)** 를 뺀 것 — 메일이 한 통 더 와도 '같은 기간·같은 필터' 로 본다. */
+    function baseSigOf(x) { return String(x || '').replace(/\|j=.*$/, ''); }
     function archNameOf(rec) {
         var f = rec.filter || {};
         var tail = [rec.label, f.pm, f.proj, f.who].filter(Boolean).join('_').replace(/[\\/:*?"<>|\s]+/g, '_').slice(0, 90);
-        return stamp(new Date(rec.at)) + '__' + fnv8(rec.sig) + '__' + tail + '.json';
+        return stamp(new Date(rec.at)) + '__' + fnv8(rec.sig) + '__' + fnv8(baseSigOf(rec.sig)) + '__' + tail + '.json';
     }
     window._psArchiveParseName = function (name) {
-        var m = String(name || '').match(/^(\d{8})_(\d{4})\d*__([0-9a-f]{8})__(.*)\.json$/);
+        var m = String(name || '').match(/^(\d{8})_(\d{4})\d*__([0-9a-f]{8})__(?:([0-9a-f]{8})__)?(.*)\.json$/);   // 둘째 해시(기간·필터)는 2026-11-26 부터 — 옛 이름엔 없다
         if (!m) return null;
-        return { at: m[1].slice(0, 4) + '-' + m[1].slice(4, 6) + '-' + m[1].slice(6) + ' ' + m[2].slice(0, 2) + ':' + m[2].slice(2), hash: m[3], title: m[4].replace(/_/g, ' ') };
+        return { at: m[1].slice(0, 4) + '-' + m[1].slice(4, 6) + '-' + m[1].slice(6) + ' ' + m[2].slice(0, 2) + ':' + m[2].slice(2), hash: m[3], base: m[4] || '', title: m[5].replace(/_/g, ' ') };
     };
     var _psArch = { names: null, at: 0, busy: null };
     function localArch() { try { return JSON.parse(localStorage.getItem(P.archiveLocalKey) || '[]') || []; } catch (e) { return []; } }
@@ -760,6 +762,24 @@
             try {
                 var rec = await window._psArchiveGet(names[i]);
                 if (rec && rec.sig === sig && Array.isArray(rec.rows)) return rec;   // 해시가 겹쳐도 열쇠로 한 번 더
+            } catch (e) { /* 다음 후보 */ }
+        }
+        return null;
+    };
+    /**
+     * 💾 [2026-11-26 사용자 요청 "한번 요약하고 버리지 말고 저장해 두었다가 재활용"] 같은 **기간·필터**인데 사실 수·JIRA 만 달라진 보관본 중 가장 최신 것.
+     *  정확히 같은 조건(`_psArchiveFind`)이 없을 때 쓴다 — 메일이 한 통만 더 와도 조건이 달라져 "보관본이 없는 것처럼" 보이던 것을 막는다.
+     *  화면은 이걸 "그 뒤 사실이 N→M건으로 바뀜 — 새로 생성하면 반영" 으로 보여 주고, AI 는 부르지 않는다.
+     */
+    window._psArchiveFindNear = async function (sig) {
+        var bh = fnv8(baseSigOf(sig));
+        var names = await window._psArchiveList();
+        for (var i = 0; i < names.length; i++) {
+            var pn = window._psArchiveParseName(names[i]);
+            if (!pn || pn.base !== bh) continue;   // 옛 이름(둘째 해시 없음)은 못 찾는다 — 정확히 같은 조건일 때만 재사용된다
+            try {
+                var rec = await window._psArchiveGet(names[i]);
+                if (rec && Array.isArray(rec.rows) && baseSigOf(rec.sig) === baseSigOf(sig)) return rec;
             } catch (e) { /* 다음 후보 */ }
         }
         return null;
@@ -825,11 +845,12 @@
                 factCount: col.facts.length, rows: conv.rows, dropped: conv.dropped
             };
             // 📚 보관 — 실패해도 요약은 보여 준다(다음에 같은 조건이면 그때 또 부를 뿐이다).
-            try { await window._psArchivePut(rec); }
+            var savedOk = false;
+            try { await window._psArchivePut(rec); savedOk = true; }
             catch (e) { console.warn('[기간 요약] 보관 실패:', e && e.message); if (window._issueLog) try { window._issueLog({ domain: 'ai', kind: 'ps_archive_fail', rid: '', route: '', params: { msg: String(e && e.message || e).slice(0, 200) } }); } catch (e2) { /* 무시 */ } }
             adoptRec(kind, rec);
             if (window._renderAiProjectSummaryBody) window._renderAiProjectSummaryBody();
-            if (window.showToast) window.showToast(T('🤖 ' + col.range.label + ' 요약을 만들었습니다', '🤖 Summary generated') + (window.projectMeta.aiPeriodSummary[kind].dropped ? T(' (근거 없는 문장 ' + window.projectMeta.aiPeriodSummary[kind].dropped + '개 제거)', ' (' + window.projectMeta.aiPeriodSummary[kind].dropped + ' ungrounded sentence(s) removed)') : ''), 'info');
+            if (window.showToast) window.showToast(T('🤖 ' + col.range.label + ' 요약을 만들었습니다' + (savedOk ? ' · 📚 보관함에 저장 — 같은 조건이면 다시 열어도 AI 0회' : ' (보관함 저장은 실패)'), '🤖 Summary generated' + (savedOk ? ' · saved to archive' : ' (archive save failed)')) + (window.projectMeta.aiPeriodSummary[kind].dropped ? T(' (근거 없는 문장 ' + window.projectMeta.aiPeriodSummary[kind].dropped + '개 제거)', ' (' + window.projectMeta.aiPeriodSummary[kind].dropped + ' ungrounded sentence(s) removed)') : ''), 'info');
             return window.projectMeta.aiPeriodSummary[kind];
         } catch (e) {
             alert(T('⚠️ 요약 생성 실패: ', '⚠️ Summary failed: ') + (e && e.message ? e.message : e));
@@ -994,6 +1015,8 @@
             _psLooked[col.sig] = 1;
             var sigNow = col.sig;
             window._psArchiveFind(sigNow).then(function (rec) {
+                return rec || window._psArchiveFindNear(sigNow);   // 💾 사실 수만 달라졌으면 가장 최근 것을 "바뀜" 표시와 함께
+            }).then(function (rec) {
                 if (!rec || mode() !== kind) return;
                 if (window._psCollectFacts(kind).sig !== sigNow) return;
                 rec._reused = true; adoptRec(kind, rec);
@@ -1503,7 +1526,7 @@
         var projs = uniq([].concat.apply([], all.map(function (r) { return r.projects; }))).sort();
         var people = uniq([].concat.apply([], all.map(function (r) { return peopleOf(r); }))).sort();
         var opt = function (list, cur, allLabel) { return '<option value="">' + esc(allLabel) + '</option>' + list.map(function (v) { return '<option value="' + esc(v) + '"' + (v === cur ? ' selected' : '') + '>' + esc(v) + '</option>'; }).join(''); };
-        var selS = window._uiSelectStyle(false) + ' max-width:150px;';
+        var selS = function (on) { return window._uiSelectStyle(!!on) + ' max-width:150px;'; };   // 고르면 켜진 표시(다른 필터 상자와 같게)
         var smallBtn = window._uiBtnStyle();
         var meta = '🤖 ' + esc(T('사실 ' + (s.factCount || 0) + '건만으로', 'from ' + (s.factCount || 0) + ' facts')) + ' · ' + esc(String(s.at || '').replace('T', ' ').slice(0, 16)) +
             (s.by ? ' · ' + esc(s.by) : '') + (s.dropped ? ' · ' + esc(T('근거 없는 항목 ' + s.dropped + '개 제거', s.dropped + ' ungrounded removed')) : '') +
@@ -1542,8 +1565,8 @@
             '<div style="display:flex; gap:4px; align-items:center; flex-wrap:wrap; margin-bottom:5px;">' + viewBar + (isBrief ? '' : chips) +
             (nCommon ? '<label style="font-size:11px; color:#8f5a00; display:inline-flex; align-items:center; gap:2px; cursor:pointer; margin-left:2px;"><input type="checkbox"' + (_psTbl.common ? ' checked' : '') + ' onchange="window._psTblSet({common:this.checked})">🔗 ' + esc(T('공통 이슈만', 'Common only')) + ' ' + nCommon + '</label>' : '') +
             pinFilterHtml(all.filter(rowPinned).length) +
-            '<select onchange="window._psTblSet({proj:this.value})" title="' + esc(T('프로젝트', 'Project')) + '" style="' + selS + '">' + opt(projs, _psTbl.proj, T('프로젝트 전체', 'All projects')) + '</select>' +
-            '<select onchange="window._psTblSet({who:this.value})" title="' + esc(T('업무 담당자', 'Assignee')) + '" style="' + selS + '">' + opt(people, _psTbl.who, T('담당자 전체', 'All assignees')) + '</select>' +
+            '<select onchange="window._psTblSet({proj:this.value})" title="' + esc(T('프로젝트', 'Project')) + '" style="' + selS(_psTbl.proj) + '">' + opt(projs, _psTbl.proj, T('프로젝트 전체', 'All projects')) + '</select>' +
+            '<select onchange="window._psTblSet({who:this.value})" title="' + esc(T('업무 담당자', 'Assignee')) + '" style="' + selS(_psTbl.who) + '">' + opt(people, _psTbl.who, T('담당자 전체', 'All assignees')) + '</select>' +
             '<button onclick="window._psTblSet({reset:1})" title="' + esc(T('표 필터·정렬 초기화', 'Reset table filters')) + '" style="' + window._uiBtnStyle('danger') + '">↺</button>' +
             '<span style="flex:1;"></span>' +
             (s.archiveView ? '' : '<button onclick="window._psRegenerate()" style="' + smallBtn + '" title="' + esc(T('보관본을 두고 AI 로 새로 만든다', 'Generate again with AI')) + '">🔄 ' + esc(T('새로 생성', 'Regenerate')) + '</button>') +
