@@ -1049,7 +1049,7 @@
             var doneAll = col.facts.filter(function (f) { return window._rr.isDone(factGanttRow(f), f.status); }).length;
             if (!_psTbl.showDone) factsShown = factsShown.filter(function (f) { return !window._rr.isDone(factGanttRow(f), f.status); });
             // 🗜 [2026-11-26 사용자 요청 "칩 버튼 1행으로"] 완료 숨김·🔗≈ 칩·열 필터를 **한 줄**에 — 표 엔진의 필터 줄 앞(cfg.barPre)에 넣는다.
-            _psFactsPre = doneAll ? '<button onclick="window._psTblSet({showDone:' + (!_psTbl.showDone) + '})" title="' + esc(T('간트 상태가 완료인 업무 — 회의에서 정리된 것', 'Gantt status = Done')) + '" style="' + window._uiPillStyle(!!_psTbl.showDone) + '">✅ ' + esc(_psTbl.showDone ? T('완료 ' + doneAll + '건 포함 중 — 숨기기', 'Done ' + doneAll + ' shown — hide') : T('완료 ' + doneAll + '건 숨김 — 보기', 'Done ' + doneAll + ' hidden — show')) + '</button>' : '';
+            _psFactsPre = doneAll ? '<button onclick="window._psTblSet({showDone:' + (!_psTbl.showDone) + '})" title="' + esc(T('간트 상태가 완료인 업무 — 회의에서 정리된 것 · 누르면 ' + (_psTbl.showDone ? '숨깁니다' : '보입니다'), 'Gantt status = Done — click to toggle')) + '" style="' + window._uiPillStyle(!!_psTbl.showDone) + '">✅ ' + esc(_psTbl.showDone ? T('완료 ' + doneAll + '건 표시', 'Done ' + doneAll + ' shown') : T('완료 ' + doneAll + '건 숨김', 'Done ' + doneAll + ' hidden')) + '</button>' : '';
             _psLast.factsShown = factsShown;   // 표를 다시 그릴 때(정렬·필터) 쓴다 — paintFacts
             if (_psTbl.pinned && !factsShown.length) h.push('<div style="padding:24px 10px; text-align:center; color:#999; font-size:12.5px;">' + esc(T('📌 핀셋을 켠 업무가 없습니다 — 열린 프로젝트의 업무만 셉니다', 'No pinned tasks (open project only)')) + '</div>');
             else h.push('<div id="ps-facts-body">' + factsTableHtml(factsShown) + '</div>');

@@ -119,11 +119,11 @@
     function chipsHtml(id) {
         var S = st(id), sim, grp = '';
         if (S.groups) {
-            grp = '<button onclick="window._fdupMode(\'' + id + '\', \'group\')" title="' + esc(T('같은 메일이 여러 프로젝트로 배분돼 내용이 똑같은 항목을 한 줄로 — 줄 안의 🔗 로 펼칩니다', 'Same mail distributed to several projects shown as one row')) + '" style="' + pill(S.groupOn) + '">🔗 ' +
-                esc(S.groupOn ? T('같은 메일 ' + S.merged + '건을 묶었습니다 — 풀기', S.merged + ' duplicates grouped — ungroup') : T('같은 메일 묶기 (묶을 중복 ' + S.merged + '건)', 'Group same-mail duplicates (' + S.merged + ')')) + '</button>';
+            grp = '<button onclick="window._fdupMode(\'' + id + '\', \'group\')" title="' + esc(T('같은 메일이 여러 프로젝트로 배분돼 내용이 똑같은 항목을 한 줄로 — 줄 안의 🔗 로 펼칩니다 · 이 단추를 누르면 묶기를 켜고/끕니다', 'Same mail distributed to several projects shown as one row — click to toggle')) + '" style="' + pill(S.groupOn) + '">🔗 ' +
+                esc(S.groupOn ? T('같은 메일 ' + S.merged + '건 묶음', S.merged + ' grouped') : T('같은 메일 묶기 (묶을 중복 ' + S.merged + '건)', 'Group same-mail duplicates (' + S.merged + ')')) + '</button>';
         }
         sim = S.simOn
-            ? (S.sims.length ? '<button onclick="window._fdupMode(\'' + id + '\', \'sim\')" title="' + esc(T('같은 프로젝트에서 업무명이 비슷한 항목을 알립니다(자동으로 합치지는 않습니다) — 줄 안의 ≈ 로 펼칩니다', 'Flags similar task names in the same project (never merged automatically)')) + '" style="' + pill(true) + '">≈ ' + esc(T('비슷한 업무 ' + S.sims.length + '묶음 — 끄기', S.sims.length + ' similar groups — turn off')) + '</button>' : '')
+            ? (S.sims.length ? '<button onclick="window._fdupMode(\'' + id + '\', \'sim\')" title="' + esc(T('같은 프로젝트에서 업무명이 비슷한 항목을 알립니다(자동으로 합치지는 않습니다) — 줄 안의 ≈ 로 펼칩니다 · 이 단추를 누르면 알림을 끕니다', 'Flags similar task names in the same project (never merged automatically)')) + '" style="' + pill(true) + '">≈ ' + esc(T('비슷 ' + S.sims.length + '묶음', S.sims.length + ' similar')) + '</button>' : '')
             : '<button onclick="window._fdupMode(\'' + id + '\', \'sim\')" style="' + pill(false) + '">≈ ' + esc(T('비슷한 업무 알림 켜기', 'Flag similar tasks')) + '</button>';
         return grp + sim;
     }

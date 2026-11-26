@@ -78,7 +78,8 @@
                        '</select>';
             });
             var dirty = activeCount(e) > 0 || !!e.sort;
-            var bar = '<div style="display:flex; gap:4px; align-items:center; flex-wrap:wrap; margin:0 0 5px;">' + sel +
+            // cfg.barPre — 필터 상자 **앞**에 같은 줄로 붙일 단추들(예: 리뷰의 완료 숨김·🔗≈ 칩). 줄을 따로 만들면 면적을 먹는다(2026-11-26 사용자 요청 "1행으로").
+            var bar = '<div style="display:flex; gap:4px; align-items:center; flex-wrap:wrap; margin:0 0 5px;">' + (cfg.barPre || '') + sel +
                 (dirty ? '<button onclick="window._ftReset(\'' + id + '\')" title="' + esc(T('필터·정렬 초기화', 'Reset filters and sort')) + '" style="' + (window._uiBtnStyle ? window._uiBtnStyle('danger') : '') + '">↺</button>' : '') +
                 '<span style="margin-left:auto; font-size:11px; color:#888;">' + view.length + ' / ' + rows.length + esc(T('건', '')) + '</span></div>';
 

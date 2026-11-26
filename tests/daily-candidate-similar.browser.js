@@ -15,7 +15,7 @@
         var simBtns = function () { return [].slice.call(c().querySelectorAll('button[onclick*="_fdupSim("]')); };
         var SIM = window.DUP_SIMILAR;
         ok('수치가 데이터로 있다(DUP_SIMILAR)', !!SIM && SIM.minShared === 2 && SIM.genericRatio > 0, SIM);
-        ok('비슷한 업무 칩("≈ 비슷한 업무 N묶음")이 있다', /≈ 비슷한 업무 \d+묶음/.test(c().innerText));
+        ok('비슷한 업무 칩("≈ 비슷 N묶음")이 있다', /≈ 비슷 \d+묶음/.test(c().innerText));
         var anchor = (window._dailyCand || []).filter(function (x) { return x._sim; })[0];
         ok('비슷한 업무 묶음이 있다', !!anchor);
         if (!anchor) throw new Error('시험 대상 없음');
@@ -45,7 +45,7 @@
         window._fdupMode('daily-cand', 'sim'); await w(400);
         ok('끄면 ≈ 칩이 없다', simBtns().length === 0 && /비슷한 업무 알림 켜기/.test(c().innerText));
         window._fdupMode('daily-cand', 'sim'); await w(300);
-        ok('다시 켜면 칩이 돌아온다', /≈ 비슷한 업무 \d+묶음/.test(c().innerText));
+        ok('다시 켜면 칩이 돌아온다', /≈ 비슷 \d+묶음/.test(c().innerText));
     } catch (e) { ok('실행', false, e && e.message); }
     finally { window.dailyCloseModal(); localStorage.removeItem(window.DAILY_POLICY.draftKey); }
     console.log(res.join('\n')); return res;

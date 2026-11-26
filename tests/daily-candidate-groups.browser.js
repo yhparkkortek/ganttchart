@@ -18,7 +18,7 @@
         ok('같은 메일 묶음 줄(🔗 ×N)이 있다', grpBtns().length > 0, grpBtns().length);
         var n0 = rowsNow();
         ok('묶으면 줄 수가 후보 수보다 적다', n0 < all.length, [n0, all.length]);
-        ok('칩이 묶은 건수를 말한다', /같은 메일 \d+건을 묶었습니다/.test(c().innerText));
+        ok('칩이 묶은 건수를 말한다', /같은 메일 \d+건 묶음/.test(c().innerText));
         // 펼치기
         var repG = (window._dailyCand || []).filter(function (x) { return x._g; })[0], members = repG._g.members.length;
         c().querySelector('button[onclick*="_fdupGrp(\'daily-cand\', ' + repG._g.n + ')"]').click(); await w(400);

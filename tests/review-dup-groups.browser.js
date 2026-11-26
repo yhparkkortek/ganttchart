@@ -19,7 +19,7 @@
         var allN = S().all.length, rowsN = mainRows();
         ok('같은 메일 묶음(🔗 ×N)이 있다', S().groups > 0, S().groups);
         ok('묶으면 줄 수가 사실 수보다 적다', rowsN < allN, [rowsN, allN]);
-        ok('칩이 묶은 건수를 말한다', /같은 메일 \d+건을 묶었습니다/.test(body().innerText));
+        ok('칩이 묶은 건수를 말한다', /같은 메일 \d+건 묶음/.test(body().innerText));
         // 펼치기 — 자식 줄도 근거 이동 id 를 갖는다
         var rep = S().all.filter(function (x) { return x._g; })[0], n = rep._g.members.length;
         body().querySelector('button[onclick*="_fdupGrp(\'ps-facts\', ' + rep._g.n + ')"]').click(); await w(400);
@@ -41,7 +41,7 @@
         window._ftReset('ps-facts'); await w(300);
         // 비슷한 업무
         var simOn = S().sims.length;
-        ok('비슷한 업무 칩이 있거나(있으면 ≈) 없다(없으면 칩 없음)', simOn ? /≈ 비슷한 업무 \d+묶음/.test(body().innerText) : !/≈ 비슷한 업무 \d+묶음/.test(body().innerText), simOn);
+        ok('비슷한 업무 칩이 있거나(있으면 ≈) 없다(없으면 칩 없음)', simOn ? /≈ 비슷 \d+묶음/.test(body().innerText) : !/≈ 비슷 \d+묶음/.test(body().innerText), simOn);
         if (simOn) {
             var cl = S().sims[0];
             ok('비슷한 업무는 같은 프로젝트끼리', cl.members.every(function (m) { return String(m.project || '') === String(cl.anchor.project || ''); }));
@@ -52,7 +52,7 @@
         }
         // 끄기
         window._fdupMode('ps-facts', 'group'); await w(400);
-        ok('묶기를 끄면 줄 수가 사실 수만큼 나온다', mainRows() >= rowsN && !/같은 메일 \d+건을 묶었습니다/.test(body().innerText), [mainRows(), rowsN]);
+        ok('묶기를 끄면 줄 수가 사실 수만큼 나온다', mainRows() >= rowsN && !/같은 메일 \d+건 묶음/.test(body().innerText), [mainRows(), rowsN]);
         window._fdupMode('ps-facts', 'group'); await w(300);
     } catch (e) { ok('실행', false, e && e.message); }
     console.log(res.join('\n')); return res;
