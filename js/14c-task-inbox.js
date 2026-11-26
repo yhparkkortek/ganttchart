@@ -1752,8 +1752,15 @@ window._mailNasApplyAffordance = function(fileName, opts) {
     });
 };
 
+/** ↩ 원문을 닫고 **연 자리로** — 탭·겹친 창·스크롤을 되돌리고 누른 줄을 깜빡여 보여 준다(js/83). */
+window._mailRawBack = function () {
+    var m = document.getElementById('inbox-mailraw-modal'); if (m) m.style.display = 'none';
+    if (window._nav && window._mailRawOpener) window._nav.restore(window._mailRawOpener);
+};
 window.showMailRawModal = function(r) {
     if (!r) return;
+    // ↩ [2026-11-26 사용자 요청 "원문 보고 이전으로 돌아가는 기능이 없다"] 연 자리(탭·겹친 창·누른 줄·스크롤)를 **열기 전에** 기억한다 — [← 돌아가기](js/83)
+    window._mailRawOpener = window._nav ? window._nav.capture() : null;
     const _en = window._currentLang === 'en';
     let modal = document.getElementById('inbox-mailraw-modal');
     if (!modal) {
@@ -1791,7 +1798,10 @@ window.showMailRawModal = function(r) {
                 <button id="inbox-mailraw-gw-btn" style="display:none; margin-left:6px; padding:7px 14px; background:#eaf7ea; color:#1f6a3a; border:1px solid #a8dab8; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer;">🔗 ${_en ? 'Open in groupware' : '그룹웨어에서 열기'}</button>
                 <button id="inbox-mailraw-eml-btn" style="display:none; margin-left:6px; padding:7px 14px; background:#eaf7ea; color:#1f6a3a; border:1px solid #a8dab8; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;" onmouseover="this.style.background='#d8eedd'; this.style.borderColor='#8ccba1';" onmouseout="this.style.background='#eaf7ea'; this.style.borderColor='#a8dab8';">📧 ${_en ? 'Open in Outlook' : '아웃룩으로 열기'}</button>
                 </span>
+                <span style="display:inline-flex; gap:6px; align-items:center;">
+                <button id="inbox-mailraw-back-btn" onclick="window._mailRawBack()" onmouseover="this.style.background='#d6e6f5'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="display:none; padding:7px 14px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">← ${_en ? 'Back' : '돌아가기'}</button>
                 <button onclick="document.getElementById('inbox-mailraw-modal').style.display='none'" onmouseover="this.style.background='#e9ecef'; this.style.borderColor='#adb5bd';" onmouseout="this.style.background='#f8f9fa'; this.style.borderColor='#ccc';" style="padding:7px 18px; background:#f8f9fa; color:#555; border:1px solid #ccc; border-radius:6px; font-size:12px; cursor:pointer; transition:background .15s, border-color .15s;">✖ ${_en ? 'Close' : '닫기'}</button>
+                </span>
             </div>
         </div>`;
         document.body.appendChild(modal);
@@ -1800,6 +1810,13 @@ window.showMailRawModal = function(r) {
     }
     const _en2 = window._currentLang === 'en';
     document.getElementById('inbox-mailraw-title').textContent = '📧 ' + (_en2 ? 'Mail Source' : '메일 원문');
+    // ↩ 연 자리가 있으면 [← 돌아가기] 를 켠다(말풍선에 어디였는지)
+    (function () {
+        var bb = document.getElementById('inbox-mailraw-back-btn'), oc = window._mailRawOpener;
+        if (!bb) return;
+        bb.style.display = (oc && (oc.row || oc.modalId || oc.tab)) ? '' : 'none';
+        bb.title = oc ? (_en2 ? 'Back to where you opened this: ' : '이 원문을 연 자리로 돌아갑니다: ') + (oc.label || '') : '';
+    })();
     // 💡 [2026-09-12 신규] 발신자만 있고 수신자(To/Cc)는 아예 안 보이던 문제 — mailRaw에 to/cc가
     //    이제 같이 보존되니(위 mailRaw 구성부 참고) 있으면 같이 보여준다. 옛 기록 등 to/cc가 없는
     //    항목은 "수신: -"로 채우지 않고 그 구간 자체를 생략(예전과 동일하게 보이게).

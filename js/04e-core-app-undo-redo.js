@@ -1810,7 +1810,9 @@
     // 🎯 [2026-10-27 신규] 간트 표에서 특정 행으로 이동+깜빡임 — 레벨 불일치 참고 목록의 "이 행 보기"용.
     //    메인 표 행은 data-row-index 속성을 갖고 있다(js/26-gantt-search.js와 동일 조회 방식).
     window._wowJumpToRow = function(rowIndex) {
+        const _navCtx = window._nav ? window._nav.capture() : null;   // ↩ 연 자리(js/83)
         if (window.switchTab) window.switchTab('gantt');
+        if (_navCtx && _navCtx.tab && _navCtx.tab !== 'gantt' && window._nav) window._nav.chip(_navCtx);
         window._wowExpandAncestorsOf(rowIndex);
         if (typeof applyFilters === 'function') applyFilters();
         setTimeout(function() {

@@ -184,6 +184,9 @@
             return;
         }
 
+        // ↩ [2026-11-26] 다른 탭에서 눌렀으면 **연 자리**를 기억해 두고(js/83) 이동 뒤 [↩ 돌아가기] 칩을 띄운다
+        const _navCtx = window._nav ? window._nav.capture() : null;
+
         // 모달은 그대로 열어둔 채 이동만 하므로(위 함수 설명 참고), 모달이 표를 가리고 있을 땐
         // 드래그해서 옆으로 옮기면 비교하기 편하다는 안내만 띄운다.
         if (window.showToast && (document.getElementById('gantt-qa-modal')?.style.display === 'block'
@@ -198,6 +201,7 @@
         // "눌러도 아무 반응 없다"고 느껴졌다 — 1차로 Gantt 탭으로 강제 전환하고, 탭이 실제로 화면에
         // 나타난 뒤(전환 애니메이션/레이아웃 안정화를 위해 한 프레임 대기) 2차로 그 안의 상세 위치로 이동한다.
         if (window.switchTab) window.switchTab('gantt');
+        if (_navCtx && _navCtx.tab && _navCtx.tab !== 'gantt' && window._nav) window._nav.chip(_navCtx);
 
         const jumpToDetail = function() {
             // 조상 WBS가 접혀 있으면 펼쳐서 실제로 보이게 함 (자기 자신 위쪽에서 레벨이 더 얕은 첫 조상을
