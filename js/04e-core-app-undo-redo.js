@@ -1876,7 +1876,7 @@
         const buildGroupHtml = function(list, cardClass) {
             return list.length ? list.map(function(c, ci) {
                 return `<div class="${cardClass}" data-gi="${ci}" style="border:1px solid #e0e0e0; border-radius:8px; padding:10px 12px; margin-bottom:8px;">
-                    <input type="text" class="wow-group-name-input" value="${escapeHtml(c.suggestedName)}" style="width:100%; padding:5px 8px; border:1px solid #c0a0d8; border-radius:5px; font-size:12.5px; font-weight:bold; color:#5a3680; margin-bottom:4px;">
+                    <input type="text" class="wow-group-name-input" value="${escapeHtml(c.suggestedName)}" style="width:100%; box-sizing:border-box; padding:5px 8px; border:1px solid #c0a0d8; border-radius:5px; font-size:12.5px; font-weight:bold; color:#5a3680; margin-bottom:4px;">
                     ${c.dateRangeLabel ? `<div style="font-size:10.5px; color:#888; margin-bottom:5px;">📅 ${escapeHtml(c.dateRangeLabel)}</div>` : ''}
                     <div style="font-size:11.5px; color:#555; line-height:1.7;">${c.titles.map(function(t, ti) {
                         return `<label style="display:flex; align-items:center; gap:5px; cursor:pointer;"><input type="checkbox" class="wow-group-member-chk" data-ord="${ti}" checked>${escapeHtml(t)}</label>`;

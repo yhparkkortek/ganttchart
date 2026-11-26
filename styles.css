@@ -582,6 +582,15 @@ thead th { text-align: center; }
     tr.ai-ref-flash td, td.ai-ref-flash, th.ai-ref-flash {
         animation: aiRefFlash 1.6s ease-out;
     }
+    /* 📅 오늘 버튼 — 오늘 시작 행 깜박임(세 번 진하게 → 사라짐, 2026-11-26). 기간은 GANTT_TODAY_FLASH.ms(js/26)와 맞춘다 */
+    @keyframes ganttTodayBlink {
+        0%, 40%, 80%  { background-color: rgba(230, 126, 34, 0.55); }
+        20%, 60%      { background-color: rgba(230, 126, 34, 0.08); }
+        100%          { background-color: transparent; }
+    }
+    tr.gantt-today-flash td {
+        animation: ganttTodayBlink 2.6s ease-in-out;
+    }
 
     /* 다중 선택된 행 표시 (전체 열 옅은 빨강, 글자는 위에 또렷하게) */
     #myTable tr.multi-selected td {

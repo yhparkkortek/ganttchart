@@ -32,6 +32,7 @@ f.onload = async function () {
       R(2, 'PROTO', '설계', '지난업무', ymd(-20), ymd(-10), '완료', '지난 일'),
       R(2, 'PROTO', '설계', '오늘걸친업무', ymd(-2), ymd(2), '진행', '진행 중'),
       R(2, 'PROTO', '설계', '오늘하루업무', ymd(0), ymd(0), '진행', '회의'),
+      R(2, 'PROTO', '설계', '오늘둘째업무', ymd(0), ymd(1), '진행', '같은 날 시작'),   // 📅 시작일이 오늘인 행이 둘 — 둘 다 깜박여야 한다
       R(2, 'PROTO', '설계', '다음업무', ymd(5), ymd(9), '대기', '오늘 이야기한 것'),   // "오늘" 이 글자로 든 다른 날 업무
       R(2, 'PROTO', '설계', '일월업무', '2026-01-10', '2026-01-12', '완료', '1월 건')];
     W.globalData = gd;
@@ -62,30 +63,35 @@ f.onload = async function () {
     btn.click(); await sleep(500);
     var s1 = shown();
     chk(inp.value === '' && D.querySelectorAll('.gantt-search-hl-date').length === 0, '걸려 있던 검색을 푼다 — "' + inp.value + '"');
-    chk(['지난업무', '오늘걸친업무', '오늘하루업무', '다음업무', '일월업무'].every(function (n) { return s1.indexOf(n) !== -1; }), '접힌 가지까지 전체 업무가 보인다 — ' + s1.join(','));
+    chk(['지난업무', '오늘걸친업무', '오늘하루업무', '오늘둘째업무', '다음업무', '일월업무'].every(function (n) { return s1.indexOf(n) !== -1; }), '접힌 가지까지 전체 업무가 보인다 — ' + s1.join(','));
     chk(!W.globalData[2]._wbsCollapsed, '접혀 있던 WBS 가 펼쳐졌다');
-    var fl = [].slice.call(D.querySelectorAll('#table-body tr.ai-ref-flash')).map(function (tr) { var r = W.globalData[+tr.getAttribute('data-row-index')]; return r._origT2 || r._origT1; });
-    chk(fl.length === 1 && fl[0] === '오늘하루업무', '오늘 위치(시작일이 오늘인 첫 행)가 반짝인다 — ' + fl.join(','));
+    var fl = [].slice.call(D.querySelectorAll('#table-body tr.gantt-today-flash')).map(function (tr) { var r = W.globalData[+tr.getAttribute('data-row-index')]; return r._origT2 || r._origT1; });
+    chk(fl.length === 2 && fl.indexOf('오늘하루업무') !== -1 && fl.indexOf('오늘둘째업무') !== -1, '시작일이 오늘인 행 전부가 깜박인다(하나만이 아니라) — ' + fl.join(','));
     // 📅 [2026-11-26 2차] 시작일이 **오늘인** 행이 1순위 — 오늘에 걸치기만 한 행(오늘걸친업무: 어제 전 시작)은 안 고른다
-    chk(fl[0] !== '오늘걸친업무', '기간이 오늘에 걸치기만 한 행은 고르지 않는다');
+    chk(fl.indexOf('오늘걸친업무') === -1 && fl.indexOf('다음업무') === -1, '기간이 오늘에 걸치기만 한 행·다른 날 행은 깜박이지 않는다');
+    var blinkAnim = getComputedStyle(D.querySelector('#table-body tr.gantt-today-flash td')).animationName;
+    chk(/ganttTodayBlink/.test(blinkAnim), '깜박임 애니메이션이 실제로 걸려 있다 — ' + blinkAnim);
     // 토스트는 W._toastStack 에 문구(dataset.msg)와 함께 쌓인다(js/04c) — 떠 있는 동안만 보인다
     var toastTxt = function () { return (W._toastStack || []).map(function (x) { return x.dataset.msg; }).join(' | '); };
-    chk(/시작 업무로 이동/.test(toastTxt()), '오늘 시작 행으로 갔다고 알린다 — ' + toastTxt().slice(0, 80));
-    var sb = D.getElementById('gantt-table-scroll'), th = D.getElementById('table-head'), tt = D.querySelector('#table-body tr.ai-ref-flash');
+    chk(/시작 업무 2건으로 이동/.test(toastTxt()), '오늘 시작 행이 몇 건인지 알린다 — ' + toastTxt().slice(0, 80));
+    var sb = D.getElementById('gantt-table-scroll'), th = D.getElementById('table-head'), tt = D.querySelector('#table-body tr.gantt-today-flash');
     var gap = Math.round(tt.getBoundingClientRect().top - sb.getBoundingClientRect().top - th.getBoundingClientRect().height);
     var canScroll = sb.scrollHeight > sb.clientHeight;
     chk(!canScroll || Math.abs(gap) <= 2 || sb.scrollTop + sb.clientHeight >= sb.scrollHeight - 2, '그 줄이 표 머리 바로 아래로 스크롤 — 간격 ' + gap + ' (스크롤 가능 ' + canScroll + ')');
+    await sleep(2900);
+    chk(D.querySelectorAll('#table-body tr.gantt-today-flash').length === 0, '깜박임이 끝나면 표시가 지워진다');
     btn.click(); await sleep(500);
     chk(shown().length === s1.length && inp.value === '', '한 번 더 눌러도 같은 상태(토글 아님) — ' + shown().length);
     // ── 오늘 시작 행이 없을 때: 옛 규칙(오늘 이후 첫 하위 업무)으로 가되 그 사실을 알린다 ──
     var hadToday = W.globalData.filter(function (r) { return r && r._origT2 === '오늘하루업무'; })[0];
-    var save = [hadToday[5], hadToday[6]];
-    hadToday[5] = ymd(3); hadToday[6] = ymd(3); W.recalculateSchedules(); await sleep(500);
+    var hadToday2 = W.globalData.filter(function (r) { return r && r._origT2 === '오늘둘째업무'; })[0];
+    var save = [hadToday[5], hadToday[6], hadToday2[5], hadToday2[6]];
+    hadToday[5] = ymd(3); hadToday[6] = ymd(3); hadToday2[5] = ymd(4); hadToday2[6] = ymd(4); W.recalculateSchedules(); await sleep(500);
     btn.click(); await sleep(600);
-    var fl2 = [].slice.call(D.querySelectorAll('#table-body tr.ai-ref-flash')).map(function (tr) { var r = W.globalData[+tr.getAttribute('data-row-index')]; return r._origT2 || r._origT1; });
+    var fl2 = [].slice.call(D.querySelectorAll('#table-body tr.gantt-today-flash')).map(function (tr) { var r = W.globalData[+tr.getAttribute('data-row-index')]; return r._origT2 || r._origT1; });
     chk(fl2.length === 1 && fl2[0] !== '오늘걸친업무' && fl2[0] !== '지난업무', '오늘 시작 행이 없으면 오늘 이후 첫 업무로 간다 — ' + fl2.join(','));
     chk(/시작하는 업무가 없어/.test(toastTxt()), '그 경우 "오늘 시작하는 업무가 없어" 라고 알린다 — ' + toastTxt().slice(0, 90));
-    hadToday[5] = save[0]; hadToday[6] = save[1]; W.recalculateSchedules(); await sleep(400);
+    hadToday[5] = save[0]; hadToday[6] = save[1]; hadToday2[5] = save[2]; hadToday2[6] = save[3]; W.recalculateSchedules(); await sleep(400);
     // 날짜 찾기 기본은 시작일만(2026-11-25 2차) — 아래 기대값(기간 한가운데·완료일로도 걸림)은 '기간 포함' 을 켠 상태
     var dsp = D.getElementById('gantt-ai-search-datespan'), dspWas = dsp.checked;
     if (!dsp.checked) dsp.click();
@@ -105,7 +111,7 @@ f.onload = async function () {
     for (var n = -120; n <= 120; n += 3) big.push(R(2, 'MP', '묶음', (n < 0 ? '과거' : '미래') + n, ymd(n), ymd(n + 1), '진행', ''));
     W.globalData = big; big[2]._wbsCollapsed = true; W.recalculateSchedules(); await sleep(600);
     btn.click(); await sleep(600);
-    var sb2 = D.getElementById('gantt-table-scroll'), th2 = D.getElementById('table-head'), ft = D.querySelector('#table-body tr.ai-ref-flash');
+    var sb2 = D.getElementById('gantt-table-scroll'), th2 = D.getElementById('table-head'), ft = D.querySelector('#table-body tr.gantt-today-flash');
     var fr2 = ft && W.globalData[+ft.getAttribute('data-row-index')];
     var gap2 = ft ? Math.round(ft.getBoundingClientRect().top - sb2.getBoundingClientRect().top - th2.getBoundingClientRect().height) : null;
     chk(fr2 && fr2._origT2 === '미래0' && sb2.scrollTop > 0 && gap2 !== null && Math.abs(gap2) <= 2 && !ft.hasAttribute('data-lazy'),

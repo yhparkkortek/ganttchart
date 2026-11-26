@@ -1698,6 +1698,7 @@
         var scrollBox = document.getElementById('gantt-table-scroll');
         if (!tbody || !scrollBox) return;
         var after = null, before = null, startsToday = null;
+        var todayRows = [];                 // 📅 [2026-11-26 3차 "오늘 행 깜박임 하이라이트"] 시작일이 오늘인 행 **전부** — 첫 행만이 아니라
         var todayEnd = today + 86400000;
         var trs = tbody.querySelectorAll('tr[data-row-index]');
         for (var k = 0; k < trs.length; k++) {
@@ -1705,7 +1706,7 @@
             if (tr.style.display === 'none') continue;
             var idx = +tr.getAttribute('data-row-index'), r = gd[idx];
             if (!r || !r._calcStartTs) continue;
-            if (!startsToday && r._calcStartTs >= today && r._calcStartTs < todayEnd) startsToday = tr;   // 시작일이 오늘인 첫 행(부모 포함)
+            if (r._calcStartTs >= today && r._calcStartTs < todayEnd) { if (!startsToday) startsToday = tr; todayRows.push(tr); }   // 시작일이 오늘인 행(부모 포함) — 첫 행이 이동 기준
             var leaf = !(idx + 1 < gd.length && gd[idx + 1] && ((gd[idx + 1]._level || 0) > (r._level || 0)));
             if (!leaf) continue;
             // ⚠️ 조기 종료 금지 — 표 순서가 날짜순이 아닐 수 있어(다른 묶음) 더 뒤에 '오늘 시작' 행이 있을 수 있다
@@ -1722,11 +1723,15 @@
         };
         // 스크롤하면 그 근처 자리표시 행이 채워지며 높이가 몇 px 달라진다(가상 스크롤, js/04j) — 채워진 뒤 한 번 더 맞춘다
         align(); setTimeout(align, 80); setTimeout(align, 250);
-        target.classList.remove('ai-ref-flash'); void target.offsetWidth; target.classList.add('ai-ref-flash');
-        setTimeout(function() { target.classList.remove('ai-ref-flash'); }, 1700);
+        // 깜박임 — 오늘 시작 행 전부(상한 `GANTT_TODAY_FLASH.max`, 데이터). 오늘 시작 행이 없을 땐 이동한 그 행만. 숨은 자리표시 행은 채운 뒤 칠한다.
+        var F = window.GANTT_TODAY_FLASH = window.GANTT_TODAY_FLASH || { max: 40, ms: 2600 };
+        var flashTrs = startsToday ? todayRows.slice(0, F.max) : [target];
+        flashTrs = flashTrs.map(function(t) { return (t === target) ? target : ((window._ganttHydrateRow && window._ganttHydrateRow(t)) || t); });
+        flashTrs.forEach(function(t) { t.classList.remove('gantt-today-flash'); void t.offsetWidth; t.classList.add('gantt-today-flash'); });
+        setTimeout(function() { flashTrs.forEach(function(t) { t.classList.remove('gantt-today-flash'); }); }, F.ms + 100);
         if (window.showToast) window.showToast(window._t(
-            '📅 ' + (startsToday ? '오늘(' + _gsTodayIso() + ') 시작 업무로 이동했습니다' : '오늘(' + _gsTodayIso() + ') 시작하는 업무가 없어 가장 가까운 위치로 이동했습니다') + (opened ? ' — 접힌 묶음 ' + opened + '개를 펼쳤습니다' : '') + '.',
-            '📅 ' + (startsToday ? 'Moved to the task starting today (' + _gsTodayIso() + ')' : 'No task starts today (' + _gsTodayIso() + ') — moved to the nearest position') + (opened ? ' — expanded ' + opened + ' group(s)' : '') + '.'), 'info');
+            '📅 ' + (startsToday ? '오늘(' + _gsTodayIso() + ') 시작 업무 ' + todayRows.length + '건으로 이동했습니다' : '오늘(' + _gsTodayIso() + ') 시작하는 업무가 없어 가장 가까운 위치로 이동했습니다') + (opened ? ' — 접힌 묶음 ' + opened + '개를 펼쳤습니다' : '') + '.',
+            '📅 ' + (startsToday ? 'Moved to ' + todayRows.length + ' task(s) starting today (' + _gsTodayIso() + ')' : 'No task starts today (' + _gsTodayIso() + ') — moved to the nearest position') + (opened ? ' — expanded ' + opened + ' group(s)' : '') + '.'), 'info');
     };
 
     // MutationObserver: table-body가 재렌더링될 때마다 검색 재적용
