@@ -117,6 +117,7 @@
                 <div class="tb-menu-label" id="settings-group-schedule">🗓️ 일정</div>
                 <button id="overdue-cleanup-btn" class="topbar-menu-item" onclick="window.openOverdueCleanup &amp;&amp; window.openOverdueCleanup(); window.closeTopbarMenu('settings-menu-popup');" title="날짜가 지난 미완료 업무를 한 화면에 모아 정리합니다 (메일에서 들어온 행은 세지 않습니다)">🧹 밀린 업무 정리</button>
                 <button id="holiday-btn" class="topbar-menu-item" onclick="window.openHolidayManager()">🗓️ 휴일 등록</button>
+                <button id="report-match-btn" class="topbar-menu-item" onclick="window.openReportMatchSetting &amp;&amp; window.openReportMatchSetting(); window.closeTopbarMenu('settings-menu-popup');" title="일일보고·주간보고에 올릴 업무 기준 — 그 날(주)에 시작한 업무만 / 기간이 걸친 업무도" data-en-title="Which tasks go into the daily/weekly report — started in range only, or also overlapping">📅 보고 업무 기준</button>
                 <div class="tb-menu-sep"></div>
                 <div class="tb-menu-label" id="settings-group-help">🛠 진단·도움말</div>
                 <button id="modal-pos-reset-btn" class="topbar-menu-item" onclick="window._modalPosReset && window._modalPosReset(); window.closeTopbarMenu('settings-menu-popup');" title="옮기거나 크기를 바꿔 둔 모달 위치를 모두 지웁니다 — 다음에 열 때 기본 위치·크기로 엽니다" data-en-title="Clears every modal position/size you moved or resized — they open at the default next time">🪟 모달 위치 초기화</button>
@@ -2794,7 +2795,7 @@
     <!-- 🔀 저장소 어댑터(Drive ↔ 사내 NAS). 플래그 OFF 기본 — 아무것도 감싸지 않는다 -->
     <script src="js/57-storage-adapter.js?v=2026112591"></script>
     <!-- 📦 Drive → NAS 일괄 이사. 미러는 "쓸 때만" 옮기므로 이게 한 번은 돌아야 한다 -->
-    <script src="js/59-daily-report.js?v=2026112907"></script>
+    <script src="js/59-daily-report.js?v=2026112708"></script>
     <script src="js/60-telegram-qa-bridge.js?v=20261124a4"></script>
     <script src="js/61-mail-evidence.js?v=20261125a1"></script>
     <script src="js/62-period-summary.js?v=2026112705"></script>
@@ -2804,6 +2805,7 @@
     <script src="js/81-fact-dup.js?v=2026112702"></script>
     <script src="js/82-tab-modal-park.js?v=2026112601"></script>
     <script src="js/83-nav-return.js?v=2026112601"></script>
+    <script src="js/84-report-match-setting.js?v=2026112701"></script>
     <script src="js/63-daily-draft-qa.js?v=20261124a4"></script>
     <script src="js/64-user-switch.js?v=20261124a4"></script>
     <script src="js/65-overdue-cleanup.js?v=2026112571"></script>

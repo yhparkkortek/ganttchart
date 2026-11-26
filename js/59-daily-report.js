@@ -1018,7 +1018,8 @@
      *     시도한다. 그래도 없으면 **진짜** 못 읽은 것이다. */
     async function scanProjectFile(entry, tag, collect, onlyMyProjectsOverride) {
         var onlyMine = (onlyMyProjectsOverride != null) ? onlyMyProjectsOverride : (window.DAILY_SCAN || {}).onlyMyProjects;
-        var key = tag + '|' + entry.file_name + '|' + (entry.updated_at || '') + '|' + (onlyMine ? '1' : '0');
+        // ⚠️ [2026-11-26] 후보 기준(`matchBy`)도 열쇠에 — 설정(js/84)에서 바꿨을 때 옛 기준으로 모은 후보를 재사용하면 안 된다.
+        var key = tag + '|' + entry.file_name + '|' + (entry.updated_at || '') + '|' + (onlyMine ? '1' : '0') + '|' + ((window.DAILY_SCAN || {}).matchBy || 'start');
         if (_projCache[key]) return _projCache[key];
         var rel = (entry.team ? entry.team + '/' : '') + entry.file_name;
         var d = await window.nasAppFile.get(rel, { json: true });
@@ -1472,6 +1473,8 @@
     // 📅 모드 전환(오늘 ↔ 기간)은 날짜 입력칸이 보이고/숨는 **레이아웃 변화**라 통째로 다시 그린다.
     //    (검색칸은 같은 정적 영역에 있어 모드 전환 중 타이핑하고 있었다면 같이 날아간다 — 드문
     //    동시 상황이라 감수한다, 다른 전체-재렌더 동작들과 같은 수준의 트레이드오프.)
+    /** 📅 [2026-11-26] 후보 기준이 바뀌었을 때(설정 js/84) — 열려 있으면 지금 기간 그대로 다시 훑어 그린다. */
+    window._dailyRescan = function () { if (_doc && document.getElementById('daily-modal') && document.getElementById('daily-modal').style.display !== 'none') { render(); rescanCandPeriod(); } };
     window._dailySetCandPeriodMode = function (mode) {
         var modes = ['range', 'week', 'yesterday', 'lastweek'];
         _candPeriod.mode = (modes.indexOf(mode) !== -1) ? mode : 'today';
