@@ -924,7 +924,8 @@ thead th { text-align: center; }
    📒 Project list — 제품 전수 목록 (js/55-project-list.js)
    Gantt 처럼 화면 폭을 전부 쓴다(열이 90개라 1200px 로는 아무것도 안 보인다).
    ══════════════════════════════════════════════════════════════════════════ */
-#tab-projectlist > .concept-tab-wrap { max-width: none !important; }
+#tab-projectlist > .concept-tab-wrap,
+#tab-psummary  > .concept-tab-wrap { max-width: none !important; }   /* Project Review(js/62)도 화면 폭 전부 (2026-11-26 사용자 요청) */
 /* ⚠️ 헤더 박스는 다른 탭과 달리 **줄바꿈을 허용**한다 — 검색·필터 6개·버튼 6개가 한 줄에 안 들어가
    오른쪽 버튼 묶음(margin-left:auto)이 박스 밖(left:1272px, 박스 폭 1030px)으로 밀려나 통째로
    안 보였다(실측). 줄바꿈을 켜면 좁은 창에서도 버튼이 아랫줄로 내려와 계속 보인다.
