@@ -977,7 +977,7 @@ window.populateTabData = function() {
 
                 const isForcedEmptyRow = isPriceEmpty && !!forceVisible[idx] && !expanded;
                 const otherColor = isForcedEmptyRow ? 'transparent' : '#333';
-                const priceColor = isForcedEmptyRow ? 'transparent' : '#777';
+                const priceColor = isForcedEmptyRow ? 'transparent' : '#333';
 
                 let rowHtml = '<tr' + rowStyle + '>'
                     + '<td class="bm-no"></td>'

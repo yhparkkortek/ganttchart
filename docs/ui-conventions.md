@@ -423,6 +423,18 @@ window.bringModalToFront('outer-wrap-id');                  // 열릴 때 즉시
   Project list KTK PN 같은 다른 식별자 칸과 같게).
 - Notice·예약 규칙의 두 줄 칸(굵은 제목 + 작은 회색 설명)은 제목이 그 칸의 머리라 굵게 둔다.
 
+#### 글자 색 — 머리글 테마색 · 본문 `#333` · 보조 `#555` · 메타 `#888` (2026-11-26)
+- 실측(1600px, computed — 투명 글자는 빼고 셀 것: `transparent` 는 알파를 떼면 `#000` 으로 보여 **가짜 이상치**가 된다):
+  머리글은 전 페이지 테마 진한 글자색(`darkText`), 본문 `#333`, 보조 정보(이메일·평일 날짜·구성/수정일) `#555`,
+  메타(No.·마지막 발송) `#888`. 역할 색(날짜 일·토·공휴일, M.C 영업판가 초록 줄, PARTS 구역 제목 갈색)은 그대로.
+- 고친 것:
+  - **입력칸이 `#000`** — 입력칸은 글자색을 물려받지 않아(브라우저 기본 검정) 인라인 색이 없는 칸만 옆 칸(#333)보다 진했다.
+    Summary 주요자재(39칸)·M.C 소계/비율 줄·PARTS Note 칸 →
+    `.concept-table td input, .concept-table td textarea, .pc-table td input, .pc-table td textarea { color: inherit }`.
+    인라인 색(날짜 규칙 `!important`·빈 줄 숨김 `transparent`·역할색)은 그대로 이긴다.
+  - **M.C 금액 칸만 `#777`** — BOM KRW/USD·PARTS 금액은 본문 `#333` → `#333`(js/22g `priceColor`, 이유 기록 없이 초기 분리 때부터).
+- ⚠️ 색을 잴 때 `rgba(…, 0)` 는 빼고 셀 것(M.C 빈 줄·반복 TYPE 은 일부러 투명).
+
 #### 행 번호(No.) 칸 — 11.5px · 회색 `#888` · 보통 굵기 · 가운데 (2026-11-26)
 - 전엔 페이지마다 달랐다: Alarm·Notice 11.5 회색 · Address·Customer SPEC·M.C 12.5 진회색 · Project list 11 테마색 · JIRA 12.5 연회색.
   → Alarm·Notice 모양 한 벌로. 행 번호는 메타라 내용보다 한 단계 작고 흐리게.
