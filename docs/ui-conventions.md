@@ -247,7 +247,13 @@ window.bringModalToFront('outer-wrap-id');                  // 열릴 때 즉시
 #### 표 본문 줄 높이 — 칸 여백 6px 8px (2026-11-24)
 - 줄 높이는 **칸 여백 + 칸 안에 입력칸이 있나**로 정해진다. 기준은 `.concept-table td { padding:6px 8px }` —
   글자만 있는 줄 ≈29~30px(일일보고·JIRA), 입력칸이 든 줄 ≈34~35px(Summary·M.C·Address·PARTS).
-- 2026-11-24 에 맞춘 것: PARTS 비교표 3px 6px(26px 줄) · 일일보고 5px 8px · JIRA 7px 8px → 전부 6px 8px.
+- 2026-11-24 에 맞춘 것: 일일보고 5px 8px · JIRA 7px 8px → 6px 8px. (PARTS 비교표도 6px 8px 로 바꿨다가 **같은 날 사용자 요청으로 3px 6px 로 되돌렸다** — 예외)
+- 2026-11-26 전수 재측정(계산값, 1600px): Summary 마일스톤·Customer SPEC·M.C·주소록·Project list·Daily·JIRA·Alarm 본문 전부 6px 8px, 머리글 10px 8px.
+  고친 것: **Alarm 머리글만 좌우 10px**(인라인 `8px 10px`, 위아래는 규칙이 10px 로 덮음) → `10px 8px`.
+  그대로 둔 것(이유 있음): Project list 아이콘 칸 오른쪽 22px(🏭·👤 아이콘 자리) · M.C SUBTOTAL 라벨 오른쪽 15px(오른쪽 정렬 라벨) ·
+  Alarm·Notice 체크박스·No. 좁은 열(36px) 좌우 6px · BOM 2px 5px · PARTS 3px 6px · Summary 주요자재 2~6px · Document 서식 8px.
+- 💬 **긴 글은 줄바꿈하지 말고 잘라서 말풍선**(2026-11-26 사용자 요청, JIRA 요약) — 줄이 바뀌면 그 줄만 높아져 표가 들쭉날쭉해진다.
+  칸에 `overflow:hidden; text-overflow:ellipsis; white-space:nowrap;` + `title="전체 글"`. JIRA 연결 이슈 표의 요약·담당자·보고자·우선순위·출처에 적용(전체 검색 표는 원래 이 모양).
   ⚠️ 인라인 `padding` 을 칸마다 적는 표(PARTS·JIRA·일일보고)는 `.concept-table` 규칙을 못 받으니 같은 값을 적을 것.
 - 예외(조밀한 표 — 일부러 좁다): BOM 2px 5px·줄 24px 고정(`ROW_H`) · Project list 30px · Summary 주요자재(좌우 두 표, Cost 열 50px 라
   여백을 늘리면 숫자가 잘린다 — 2px) · 간트(자기 체계 31px).
