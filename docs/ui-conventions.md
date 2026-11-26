@@ -806,6 +806,9 @@ Sample Report **원본저장** 구간이 옛 `/doc/docx` 한 길만 기대해서
 > 🔁 같은 날 2차(사용자: "고객사양·MC TABLE 행이 다른 페이지보다 조금 높다"): 입력칸 줄은 원래 **35px** 였다 — 입력칸 자체가 위아래 여백 2px + `line-height:normal` 로 21px 이었기 때문. styles.css `.concept-table td input, textarea` 를 `padding:0 2px; line-height:1.3` 으로 → 입력칸 16.3px, 줄 **30.3px**(Customer SPEC 30줄·M.C·주소록·Summary 마일스톤 전부, Project list 30.3·JIRA 31.8 과 같은 줄). 스크린샷으로 글자가 잘리지 않는 것까지 확인.
 높이를 직접 정하지 말고 **칸 여백(본문 6px 8px · 머리글 10px 8px)** 으로 맞춘다 — 두 줄짜리 칸(제목+미리보기)·버튼 칸은 그만큼 높아지는 게 맞다.
 
+**줄 간격(line-height) = 1.3 한 벌**(2026-11-26 재측정): 본문 칸·머리글·표 안 입력칸이 전부 1.3 이고, 여러 줄로 접힌 칸(Project Review 내용·업무)도 1.3.
+맞춘 것: Project list 머리글 1.2 → 1.3(styles.css `.pl-table th`) · Summary 주요자재 입력칸 지정 없음(`normal`) → 1.3. 둘 다 줄 높이는 그대로(머리글 36px·주요자재 줄 25px — 바꾸기 전과 같은 값).
+
 실측(1600px 폭, 보이는 표의 줄 높이 최빈값):
 | 표 | 본문 | 머리글 |
 |---|---|---|

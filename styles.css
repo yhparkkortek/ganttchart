@@ -951,7 +951,7 @@ thead th { text-align: center; }
 .pl-table th {
     position: sticky; top: 0; z-index: 4; background: #eef6f7; color: #00707d;   /* 2026-11-24: bg -> headerTint (다른 표와 같게) */
     border-bottom: 1px solid #a3d9e0; border-right: 1px solid #d9e9ec;
-    padding: 6px; text-align: center; font-size: 11px; line-height: 1.2;   /* 2026-11-25: left -> center (다른 표 머리글과 같게) */
+    padding: 6px; text-align: center; font-size: 11px; line-height: 1.3;   /* 2026-11-25: left -> center (다른 표 머리글과 같게) · 2026-11-26 줄 간격 1.2 -> 1.3(다른 표와 같게) */
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis; user-select: none;
 }
 .pl-table td {
@@ -1207,7 +1207,7 @@ thead th { text-align: center; }
 /* ↕ [2026-11-25] 입력칸 줄도 글자 줄과 같은 높이(≈31px) — 위아래 여백 2px + line-height normal 로 입력칸이 21px 이라
    Customer SPEC·M.C·주소록·Summary 마일스톤 줄만 35px 이었다. */
 /* 🔤 [2026-11-26] Summary 주요자재 표는 .concept-table 이 아니라 입력칸이 브라우저 기본 13.33px 였다(같은 줄 글자는 12.5) → 칸 글자를 따른다. */
-tbody[id^="sum-materials-rows-"] input { font-size: inherit; font-family: inherit; color: inherit; }
+tbody[id^="sum-materials-rows-"] input { font-size: inherit; font-family: inherit; color: inherit; line-height: 1.3; }   /* 줄 간격 1.3 — 지정이 없어 normal 이었다(2026-11-26) */
 /* 🎨 [2026-11-26] 표 안 입력칸 글자색 — 인라인 색이 없으면 브라우저 기본 #000 이라 옆 칸(#333)보다 진했다. 칸 글자색을 따른다. */
 .concept-table td input, .concept-table td textarea, .pc-table td input, .pc-table td textarea { color: inherit; }
 .concept-table td input, .concept-table td textarea { border:none; width:100%; font-size:12.5px; padding:0 2px; line-height:1.3; font-family:inherit; }
