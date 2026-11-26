@@ -191,11 +191,16 @@
                 meet.click();
                 var hint = document.getElementById('ps-meet-hint'), tr = hint && hint.closest('tr[id^="ps-brief-"]');
                 ok('누르면 그 업무 줄로 가서 깜빡이고 돌아가기 안내가 붙는다', !!tr && /fff3bf|255, 243, 191/.test(tr.style.background) && /결정 필요/.test(tr.textContent), tr && tr.outerHTML.slice(0, 200));
-                if (tr) tr.querySelector('td:nth-child(2)').click();
+                await new Promise(function (r) { setTimeout(r, 2200); });
+                ok('하이라이트는 2초가 지나도 남아 있다', !!tr && /fff3bf|255, 243, 191/.test(tr.style.background), tr && tr.style.background);
+                var md = function (el) { el.dispatchEvent(new MouseEvent('mousedown', { bubbles: true })); };
+                if (tr) { md(tr.querySelector('td:nth-child(2)')); tr.querySelector('td:nth-child(2)').click(); }
                 var meet2 = document.getElementById('ps-meet-0');
-                ok('업무 줄을 누르면 안내가 지워지고 회의 줄이 깜빡인다', !document.getElementById('ps-meet-hint') && !!meet2 && /ffe3e3|255, 227, 227/.test(meet2.style.background));
+                ok('업무 줄을 누르면 안내·업무 줄 하이라이트가 지워지고 회의 줄이 하이라이트된다', !document.getElementById('ps-meet-hint') && !!meet2 && /ffe3e3|255, 227, 227/.test(meet2.style.background) && !!tr && !tr.style.background);
                 if (tr) tr.click();
                 ok('돌아온 뒤 업무 줄을 또 눌러도 아무 일 없다', !document.getElementById('ps-meet-hint'));
+                md(document.getElementById('psummary-page'));
+                ok('다른 곳을 누르면 하이라이트가 사라진다', !!meet2 && !meet2.style.background);
             }
             ok('"프로젝트를 열어야 바꿀 수 있다" 안내 띠는 없다', !/그 프로젝트를 열어야/.test(document.getElementById('psummary-page').textContent));
             window._psTblSet({ view: 'rows' });

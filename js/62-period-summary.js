@@ -1674,11 +1674,24 @@
     };
     // 🎯 [2026-11-23 사용자 요청] 근거 → 그 사실 카드로 이동(상세·📧 원문) → 카드를 누르면 표의 그 행으로 돌아온다.
     var _psBackRow = null;
+    // ✨ [2026-11-26 사용자 요청 "너무 빨리 사라진다 — 유지했다가 다른 곳을 누르거나 돌아가면 사라지게"]
+    //    세 번 깜빡인 뒤 **켜진 채로 둔다**. 지우는 건 ① 다른 곳을 누를 때(그 칸 안을 누르면 유지 — 돌아가기 단추가 거기 있다)
+    //    ② 다른 칸이 하이라이트될 때(돌아가기) — 한 번에 하나만.
+    var _psHold = null;
+    function unflash() {
+        var el = _psHold; _psHold = null;
+        if (el) { el.style.background = ''; el.style.boxShadow = ''; }
+    }
     function flash(el, color) {
         if (!el) return;
+        unflash();
+        _psHold = el;
         el.style.background = color; el.style.boxShadow = '0 0 0 2px #1971c2';
-        setTimeout(function () { el.style.background = ''; el.style.boxShadow = ''; }, 1600);
+        try { el.animate([{ opacity: 1 }, { opacity: 0.35 }, { opacity: 1 }], { duration: 500, iterations: 3 }); } catch (e) { /* 애니메이션 없는 브라우저 — 색은 남는다 */ }
     }
+    document.addEventListener('mousedown', function (ev) {
+        if (_psHold && !(ev.target && _psHold.contains(ev.target))) unflash();
+    }, true);
     window._psGoFact = function (key, rowI) {
         var det = document.getElementById('ps-facts-det');
         if (det) det.open = true;
