@@ -670,6 +670,10 @@ div:has(> [onclick*="_toggleAlarmSection"]) { border-color: var(--ui-cell-line, 
     #myTable tbody tr td.status-td.st-blocked .status-select  { background: #fff5f5 !important; color: #c92a2a !important; }
     #myTable tbody tr td.status-td.st-decision .status-select { background: #f3f0ff !important; color: #7048e8 !important; }
     #myTable tbody tr td.status-td .status-select option { background: #fff; color: #333; font-weight: normal; }
+    /* ▾ 상태 열 머리글 필터 — 걸리면 테마색으로 채운다(업무필터와 같은 필터) */
+    .gantt-status-th-filter { display:inline-block; margin-left:3px; padding:0 3px; border-radius:4px; font-size:10px; color:#aaa; cursor:pointer; }
+    .gantt-status-th-filter:hover { color: var(--ui-accent, #00707d); }
+    .gantt-status-th-filter.on { background: var(--ui-accent, #00707d); color:#fff; }
 
     /* 알림 켜진 행 표시 (전체 행에 옅은 푸른 배경 + 좌측 강조선) — 지브라(줄무늬) 행보다 우선 적용되도록 tbody까지 포함해 우선순위 보강 */
     #myTable tbody tr.alarm-on td {

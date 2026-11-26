@@ -812,6 +812,71 @@
         var t = window._ganttStatusLabel(v).replace(/&/g, '&amp;').replace(/</g, '&lt;');
         return '<span class="gantt-status-chip" style="' + window._ganttStatusChipStyle(v) + '">' + t + '</span>';
     };
+    /* ▾ [2026-11-26 사용자 요청 "상태 필터"] 상태 열 머리글에서 바로 거르기 — 새 필터를 만들지 않고
+     *  업무필터의 '업무상태' 와 **같은 필터 상태**(`currentFilters[colIdx.status]`)를 고친다. 그래서 둘 중
+     *  어디서 바꿔도 같고, 업무필터 버튼의 (N) 표시·초기화도 그대로 먹는다. 값은 저장값(완료/진행/지연/대기). */
+    window._ganttStatusFilterSet = function () {
+        if (typeof colIdx === 'undefined' || colIdx.status === -1) return null;
+        if (!currentFilters[colIdx.status]) currentFilters[colIdx.status] = new Set(['All']);
+        return currentFilters[colIdx.status];
+    };
+    window._ganttStatusFilterActive = function () {
+        if (typeof colIdx === 'undefined' || colIdx.status === -1 || typeof currentFilters === 'undefined') return false;
+        var s = currentFilters[colIdx.status];
+        return !!(s && !s.has('All'));
+    };
+    window._ganttStatusFilterToggle = function (value) {
+        var set = window._ganttStatusFilterSet();
+        if (!set) return;
+        if (value === 'All') { set.clear(); set.add('All'); }
+        else {
+            set.delete('All');
+            if (set.has(value)) set.delete(value); else set.add(value);
+            if (set.size === 0) set.add('All');
+        }
+        // 업무필터 패널의 버튼 표시도 다시 그린다(같은 Set 을 보므로 저장된 선택이 그대로 남는다)
+        try { if (window.generateFilters && typeof globalData !== 'undefined') window.generateFilters(globalData); } catch (e) {}
+        if (typeof applyFilters === 'function') applyFilters();
+        if (window.updateWorkFilterBtnState) window.updateWorkFilterBtnState();
+        var th = document.getElementById('gantt-status-th-filter');
+        if (th) th.classList.toggle('on', window._ganttStatusFilterActive());
+        window._ganttStatusFilterRender();
+    };
+    window._ganttStatusFilterRender = function () {
+        var pop = document.getElementById('gantt-status-filter-pop');
+        if (!pop) return;
+        var set = window._ganttStatusFilterSet() || new Set(['All']);
+        var all = set.has('All');
+        var pill = function (on, tone) { return window._uiPillStyle ? window._uiPillStyle(on, tone) : ''; };
+        var html = '<button onclick="event.stopPropagation(); window._ganttStatusFilterToggle(\'All\')" style="' + pill(all) + '">' + (window._currentLang === 'en' ? 'All' : '전체') + '</button>';
+        var vals = window.GANTT_STATUS_CHOICES.slice();
+        // 옛 '보류' 가 남은 프로젝트는 지연으로 함께 걸린다(필터가 보류→지연으로 읽는다) — 따로 칩을 만들지 않는다
+        vals.forEach(function (v) {
+            var c = window.GANTT_STATUS_COLORS[window._ganttStatusKind(v)];
+            html += '<button onclick="event.stopPropagation(); window._ganttStatusFilterToggle(\'' + v + '\')" style="' + pill(!all && set.has(v), c) + '">' + window._ganttStatusLabel(v) + '</button>';
+        });
+        pop.innerHTML = html;
+    };
+    window._ganttStatusFilterOpen = function (ev) {
+        if (ev) { ev.stopPropagation(); ev.preventDefault(); }
+        var pop = document.getElementById('gantt-status-filter-pop');
+        if (pop && pop.style.display !== 'none') { pop.style.display = 'none'; return; }
+        if (!pop) {
+            pop = document.createElement('div');
+            pop.id = 'gantt-status-filter-pop';
+            pop.className = 'row-action-popup';
+            pop.style.cssText = 'position:fixed; z-index:10050; display:flex; gap:5px; flex-wrap:wrap; max-width:330px; padding:8px; background:#fff; border:1px solid #ced4da; border-radius:8px; box-shadow:0 4px 14px rgba(0,0,0,.15);';
+            pop.onclick = function (e) { e.stopPropagation(); };
+            document.body.appendChild(pop);
+            document.addEventListener('click', function () { var p = document.getElementById('gantt-status-filter-pop'); if (p) p.style.display = 'none'; });
+        }
+        window._ganttStatusFilterRender();
+        var btn = document.getElementById('gantt-status-th-filter');
+        var r = btn ? btn.getBoundingClientRect() : { left: 100, bottom: 100 };
+        pop.style.display = 'flex';
+        pop.style.left = Math.max(8, Math.min(r.left - 20, window.innerWidth - 340)) + 'px';
+        pop.style.top = (r.bottom + 4) + 'px';
+    };
     /** 칩 종류 — todo / done / blocked / decision (모르는 값은 todo) */
     window._ganttStatusKind = function (v) {
         return window.GANTT_STATUS_KIND[window._ganttStatusKo(v)] || 'todo';
@@ -1965,7 +2030,7 @@
                 const wbsLabel = lang.header['개발업무(wbs)'] || '개발업무 (WBS)';
                 const headerLockSvg = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"></rect><path d="M8 11V7a4 4 0 0 1 8 0v4"></path></svg>';
                 headHtml += `<th style="text-align: center; width: var(--w-period); min-width: 30px; max-width: var(--w-period); white-space: nowrap;">${periodLabel} <span onclick="window.wrToggleAllScheduleLock()" title="🔒 전체 업무 일정 고정 (클릭 시 현재 상태와 무관하게 항상 전체 잠금 · 완료일은 상위 업무엔 표시만 영향)" style="display:inline-flex; vertical-align:middle; cursor:pointer; color:#495057;">${headerLockSvg}</span></th>`;
-                headHtml += `<th class="status-th" style="text-align: center; width: var(--w-status); min-width: 30px; max-width: var(--w-status);">${statusLabel}</th>`;
+                headHtml += `<th class="status-th" style="text-align: center; width: var(--w-status); min-width: 30px; max-width: var(--w-status); white-space:nowrap;">${statusLabel}<span id="gantt-status-th-filter" class="gantt-status-th-filter${window._ganttStatusFilterActive && window._ganttStatusFilterActive() ? ' on' : ''}" onclick="window._ganttStatusFilterOpen(event)" title="${window._currentLang === 'en' ? 'Filter by status' : '상태로 거르기 (업무필터의 업무상태와 같은 필터)'}">▾</span></th>`;
                 headHtml += `<th style="text-align: center; width: var(--w-wbs); min-width: 100px; max-width: var(--w-wbs); cursor:pointer;" title="${window._currentLang === 'en' ? 'Expand/collapse all (expand all if any group is collapsed, otherwise collapse all)' : '전체 펼치기/접기 (하나라도 접혀 있으면 전체 펼치기, 전부 펼쳐져 있으면 전체 접기)'}" onclick="window.wrToggleAllWbsCollapse(event)"><div style="display:inline-block; padding-right:2px; vertical-align: middle;">${wbsLabel} <span style="font-size:9px; color:#aaa;" id="wbs-th-arrow">▼</span></div></th>`;
             }
         });
