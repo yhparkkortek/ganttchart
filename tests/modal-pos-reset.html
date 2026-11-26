@@ -71,6 +71,27 @@ f.onload = async function () {
     var t2 = Math.round(D.getElementById('matcart-box').getBoundingClientRect().top);
     chk(t1 >= bb && t2 === t0, '⑩ 프로젝트 탭 줄 아래로 다시 붙음 — 처음 ' + t0 + ' · 탭 줄 끝 ' + bb + ' → ' + t1 + ' · 탭 줄 없앰 → ' + t2);
     hide('matcart-modal'); await sleep(300);
+    // ⑪ 페이지에서 여는 내용 모달(캘린더 날짜 목록·알람 상세·알람 일정·공지 등록)도 맞춤 자리 + 버튼이 상자 안에
+    var cases = [
+      ['calendar', 'cal-day-popup-modal', function () { D.getElementById('cal-day-popup-overlay').style.display = 'flex'; }, function () { hide('cal-day-popup-overlay'); }],
+      ['alarm', 'alarm-modal', function () { D.getElementById('alarm-modal-body').innerHTML = new Array(80).join('<p>긴 업무 내용 줄</p>'); D.getElementById('alarm-modal-overlay').style.display = 'flex'; D.getElementById('alarm-modal').style.display = 'flex'; }, function () { W.closeAlarmModal(); }],
+      ['alarm', 'alarm-schedule-modal', function () { D.getElementById('alarm-schedule-overlay').style.display = 'flex'; D.getElementById('alarm-schedule-modal').style.display = 'flex'; }, function () { hide('alarm-schedule-overlay'); hide('alarm-schedule-modal'); }],
+      ['alarm', 'notice-modal', function () { W.openNoticeModal(); }, function () { hide('notice-modal'); hide('notice-modal-bg'); }]
+    ];
+    for (const c of cases) {
+        W.localStorage.removeItem(KEY); W.switchTab(c[0]); await sleep(300);
+        c[2](); await sleep(700);
+        // 열 때 0.2초 떠오르는 애니메이션(.history-modal fadeIn)은 헤드리스 가상 시간에선 끝나지 않는다 — 끝낸 뒤 잰다
+        D.getElementById(c[1]).getAnimations().forEach(function (an) { try { an.finish(); } catch (e) {} });
+        var f2 = W._modalFitRect(), want = [f2.l, f2.t, f2.w, f2.h], got = R(c[1]);
+        var bx = D.getElementById(c[1]).getBoundingClientRect();
+        var btns = [].slice.call(D.getElementById(c[1]).querySelectorAll('button')).filter(function (b) { return b.offsetWidth; });
+        var lastB = btns.length ? Math.round(btns[btns.length - 1].getBoundingClientRect().bottom) : 0;
+        chk(same(got, want) && lastB <= Math.round(bx.bottom) && M.style.paddingRight !== '', '⑪ ' + c[0] + ' ▸ ' + c[1] + ' 맞춤 ' + want + ' — ' + got + ' · 마지막 버튼 끝 ' + lastB + ' ≤ 상자 끝 ' + Math.round(bx.bottom) + ' · 페이지 비킴 ' + M.style.paddingRight);
+        c[3](); await sleep(400);
+    }
+    chk(M.style.paddingRight === '', '⑪ 다 닫으면 원래 폭 — "' + M.style.paddingRight + '"');
+    W.switchTab('briefspec'); await sleep(300);
     if (saved === null) W.localStorage.removeItem(KEY); else W.localStorage.setItem(KEY, saved);
   } catch (e) { out.push('SETUP ' + e.message); }
   out.push(pass + '/' + (pass + fail));

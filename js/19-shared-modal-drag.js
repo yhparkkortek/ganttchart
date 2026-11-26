@@ -313,7 +313,10 @@ window._modalPosSave = function(boxId, withSize) {
 //    사람이 옮기거나 크기를 바꾼 적이 있으면(위치 기억, _modalPosRestore) 그게 이긴다 — 이 규칙은 그 전까지의 기본값.
 //    대상은 데이터 한 줄: 박스 id 를 아래 목록에 넣으면 된다.
 window.MODAL_FIT_WIDE = ['gantt-qa-box', 'mail-analyzer-modal', 'task-inbox-modal', 'jira-issue-box', 'jira-search-box',
-                         'daily-box', 'matcart-box', 'ovc-box', 'ms-queue-box'];
+                         'daily-box', 'matcart-box', 'ovc-box', 'ms-queue-box',
+                         // 📐 [2026-11-26 사용자 요청] 페이지에서 여는 내용 모달 — 캘린더 날짜 목록 · 알람 상세 · 알람 일정 ·
+                         //    공지 등록 · 주간 보고 AI 미리보기. 설정 폼(알람 설정 등)은 좁은 게 맞아 넣지 않는다.
+                         'cal-day-popup-modal', 'alarm-modal', 'alarm-schedule-modal', 'notice-modal', 'wr-pv-box'];
 window.MODAL_FIT_POLICY = { side: 'right', minHalfW: 640, gapDefault: 10, minW: 600 };
 // 붙은 모달이 있어도 페이지를 비키지 않는 탭 — 탭 이름은 사이드바 data-tab.
 //    [2026-11-25 사용자 결정 번복] 처음엔 화면 전체를 쓰는 페이지(간트·목록·캘린더·주간 보고)를 넣었는데, 그러면

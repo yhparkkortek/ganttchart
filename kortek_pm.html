@@ -591,9 +591,9 @@
 <div id="alarm-modal-overlay" class="modal-overlay" style="display:none; pointer-events:none; background:none;"></div>
 
 <div id="alarm-modal" style="display:none; pointer-events:all; position:fixed; top:8vh; left:50%; transform:translateX(-50%);
-  width:var(--modal-w-md); max-width:92vw; background:#fff; border-radius:10px; box-shadow:0 8px 32px rgba(0,0,0,0.22);
+  width:var(--modal-w-md); max-width:92vw; max-height:90vh; flex-direction:column; background:#fff; border-radius:10px; box-shadow:0 8px 32px rgba(0,0,0,0.22);
   padding:28px 28px 20px; font-family:'맑은 고딕',sans-serif;">
-  <div id="alarm-modal-drag-handle" style="display:flex; align-items:center; justify-content:space-between; margin:-28px -28px 18px; padding:13px 18px; cursor:grab; background:#fff8e6; border-radius:10px 10px 0 0; border-bottom:1px solid #ffe08a;">
+  <div id="alarm-modal-drag-handle" style="flex-shrink:0; display:flex; align-items:center; justify-content:space-between; margin:-28px -28px 18px; padding:13px 18px; cursor:grab; background:#fff8e6; border-radius:10px 10px 0 0; border-bottom:1px solid #ffe08a;">
     <h3 id="alarm-modal-title" style="margin:0; font-size:14px; color:#7a5210;">알람 상세</h3>
     <button onclick="window.closeAlarmModal()"
         style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); border-radius:6px;
@@ -604,8 +604,8 @@
         onmouseout="this.style.background='var(--modal-icon-bg)'; this.style.borderColor='var(--modal-icon-border)';"
         title="닫기" data-i18n-title="close">✕</button>
   </div>
-  <div id="alarm-modal-body" style="font-size:13px; color:#333; line-height:1.7;"></div>
-  <div style="margin-top:20px; display:flex; gap:10px; justify-content:flex-end;">
+  <div id="alarm-modal-body" style="flex:1; min-height:0; overflow-y:auto; font-size:13px; color:#333; line-height:1.7;"></div>
+  <div style="flex-shrink:0; margin-top:20px; display:flex; gap:10px; justify-content:flex-end;">
     <button id="alarm-modal-send-btn" data-i18n="alarm-modal-send-btn"
       onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';"
       style="padding:6px 14px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;"
@@ -2686,7 +2686,7 @@
 
 <script src="js/18-mail-analyzer-modal-drag.js?v=20261124a4"></script>
 
-<script src="js/19-shared-modal-drag.js?v=2026112608"></script>
+<script src="js/19-shared-modal-drag.js?v=2026112620"></script>
 <script src="js/19b-dropdown-reorder.js?v=20261125abs"></script>
 
 <script src="js/20-weekly-report.js?v=2026112733gw"></script>
@@ -2735,7 +2735,7 @@
 <!-- 22-tabs-summary-mctable.js 분리 (토큰 절약 · 협업용): 로딩 순서는 기존과 동일하게 유지 -->
 <script src="js/22a-summary-mctable-parse.js?v=2026112596"></script>
 <script src="js/22b-summary-mctable-core1.js?v=2026112699r"></script>
-<script src="js/22c-summary-mctable-core2.js?v=2026112699r"></script>
+<script src="js/22c-summary-mctable-core2.js?v=2026112620"></script>
 <script src="js/22d-summary-mctable-core3.js?v=2026112801"></script>
 <script src="js/22e-summary-mctable-core4.js?v=2026112735"></script>
 <script src="js/22f-address-book.js?v=2026112811"></script>

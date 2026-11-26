@@ -884,7 +884,7 @@ window.openAlarmModal = function(idx) {
         </table>`;
 
     document.getElementById('alarm-modal-overlay').style.display = 'flex';
-    document.getElementById('alarm-modal').style.display = 'block';
+    document.getElementById('alarm-modal').style.display = 'flex';   // 헤더·버튼 고정 + 본문 스크롤(3단)
     window.bringModalToFront('alarm-modal');
 };
 
