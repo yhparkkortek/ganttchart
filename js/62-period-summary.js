@@ -1286,13 +1286,13 @@
             rowClass: function (f) { return factPinned(f) ? 'rp-on' : ''; },   // 핀셋 켠 행은 간트처럼 행 전체가 옅게 물든다
             rowAttr: function (f) { return 'id="ps-fact-' + factKey(f) + '" onclick="window._psFactBack(event)" style="transition:box-shadow .3s, background .3s;"'; },
             cols: [
-                { id: 'date', label: T('날짜', 'Date'), w: '82px', nowrap: true, firstDir: -1, sort: function (f) { return f.date || ''; },
+                { id: 'date', label: T('날짜', 'Date'), w: '82px', nowrap: true, align: 'center', firstDir: -1, sort: function (f) { return f.date || ''; },
                   // 🚩 붉은 바는 **첫 칸 왼쪽 끝**에(간트 No. 칸과 같은 구조 — 별도 칸·테두리 없이)
                   tdCls: function (f) { return dateCls(f.date) + ' rp-cell rp-pad'; },
                   html: function (f) { var ri = factGanttRow(f); return pinBtnHtml(ri >= 0 ? [ri] : [], "window._psPinFact('" + factKey(f) + "')") + esc(f.date || ''); } },
-                { id: 'cat', label: T('구분', 'Role'), w: '58px', nowrap: true, sort: function (f) { return f.cat || '~'; }, opt: function (f) { return f.cat || ''; },
+                { id: 'cat', label: T('구분', 'Role'), w: '58px', nowrap: true, align: 'center', sort: function (f) { return f.cat || '~'; }, opt: function (f) { return f.cat || ''; },
                   html: function (f) { return f.cat ? '<span style="' + window._uiBadgeStyle() + ' background:#eef3f7; color:#2c5f8a;">' + esc(f.cat) + '</span>' : ''; } },
-                { id: 'who', label: T('담당자', 'Assignee'), w: '92px', nowrap: true, sort: function (f) { return f.assignee || '~'; },
+                { id: 'who', label: T('담당자', 'Assignee'), w: '92px', nowrap: true, align: 'center', sort: function (f) { return f.assignee || '~'; },
                   opt: function (f) { return String(f.assignee || '').split(',').map(function (x) { return x.trim(); }); },
                   // 👤 이름이 많으면 면적을 다 먹었다(2026-11-26 신고) — 첫 이름 + "외 N", 전체는 말풍선
                   html: function (f) { return whoTip(String(f.assignee || '').split(',').map(function (x) { return x.trim(); }), []); } },

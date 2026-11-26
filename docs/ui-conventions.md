@@ -789,6 +789,9 @@ Sample Report **원본저장** 구간이 옛 `/doc/docx` 한 길만 기대해서
   | Daily 하루 보기 | 이름·종류가 왼쪽 | 가운데(js/59 — 구분은 원래 `.daily-cat-cell` 가운데) |
 - 예외: **Project list** 는 사내 엑셀 "제품 SPEC" 을 그대로 옮긴 90열 목록이라 엑셀처럼 **전부 왼쪽**(No. 만 가운데) — 열마다 정렬을 바꾸면 줄임표(…)로 잘린 값이 열마다 다른 자리에서 잘려 오히려 읽기 어렵다. Summary·M.C·PARTS·Document 표는 앞서 정한 대로 손대지 않는다. Daily 의 `미작성` 줄은 나머지 칸을 합친 안내 칸이라 왼쪽 그대로.
 - 새 표: 칸에 정렬을 적을 땐 이 규칙으로. 머리글은 값과 상관없이 가운데(위 절).
+- 🔁 2026-11-26 재측정: JIRA·Alarm·주소록·BOM·Daily 는 그대로 규칙대로. 그 뒤 생긴 **Project Review 근거 사실 표**(js/62 열 정의 → js/79 공용 엔진, 일일보고 불러오기도 같은 엔진)만
+  날짜·구분·담당자가 왼쪽이었다 → 열 정의에 `align:'center'`. Summary 주요자재 Cost($) 왼쪽·M.C 금액 가운데는 위 예외(손대지 않는 표)라 그대로.
+- ⇅ **정렬 방향(머리글 첫 클릭)**: 전부 **오름차순(▲)부터** — Project list·주소록·BOM·JIRA·Project Review 실측. 예외는 **날짜 열은 최신부터(▼)**(Project Review `firstDir:-1`, JIRA 는 처음부터 수정일 ▼ 로 정렬돼 열린다). 새 정렬 표도 같은 식으로.
 
 검증: 고친 뒤 실제 화면에서 Alarm 행 칸 정렬 `center center left center center left center left center …`(업무명·두 이메일만 left), 주소록 입력칸 `email:left` 나머지 center, Daily 이름·종류 center.
 
