@@ -2699,6 +2699,14 @@
         renderRoster();
     };
 
+    /** 👥 명단 버튼 — 안 열려 있으면 열고 **열려 있으면 닫는다**(2026-11-26 요청 "명단 버튼도 모달 열고 닫기", 내 보고 쓰기 버튼과 같은 방식).
+     *  닫기는 명단 모달의 ✕·[닫기] 와 같은 것(`display:none` — 고친 칸은 저장 전이면 버려진다, 그 둘과 동일). 열려 있는지는 계산된 display 로 본다. */
+    window.dailyToggleRoster = function () {
+        var m = document.getElementById('daily-roster-modal');
+        if (m && getComputedStyle(m).display !== 'none') { m.style.display = 'none'; return; }
+        return window.dailyOpenRoster();
+    };
+
     function renderRoster() {
         var wrap = document.getElementById('daily-roster-modal');
         if (!wrap) {

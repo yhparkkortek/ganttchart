@@ -37,6 +37,18 @@ f.onload = async function () {
     var page = D.querySelector('#tab-daily .concept-header-box').getBoundingClientRect();
     chk(r.left >= page.right - 2 || r.left >= 600, '페이지(헤더 상자) 오른쪽 여백에 열린다 — 모달 left ' + Math.round(r.left) + ' · 페이지 right ' + Math.round(page.right));
     chk(D.getElementById('app-main').style.paddingRight !== '', '붙어 있는 동안 페이지가 비킨다(오른쪽 여백 확보)');
+    // 👥 명단 버튼도 토글 — 열려 있을 때 다시 누르면 닫히고, 또 누르면 열린다(2026-11-26)
+    var rShown = function () { var m = D.getElementById('daily-roster-modal'); return !!m && W.getComputedStyle(m).display !== 'none'; };
+    chk(/dailyToggleRoster/.test(rb.getAttribute('onclick')), '명단 버튼이 토글 함수를 부른다 — ' + rb.getAttribute('onclick'));
+    chk(rShown(), '(준비) 지금 명단이 열려 있다');
+    rb.click(); await sleep(500);
+    chk(!rShown(), '명단 버튼을 다시 누르면 닫힌다');
+    rb.click(); await sleep(1800);
+    chk(rShown(), '또 누르면 다시 열린다(맞춤 자리 그대로 — ' + Math.round(D.getElementById('daily-roster-box').getBoundingClientRect().left) + ')');
+    D.querySelector('#daily-roster-modal button[onclick*="daily-roster-modal"]').click(); await sleep(300);
+    chk(!rShown(), '✕ 로 닫는다');
+    rb.click(); await sleep(1800);
+    chk(rShown(), '✕ 로 닫은 뒤 버튼을 누르면 바로 열린다(닫기 한 번 더 먹지 않는다)');
     // 내 보고 쓰기와 같은 자리
     W.dailyOpenModal(); await sleep(1800);
     var wr = D.getElementById('daily-box').getBoundingClientRect();
