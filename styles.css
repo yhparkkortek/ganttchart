@@ -2844,8 +2844,9 @@ tr.jira-zebra-b { background: #e8f2f3; }
 #doc-page-body.doc-mode-write table.doc-t td.doc-lab { background:#f1f3f5 !important; color:#343a40 !important; }
 /* 긴 칸 이름은 줄바꿈 — 기본 규칙이 nowrap 이라 칸 밖으로 삐져나가는데, 점검 보기에선 옆 칸 흰 입력칸이 덮어 안 보이고
    작성 보기에선 입력칸이 투명해 **값 위에 겹쳐** 보였다(실측: PRODUCT SPEC '양식 계열 (stellar / obsidian / obsidian55)' 등 25칸). */
-#doc-page-body.doc-mode-write table.doc-t th,
-#doc-page-body.doc-mode-write table.doc-t td.doc-lab { white-space:normal; word-break:keep-all; overflow-wrap:anywhere; }
+/*  ↳ [같은 날] 🔍 점검 보기도 같은 규칙 — 거기선 겹치진 않았지만 이름 뒷부분이 입력칸 밑에 **잘려** 끝까지 못 읽었다(실측 24칸). */
+#doc-page-body table.doc-t th,
+#doc-page-body table.doc-t td.doc-lab { white-space:normal; word-break:keep-all; overflow-wrap:anywhere; }
 #doc-page-body.doc-mode-write .doc-in { border-color:transparent; background:transparent; border-radius:2px; padding:3px 4px; }
 #doc-page-body.doc-mode-write .doc-in:hover { background:#f8f9fa; }
 #doc-page-body.doc-mode-write .doc-in.own { border-color:transparent; background:transparent; font-weight:normal;
