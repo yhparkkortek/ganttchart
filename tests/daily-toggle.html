@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>✏️ 내 보고 쓰기 버튼 토글 시험</title></head><body style="margin:0">
+<!-- 📔 [2026-11-26] "내 보고 쓰기" 버튼: 누르면 모달이 열리고 **다시 누르면 닫힌다**. 진짜 kortek_pm.html 을 iframe 으로 띄워 진짜 버튼(`#daily-write-btn`)을 누른다.
+     가짜는 NAS 경계 셋뿐(`dailyEnsureIdentity`·`dailyLoadRoster`·`dailyLoad`) — 모달 열기·닫기·draft 저장은 진짜. 다른 프로젝트 훑기는 끈다(네트워크 0).
+     ⚠️ 프로젝트가 열린 탭에서 돌리지 말 것(빈 앱 전용). 실행: chrome --headless=new --disable-gpu --allow-file-access-from-files --window-size=1500,900
+        --virtual-time-budget=40000 --dump-dom file:///.../tests/daily-toggle.html → <pre id="out"> (마지막 줄 N/M) -->
+<iframe id="f" src="../kortek_pm.html?dtoggle=1" style="border:0;width:1400px;height:800px;"></iframe>
+<pre id="out">running…</pre>
+<script>
+var out = [], pass = 0, fail = 0;
+function chk(c, l) { c ? pass++ : fail++; out.push((c ? 'ok   ' : 'FAIL ') + l); }
+function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+var f = document.getElementById('f');
+f.onload = async function () {
+  await sleep(2500);
+  var W = f.contentWindow, D = f.contentDocument;
+  try {
+    if (W.currentDriveFileId) { out.push('SKIP 프로젝트가 열려 있다'); throw new Error('skip'); }
+    D.querySelectorAll('[id$="-overlay"],[id$="-modal"]').forEach(function (x) { if (x.style) x.style.display = 'none'; });
+    W.DAILY_SCAN.otherProjects = false;
+    W.dailyEnsureIdentity = async function () { return true; };
+    W.dailyLoadRoster = async function () { return []; };
+    W.dailyLoad = async function () { return null; };
+    W.switchTab('daily'); await sleep(500);
+    var btn = D.getElementById('daily-write-btn');
+    var shown = function () { var m = D.getElementById('daily-modal'); return !!m && W.getComputedStyle(m).display !== 'none'; };
+    chk(!!btn && /dailyToggleModal/.test(btn.getAttribute('onclick')), '버튼이 토글 함수를 부른다 — ' + (btn && btn.getAttribute('onclick')));
+    chk(!shown(), '처음엔 모달이 없다');
+    btn.click(); await sleep(1500);
+    chk(shown(), '버튼을 누르면 모달이 열린다');
+    btn.click(); await sleep(500);
+    chk(!shown(), '다시 누르면 모달이 닫힌다');
+    btn.click(); await sleep(1500);
+    chk(shown(), '또 누르면 다시 열린다');
+    // ✕ 로 닫은 뒤에도 버튼이 바로 열어 준다(상태가 엇갈리지 않는다)
+    D.querySelector('#daily-modal button[onclick*="dailyCloseModal"]').click(); await sleep(300);
+    chk(!shown(), '✕ 로 닫는다');
+    btn.click(); await sleep(1500);
+    chk(shown(), '✕ 로 닫은 뒤 버튼을 누르면 열린다(닫기 한 번 더 먹지 않는다)');
+    btn.click(); await sleep(500);
+    chk(!shown(), '열린 상태에서 누르면 닫힌다');
+    try { W.localStorage.removeItem(W.DAILY_POLICY.draftKey); } catch (e) { /* 무시 */ }
+  } catch (e) { if (e.message !== 'skip') out.push('SETUP ' + e.message); }
+  out.push(pass + '/' + (pass + fail));
+  document.getElementById('out').textContent = out.join('\n');
+};
+</script></body></html>

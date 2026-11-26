@@ -1685,6 +1685,14 @@
         var m = document.getElementById('daily-modal');
         if (m) m.style.display = 'none';
     };
+    /** ✏️ 내 보고 쓰기 버튼 — 안 열려 있으면 열고, **열려 있으면 닫는다**(2026-11-26 요청 "다시 누르면 모달 닫히도록").
+     *  닫기는 ✕ 와 같은 경로(`dailyCloseModal`)라 초안 저장·사진 URL 반환이 똑같이 돈다. 열려 있는지는 **계산된 display** 로 본다(인라인 style 이 비어 있어도 맞게). */
+    window.dailyToggleModal = function () {
+        var m = document.getElementById('daily-modal');
+        var shown = !!m && getComputedStyle(m).display !== 'none';
+        if (shown) { window.dailyCloseModal(); return; }
+        return window.dailyOpenModal();
+    };
     window._dailySetType = function (k) { _doc.dayType = k; saveDraftLocal(); render(); };
     window._dailyNote = function (i, v) { if (_doc.items[i]) { _doc.items[i].note = v; saveDraftLocal(); } };
     /** 업무 하나의 칸(오늘 한 일·해야 할 일·막힌 일). 다시 그리지 **않는다** — 타이핑 중이다. */
