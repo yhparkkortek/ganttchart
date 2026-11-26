@@ -474,7 +474,7 @@
                    return '<td style="border:1px solid #cfe3e5; padding:3px; text-align:center;">'
                         + '<input type="checkbox" data-res="' + _esc(r.key) + '|' + _esc(p.key) + '"'
                         + ' data-res-label="' + _esc(r.label) + '"'
-                        + (window.resPortOn(r.key, p.key) ? ' checked' : '') + '></td>';
+                        + (window.resPortOn(r.key, p.key) ? ' checked' : '') + ' style="width:14px; height:14px; display:block; margin:0 auto; cursor:pointer;"></td>';
                }).join('')
                + '</tr>';
         });
@@ -511,7 +511,7 @@
                    return '<td style="border:1px solid #cfe3e5; padding:3px; text-align:center;">'
                         + '<input type="checkbox" data-res="' + _esc(r.key) + '|' + _esc(p.key) + '"'
                         + ' data-res-label="' + _esc(r.label) + '"'
-                        + (window.resPortOn(r.key, p.key) ? ' checked' : '') + '></td>';
+                        + (window.resPortOn(r.key, p.key) ? ' checked' : '') + ' style="width:14px; height:14px; display:block; margin:0 auto; cursor:pointer;"></td>';
                }).join('')
                + '</tr>';
         });

@@ -106,7 +106,7 @@ window.renderNoticeTab = function() {
           <td style="padding:6px 6px;text-align:center;">
             <input type="checkbox" class="notice-row-cb" data-id="${n.id}" data-idx="${i}"
                    onclick="window._noticeCbClick(event, this, ${i})"
-                   style="cursor:pointer; width:14px; height:14px;">
+                   style="cursor:pointer; width:14px; height:14px; display:block; margin:0 auto;">
           </td>
           <td style="padding:6px 6px;text-align:center;font-size:11.5px;color:#888;" title="#NI${no}">${no}</td>
           <td style="padding:6px 8px;text-align:center;font-size:16px;">${statusDot}</td>
