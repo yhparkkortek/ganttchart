@@ -1670,17 +1670,57 @@
         var d = new Date();
         return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
     }
+    // 📅 [2026-11-26 사용자 요청 "오늘 버튼을 누르면 오늘자 업무만 보여주는데 — 전체 업무 풀어서 오늘자 위치로 이동"]
+    //    거르지 않는다: ① 검색이 걸려 있으면 푼다 ② WBS 를 전부 펼친다 ③ 보이는 하위 업무(리프) 중 시작일이 오늘 이후인
+    //    첫 행을 표 머리 바로 아래로 스크롤하고 잠깐 반짝인다(없으면 오늘 이전에 시작한 마지막 행). 그 위가 지난 일, 아래가 앞으로의 일.
+    //    부모 행은 기간이 하위 전부를 덮어 오늘에 늘 걸리므로 기준으로 삼지 않는다. 오늘 날짜로 찾기는 검색 바의 📅 로 그대로 된다.
     window.ganttSearchToday = function() {
-        _ensureSearchBar();
-        var inp = document.getElementById('gantt-ai-search-input');
-        if (!inp) return;
-        var iso = _gsTodayIso();
-        if (_query === iso && _lastAppliedQuery === iso) { _clearSearch(); return; }
-        inp.value = iso;
-        _query = iso; _selected.clear(); _navIndex = -1;
-        _showSearchBar();
-        _applySearch();
-        if (!_matchedIndices.length && window.showToast) window.showToast(window._t ? window._t(_dateSpan ? '오늘(' + iso + ')에 걸친 업무가 없습니다' : '오늘(' + iso + ') 시작하는 업무가 없습니다 — 기간에 걸친 업무는 ‘기간 포함’을 켜세요', 'No tasks on today (' + iso + ')') : '오늘 업무 없음', 'info');
+        var gd = window.globalData;
+        if (!gd || gd.length <= 1) return;
+        if (_query) _clearSearch();
+        var opened = 0;
+        for (var i = 1; i < gd.length; i++) {
+            var row = gd[i]; if (!row) continue;
+            var hasKids = (i + 1 < gd.length) && gd[i + 1] && ((gd[i + 1]._level || 0) > (row._level || 0));
+            if (!hasKids) continue;
+            if (row._wbsCollapsed) opened++;
+            row._wbsCollapsed = false;
+            if (window._wbsSyncRowArrows) window._wbsSyncRowArrows(i, false, true);
+        }
+        var ha = document.getElementById('wbs-th-arrow'); if (ha) ha.textContent = '▲';
+        if (typeof applyFilters === 'function') applyFilters();
+
+        var t0 = new Date(); t0.setHours(0, 0, 0, 0); var today = t0.getTime();
+        var tbody = document.getElementById('table-body');
+        var scrollBox = document.getElementById('gantt-table-scroll');
+        if (!tbody || !scrollBox) return;
+        var after = null, before = null;
+        var trs = tbody.querySelectorAll('tr[data-row-index]');
+        for (var k = 0; k < trs.length; k++) {
+            var tr = trs[k];
+            if (tr.style.display === 'none') continue;
+            var idx = +tr.getAttribute('data-row-index'), r = gd[idx];
+            if (!r || !r._calcStartTs) continue;
+            var leaf = !(idx + 1 < gd.length && gd[idx + 1] && ((gd[idx + 1]._level || 0) > (r._level || 0)));
+            if (!leaf) continue;
+            if (r._calcStartTs >= today) { after = tr; break; }
+            before = tr;
+        }
+        var target = after || before;
+        if (!target) { if (window.showToast) window.showToast(window._t('📅 날짜가 있는 업무가 없습니다.', '📅 No dated tasks.'), 'info'); return; }
+        if (window._ganttHydrateRow) target = window._ganttHydrateRow(target) || target;
+        var thead = document.getElementById('table-head');
+        var align = function() {
+            var delta = target.getBoundingClientRect().top - scrollBox.getBoundingClientRect().top - (thead ? thead.getBoundingClientRect().height : 0);
+            if (Math.abs(delta) > 1) scrollBox.scrollTop += delta;
+        };
+        // 스크롤하면 그 근처 자리표시 행이 채워지며 높이가 몇 px 달라진다(가상 스크롤, js/04j) — 채워진 뒤 한 번 더 맞춘다
+        align(); setTimeout(align, 80); setTimeout(align, 250);
+        target.classList.remove('ai-ref-flash'); void target.offsetWidth; target.classList.add('ai-ref-flash');
+        setTimeout(function() { target.classList.remove('ai-ref-flash'); }, 1700);
+        if (window.showToast) window.showToast(window._t(
+            '📅 오늘(' + _gsTodayIso() + ') 위치로 이동했습니다' + (opened ? ' — 접힌 묶음 ' + opened + '개를 펼쳤습니다' : '') + '.',
+            '📅 Moved to today (' + _gsTodayIso() + ')' + (opened ? ' — expanded ' + opened + ' group(s)' : '') + '.'), 'info');
     };
 
     // MutationObserver: table-body가 재렌더링될 때마다 검색 재적용
