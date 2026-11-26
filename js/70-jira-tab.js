@@ -931,9 +931,10 @@
             + '<button onclick="window._jiraSearchRun()"' + btnHover + ' style="' + btnSt + ' font-weight:bold; flex-shrink:0;">🔍 ' + T('검색', 'Search') + '</button>'
             + '</div></div>'
             + '<div id="jira-search-sim" style="flex:0 0 auto; display:none; padding:0 14px 6px;"></div>'
-            // 🩹 [2026-11-26 사용자 제보 "모달 도표 하단 겹침"] 끝까지 내려도 마지막 줄이 모달 하단에 바로 붙어 보였다
-            //    — 아래 padding-bottom 을 다른 모달 본문과 같은 여유(18~20px대)로 늘려 끝에 숨 쉴 자리를 둔다.
-            + '<div id="jira-search-body" style="padding:0 14px 20px; flex:1 1 auto; min-height:0; overflow:auto; font-size:12px;"></div>'
+            // 🩹 [2026-11-26 사용자 제보 "모달 도표 하단 겹침"] 스크롤 중 표 줄이 모달 아래 테두리까지 그대로 흘러내려 겹쳐 보였다.
+            //    ⚠️ 스크롤 상자는 **padding 상자 끝**에서 자른다 — padding-bottom 은 맨 끝까지 내렸을 때만 보이고 스크롤 중엔
+            //    아무 소용이 없다(처음 그걸로 고쳤다가 "그대로임"). 그래서 스크롤 상자 **바깥** 여백(margin-bottom)으로 늘 보이는 틀을 둔다.
+            + '<div id="jira-search-body" style="padding:0 14px 6px; margin-bottom:12px; flex:1 1 auto; min-height:0; overflow:auto; font-size:12px;"></div>'
             + '</div>';
         wrap.style.display = 'block';
         if (window._makeDraggable) window._makeDraggable('jira-search-box', 'jira-search-drag');
