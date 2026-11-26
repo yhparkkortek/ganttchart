@@ -235,7 +235,7 @@ window._renderModelCardHtml = function(model, idx) {
     var _unitSel = '<select onchange="window.setProjectModelUnit(' + idx + ', this.value)" '
         + 'title="' + (_mEn ? 'Pick the product family for this model' : '이 모델의 제품군을 고릅니다') + '" '
         + 'style="font-size:12px; font-weight:bold; color:#00707d; background:#fff; border:1px solid #cfe3e5; '
-        + 'border-radius:5px; padding:2px 6px; height:22px; box-sizing:border-box; cursor:pointer;">'
+        + 'border-radius:4px; padding:2px 6px; height:22px; box-sizing:border-box; cursor:pointer;">'
         + _opt + '</select>';
     var ktkVal = escapeHtml(model.KTKPN && model.KTK모델명 ? model.KTKPN + '_' + model.KTK모델명 : (model.KTKPN || model.KTK모델명 || ''));
     // 💡 [2026-10-15] 헤더 높이 통일 — 예전엔 "(기본)"은 맨텍스트, 삭제는 테두리+패딩 버튼이라

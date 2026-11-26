@@ -2400,7 +2400,7 @@
                 + '<button type="button" onclick="window._jiraFindProjectFromSummary(this)"'
                 + ' onmouseover="this.style.background=\'#a3d9e0\';" onmouseout="this.style.background=\'#e0f5f7\';"'
                 + ' title="' + esc(T('JIRA 프로젝트 찾기', 'Find JIRA project')) + '"'
-                + ' style="flex:0 0 auto; padding:0 9px; border-radius:5px; font-size:12px; cursor:pointer; border:none;'
+                + ' style="flex:0 0 auto; padding:0 9px; border-radius:6px; font-size:12px; cursor:pointer; border:none;'
                 + ' background:#e0f5f7; color:#00707d; transition:background .15s;">🔍</button>'
                 + '</div>';
             var tail = '</div></div>';

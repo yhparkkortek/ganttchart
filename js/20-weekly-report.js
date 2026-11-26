@@ -468,23 +468,23 @@
         //    블록과 블록 사이의 "적당한 위치"에서만 페이지가 나뉘도록 함 (아래 print CSS와 짝)
         container.innerHTML = `
             <div>
-                <div class="wr-print-block" style="margin-bottom:14px; border:1px solid ${BORDER_C}; border-radius:4px; overflow:hidden;">
+                <div class="wr-print-block" style="margin-bottom:14px; border:1px solid ${BORDER_C}; border-radius:6px; overflow:hidden;">
                     <div style="background:${SKY_TINT}; padding:8px; text-align:center; font-weight:bold; font-size:16px; color:#2c5f8a;">${_wrEn ? 'Development Progress' : '개발 진척 현황'}</div>
                     <div style="padding:12px; background:#fff;">${wrRenderTimeline()}</div>
                 </div>
 
                 <div style="display:flex; gap:10px; margin-bottom:14px; align-items:stretch;">
-                    <div class="wr-print-block" style="flex:1; display:flex; flex-direction:column; background:#fff; border:1px solid ${BORDER_C}; border-radius:4px; overflow:hidden;">
+                    <div class="wr-print-block" style="flex:1; display:flex; flex-direction:column; background:#fff; border:1px solid ${BORDER_C}; border-radius:6px; overflow:hidden;">
                         <div style="background:${SKY_TINT}; padding:8px; text-align:center; font-weight:bold; font-size:16px; color:#2c5f8a;">${_wrEn ? `Key Achievements (${data.thisWeekNo}W)` : `주요 실적 (${data.thisWeekNo}W)`}</div>
                         <div style="padding:12px; background:#fff; flex:1;">${wrRenderEditableList(data.thisList)}</div>
                     </div>
-                    <div class="wr-print-block" style="flex:1; display:flex; flex-direction:column; background:#fff; border:1px solid ${BORDER_C}; border-radius:4px; overflow:hidden;">
+                    <div class="wr-print-block" style="flex:1; display:flex; flex-direction:column; background:#fff; border:1px solid ${BORDER_C}; border-radius:6px; overflow:hidden;">
                         <div style="background:${SKY_TINT}; padding:8px; text-align:center; font-weight:bold; font-size:16px; color:#2c5f8a;">${_wrEn ? `Upcoming Plans (${data.nextWeekNo}W)` : `추진 계획 (${data.nextWeekNo}W)`}</div>
                         <div style="padding:12px; background:#fff; flex:1;">${wrRenderEditableList(data.nextList)}</div>
                     </div>
                 </div>
 
-                <div class="wr-print-block" style="border:1px solid ${BORDER_C}; border-radius:4px; overflow:hidden;">
+                <div class="wr-print-block" style="border:1px solid ${BORDER_C}; border-radius:6px; overflow:hidden;">
                     <div style="background:${SKY_TINT}; padding:8px; text-align:center; font-weight:bold; font-size:16px; color:#2c5f8a;">${_wrEn ? 'Issues & Actions' : '문제점 및 Issue'}</div>
                     <div style="background:#fff;">${wrRenderIssueTable([...data.thisList, ...data.nextList])}</div>
                 </div>

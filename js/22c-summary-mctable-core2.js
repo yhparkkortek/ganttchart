@@ -1077,7 +1077,7 @@ window.renderMember3Rows = function(rows) {
             + '<div style="position:relative; display:flex; align-items:center;">'
             +   '<input type="email" data-idx="' + idx + '" data-field="email" class="u-input" value="' + _escTabVal(r.email) + '" placeholder="email@company.com" style="width:100%; padding-right:24px; box-sizing:border-box;">'
             +   '<button type="button" onclick="window.deleteMember3Row(' + idx + ')" title="이 인원 삭제"'
-            +     ' style="position:absolute; right:3px; top:50%; transform:translateY(-50%); border:1px solid #ccc; border-radius:3px; background:#fff; color:#999; cursor:pointer; font-size:13px; line-height:1; width:18px; height:18px; padding:0; display:flex; align-items:center; justify-content:center;"'
+            +     ' style="position:absolute; right:3px; top:50%; transform:translateY(-50%); border:1px solid #ccc; border-radius:4px; background:#fff; color:#999; cursor:pointer; font-size:13px; line-height:1; width:18px; height:18px; padding:0; display:flex; align-items:center; justify-content:center;"'
             +     ' onmouseover="this.style.background=\'#e03131\'; this.style.borderColor=\'#e03131\'; this.style.color=\'#fff\';" onmouseout="this.style.background=\'#fff\'; this.style.borderColor=\'#ccc\'; this.style.color=\'#999\';">－</button>'
             + '</div>';
     };
@@ -1276,7 +1276,7 @@ window.renderMaterialRows = function(rows, modelIdx) {
         // 💡 [2026-08-25 UX 개선] 예전엔 "삭제 버튼"이 맨 오른쪽 체크박스 칸에 있어서 눈에 잘 안 띈다는
         //    지적이 있었음 — PANEL 행의 🔍(스펙 미리보기) 버튼과 같은 자리(설명 입력칸 바로 옆)로 옮겨서,
         //    자유추가 행을 열 때 바로 보이는 "행 액션 버튼" 자리로 통일했다.
-        const delBtn = r.locked ? '' : '<button type="button" onclick="window.deleteMaterialRow(' + idx + ', ' + _mi + ')" title="' + (_matEn ? 'Delete this row' : '이 행 삭제') + '" style="flex-shrink:0; border:1px solid #ccc; border-radius:3px; background:#fff; color:#999; cursor:pointer; font-size:11px; width:20px; height:20px; line-height:1; padding:0;">－</button>';
+        const delBtn = r.locked ? '' : '<button type="button" onclick="window.deleteMaterialRow(' + idx + ', ' + _mi + ')" title="' + (_matEn ? 'Delete this row' : '이 행 삭제') + '" style="flex-shrink:0; border:1px solid #ccc; border-radius:4px; background:#fff; color:#999; cursor:pointer; font-size:11px; width:20px; height:20px; line-height:1; padding:0;">－</button>';
         // 💡 [2026-08-25 신규 — Panel Compare 연동] PANEL 구분 행에 모델명이 적혀 있으면, 그 옆에
         //    스펙 미리보기 버튼을 붙인다 — 클릭하면 패널 스펙 라이브러리에서 조회해 보여주고,
         //    Panel Compare 탭 비교표에 없으면 바로 추가할 수 있게 한다.
@@ -1296,9 +1296,9 @@ window.renderMaterialRows = function(rows, modelIdx) {
             + '<input type="text" data-idx="' + idx + '" data-field="description" class="u-input" value="' + _escTabVal(r.description) + '" placeholder="' + (_matEn ? 'e.g. MV315QHM-N41' : '예: MV315QHM-N41') + '" style="border:none; width:100%; box-sizing:border-box; background:transparent;" '
             + ((r.category === 'PANEL' || _epRowType[r.category]) ? 'onchange="window.renderMaterialRows(window.collectMaterialRows(true, ' + _mi + '), ' + _mi + ');"' : '') + '>'
             + ((r.category === 'PANEL' && _hasSpecKey)
-                ? '<button type="button" onclick="window.showPanelSpecModal(' + escapeHtml(JSON.stringify(r.description)) + ', ' + escapeHtml(JSON.stringify(r.ktkPn || '')) + ')" title="' + (_matEn ? 'Panel spec preview' : '패널 스펙 미리보기') + '" style="flex-shrink:0; border:1px solid #cfd8e3; border-radius:5px; background:#fff; color:var(--ui-accent, #00707d); cursor:pointer; font-size:11px; width:20px; height:20px; line-height:1; padding:0; box-sizing:border-box;">🔍</button>'
+                ? '<button type="button" onclick="window.showPanelSpecModal(' + escapeHtml(JSON.stringify(r.description)) + ', ' + escapeHtml(JSON.stringify(r.ktkPn || '')) + ')" title="' + (_matEn ? 'Panel spec preview' : '패널 스펙 미리보기') + '" style="flex-shrink:0; border:1px solid #cfd8e3; border-radius:4px; background:#fff; color:var(--ui-accent, #00707d); cursor:pointer; font-size:11px; width:20px; height:20px; line-height:1; padding:0; box-sizing:border-box;">🔍</button>'
                 : ((_epRowType[r.category] && _hasSpecKey)
-                    ? '<button type="button" onclick="window.showElecPartSpecModal(' + escapeHtml(JSON.stringify(_epRowType[r.category])) + ', ' + escapeHtml(JSON.stringify(r.description)) + ', ' + escapeHtml(JSON.stringify(r.ktkPn || '')) + ')" title="' + (_matEn ? 'Spec preview' : '스펙 미리보기') + '" style="flex-shrink:0; border:1px solid #cfd8e3; border-radius:5px; background:#fff; color:var(--ui-accent, #00707d); cursor:pointer; font-size:11px; width:20px; height:20px; line-height:1; padding:0; box-sizing:border-box;">🔍</button>'
+                    ? '<button type="button" onclick="window.showElecPartSpecModal(' + escapeHtml(JSON.stringify(_epRowType[r.category])) + ', ' + escapeHtml(JSON.stringify(r.description)) + ', ' + escapeHtml(JSON.stringify(r.ktkPn || '')) + ')" title="' + (_matEn ? 'Spec preview' : '스펙 미리보기') + '" style="flex-shrink:0; border:1px solid #cfd8e3; border-radius:4px; background:#fff; color:var(--ui-accent, #00707d); cursor:pointer; font-size:11px; width:20px; height:20px; line-height:1; padding:0; box-sizing:border-box;">🔍</button>'
                     : ''))
             + delBtn
             + '</div></td>';
@@ -1405,7 +1405,7 @@ window.renderMaterialModelsContainer = function() {
             + '</div>'
             + '<div id="sum-materials-body-' + i + '" style="padding:10px 12px;' + (collapsed ? ' display:none;' : '') + '">'
                 + '<div style="display:flex; gap:16px; flex-wrap:wrap;">' + _tableHtml('a', i) + _tableHtml('b', i) + '</div>'
-                + '<button type="button" onclick="window.addMaterialRow(' + i + ')" onmouseover="this.style.background=\'#eef6f7\';" onmouseout="this.style.background=\'#fff\';" style="margin-top:10px; padding:4px 12px; border:1px dashed #a3d9e0; color:#00707d; background:#fff; border-radius:4px; cursor:pointer; font-size:12px;">'
+                + '<button type="button" onclick="window.addMaterialRow(' + i + ')" onmouseover="this.style.background=\'#eef6f7\';" onmouseout="this.style.background=\'#fff\';" style="margin-top:10px; padding:4px 12px; border:1px dashed #a3d9e0; color:#00707d; background:#fff; border-radius:6px; cursor:pointer; font-size:12px;">'
                 + (_en ? '+ Add Material' : '+ 자재 추가') + '</button>'
             + '</div>'
         + '</div>';

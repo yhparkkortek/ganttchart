@@ -18,7 +18,7 @@
 <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
 
-<link rel="stylesheet" href="styles.css?v=2026112699r">
+<link rel="stylesheet" href="styles.css?v=2026112699q">
 <!-- 💡 [2026-09-04] FOUC 방지: 저장된 테마 CSS를 첫 렌더 전에 즉시 주입.
      styles.css가 파싱된 직후, <body>가 렌더되기 전에 실행되므로
      "청록 → 파랑" 깜빡임 없이 바로 올바른 테마색이 적용된다.
@@ -1356,7 +1356,7 @@
             <div class="concept-section" style="flex:1 1 260px; margin-bottom:16px;">
                 <h3 id="sum-h3-overview">프로젝트 개요</h3>
                 <div class="concept-grid" style="grid-template-columns:140px 1fr 140px 1fr;">
-                    <label id="sum-lbl-purpose" style="align-self:start; padding-top:6px;">적용 목적</label><textarea id="sum-purpose" class="u-input" rows="1" style="width:100%; padding:6px 8px; border:1px solid #cfe3e5; border-radius:4px; font-size:12.5px; box-sizing:border-box; font-family:inherit; resize:none; overflow:hidden; grid-column:2/-1;" placeholder="예: LNW UK / 유럽 시장 판매 / S32 신규 Cabinet 개발" data-i18n-placeholder="sum-purpose" oninput="this.style.height='auto';this.style.height=(this.scrollHeight)+'px';"></textarea>
+                    <label id="sum-lbl-purpose" style="align-self:start; padding-top:6px;">적용 목적</label><textarea id="sum-purpose" class="u-input" rows="1" style="width:100%; padding:6px 8px; border:1px solid #cfe3e5; border-radius:6px; font-size:12.5px; box-sizing:border-box; font-family:inherit; resize:none; overflow:hidden; grid-column:2/-1;" placeholder="예: LNW UK / 유럽 시장 판매 / S32 신규 Cabinet 개발" data-i18n-placeholder="sum-purpose" oninput="this.style.height='auto';this.style.height=(this.scrollHeight)+'px';"></textarea>
                     <label id="sum-lbl-volume">연간 수요량</label><input type="text" id="sum-volume" class="u-input" placeholder="예: 약 20,000대/년" data-i18n-placeholder="sum-volume">
                     <label id="sum-lbl-mpdate">목표 양산 일정</label><input type="text" id="sum-mp-date" class="u-input" placeholder="예: 2027년 5월 납품 예정" data-i18n-placeholder="sum-mp-date">
                 </div>
@@ -1368,11 +1368,11 @@
                 <div class="concept-grid" style="flex:none; min-width:280px; max-width:440px;">
                     <label id="sum-lbl-customer">고객사&gt;프로젝트명 <span style="color:#e03131;">*</span></label><input type="text" id="sum-customer" class="u-input req-field" placeholder="예: LNW&gt;STELLAR32" data-i18n-placeholder="sum-customer" oninput="window._checkRequiredField(this)">
                 </div>
-                <button type="button" onclick="window.addProjectModel()" id="sum-btn-add-model" style="font-size:12px; padding:3px 14px; border:1px solid #cfe3e5; border-radius:12px; background:#e0f5f7; cursor:pointer; color:#00707d; white-space:nowrap;" onmouseover="this.style.background='#a3d9e0';this.style.borderColor='#52a5af';" onmouseout="this.style.background='#e0f5f7';this.style.borderColor='#cfe3e5';">+ 모델 추가</button>
+                <button type="button" onclick="window.addProjectModel()" id="sum-btn-add-model" style="font-size:12px; padding:3px 14px; border:1px solid #cfe3e5; border-radius:6px; background:#e0f5f7; cursor:pointer; color:#00707d; white-space:nowrap;" onmouseover="this.style.background='#a3d9e0';this.style.borderColor='#52a5af';" onmouseout="this.style.background='#e0f5f7';this.style.borderColor='#cfe3e5';">+ 모델 추가</button>
             </div>
             <div id="sum-models-container" style="display:flex; flex-direction:column; gap:8px; margin-bottom:10px;"></div>
             <div class="concept-grid">
-                <label id="sum-lbl-mailkw" title="메일 자동수집·분석 시 이 프로젝트로 매칭할 별칭/약어. 쉼표로 구분 (예: S32, 에스삼투, STELLAR)&#10;&#10;⚠️ 사람 이름은 넣지 마세요 — 그 사람이 보내는 모든 메일이 내용과 무관하게 이 프로젝트로 자동 매칭됩니다(서명란에 항상 본인 이름이 들어가기 때문). 주소록에 등록된 이름은 매칭 시 자동으로 제외되지만, 안전하게 첫제부터 넣지 않는 걸 권장합니다." data-i18n-title="mail-keyword-hint">메일 키워드 🔖</label><div id="sum-mailkw-cell" style="display:flex; gap:6px; align-items:center; min-width:0;"><input type="text" id="sum-mail-keywords" class="u-input" style="flex:1 1 auto; min-width:0;" placeholder="예: S32, STELLAR, 에스삼투 (쉼표로 구분)" data-i18n-placeholder="sum-mail-keywords"><!-- 📊 [2026-11-24 사용자 요청] 토픽 프로파일(js/26)은 메일 키워드와 같은 줄 — 둘 다 메일 매칭 어휘다 --><button type="button" onclick="window._generateTopicProfile && window._generateTopicProfile()" data-i18n="topic-profile-gen-btn" title="현재 프로젝트의 간트 업무를 AI로 분석하여 키워드·토픽 프로파일을 저장합니다. 이후 메일 분석 정확도가 향상됩니다." data-i18n-title="topic-profile-gen-hint" style="height:29px; box-sizing:border-box; padding:0 12px; font-size:12px; border:1px solid #cfe3e5; border-radius:12px; background:#e0f5f7; color:#00707d; cursor:pointer; white-space:nowrap; flex-shrink:0;">📊 토픽 프로파일 생성</button><span id="topic-profile-badge" onclick="window._showTopicProfileViewer && window._showTopicProfileViewer()" style="font-size:11px;color:#888;white-space:nowrap;cursor:pointer;flex-shrink:0;" title="클릭하면 저장된 토픽 프로파일을 열람합니다" data-i18n-title="topic-profile-view-hint"></span><button type="button" onclick="window._showTopicProfileViewer && window._showTopicProfileViewer()" title="저장된 토픽 프로파일 열람" data-i18n-title="topic-profile-view" style="height:29px; box-sizing:border-box; padding:0 9px; font-size:12px; border:1px solid #cfe3e5; border-radius:12px; background:#e0f5f7; color:#00707d; cursor:pointer; white-space:nowrap; flex-shrink:0;">🔍</button></div>
+                <label id="sum-lbl-mailkw" title="메일 자동수집·분석 시 이 프로젝트로 매칭할 별칭/약어. 쉼표로 구분 (예: S32, 에스삼투, STELLAR)&#10;&#10;⚠️ 사람 이름은 넣지 마세요 — 그 사람이 보내는 모든 메일이 내용과 무관하게 이 프로젝트로 자동 매칭됩니다(서명란에 항상 본인 이름이 들어가기 때문). 주소록에 등록된 이름은 매칭 시 자동으로 제외되지만, 안전하게 첫제부터 넣지 않는 걸 권장합니다." data-i18n-title="mail-keyword-hint">메일 키워드 🔖</label><div id="sum-mailkw-cell" style="display:flex; gap:6px; align-items:center; min-width:0;"><input type="text" id="sum-mail-keywords" class="u-input" style="flex:1 1 auto; min-width:0;" placeholder="예: S32, STELLAR, 에스삼투 (쉼표로 구분)" data-i18n-placeholder="sum-mail-keywords"><!-- 📊 [2026-11-24 사용자 요청] 토픽 프로파일(js/26)은 메일 키워드와 같은 줄 — 둘 다 메일 매칭 어휘다 --><button type="button" onclick="window._generateTopicProfile && window._generateTopicProfile()" data-i18n="topic-profile-gen-btn" title="현재 프로젝트의 간트 업무를 AI로 분석하여 키워드·토픽 프로파일을 저장합니다. 이후 메일 분석 정확도가 향상됩니다." data-i18n-title="topic-profile-gen-hint" style="height:29px; box-sizing:border-box; padding:0 12px; font-size:12px; border:1px solid #cfe3e5; border-radius:6px; background:#e0f5f7; color:#00707d; cursor:pointer; white-space:nowrap; flex-shrink:0;">📊 토픽 프로파일 생성</button><span id="topic-profile-badge" onclick="window._showTopicProfileViewer && window._showTopicProfileViewer()" style="font-size:11px;color:#888;white-space:nowrap;cursor:pointer;flex-shrink:0;" title="클릭하면 저장된 토픽 프로파일을 열람합니다" data-i18n-title="topic-profile-view-hint"></span><button type="button" onclick="window._showTopicProfileViewer && window._showTopicProfileViewer()" title="저장된 토픽 프로파일 열람" data-i18n-title="topic-profile-view" style="height:29px; box-sizing:border-box; padding:0 9px; font-size:12px; border:1px solid #cfe3e5; border-radius:6px; background:#e0f5f7; color:#00707d; cursor:pointer; white-space:nowrap; flex-shrink:0;">🔍</button></div>
             </div>
         </div>
         <div style="display:flex; gap:16px; align-items:stretch; flex-wrap:wrap;">
@@ -1407,7 +1407,7 @@
                     <div id="sum-member3-col-b" class="concept-grid" style="grid-template-columns:140px 1fr 1fr; row-gap:10px; column-gap:12px;"></div>
                 </div>
             </div>
-            <button id="sum-add-member3-btn" type="button" onclick="window.addMember3Row()" onmouseover="this.style.background='#eef6f7';" onmouseout="this.style.background='#fff';" style="margin-top:10px; padding:4px 12px; border:1px dashed #a3d9e0; color:#00707d; background:#fff; border-radius:4px; cursor:pointer; font-size:12px; transition:background .15s;">+ 인원 추가</button>
+            <button id="sum-add-member3-btn" type="button" onclick="window.addMember3Row()" onmouseover="this.style.background='#eef6f7';" onmouseout="this.style.background='#fff';" style="margin-top:10px; padding:4px 12px; border:1px dashed #a3d9e0; color:#00707d; background:#fff; border-radius:6px; cursor:pointer; font-size:12px; transition:background .15s;">+ 인원 추가</button>
         </div>
         <div class="concept-section" id="major-materials-section">
             <h3><span id="sum-h3-materials">주요 자재</span> <span data-i18n="sum-materials-note" style="font-size:11px;color:#999;font-weight:normal;">(메일 분석 시 참고 자료로 활용 · 체크박스는 &quot;분석용&quot;, 그 옆 － 버튼은 자유추가 행 삭제)</span></h3>
@@ -1560,7 +1560,7 @@
             <button id="mc-rev-cycle-btn" class="mc-rev-btn unit-cycle-btn" data-rev="R1" onclick="window.mcCycleRevision()" title="클릭할 때마다 금액이 입력된 리비전끼리 순환 (완전히 새 리비전은 ➕로 추가)" data-i18n-title="revision-cycle-hint"
                 style="padding:6px 10px; min-width:auto; border-radius:5px; cursor:pointer; font-size:12px; font-weight:bold;">R1</button>
             <button id="mc-comparison-btn" class="mc-comparison-btn" onclick="window.mcShowComparison && window.mcShowComparison()" title="Comparison"
-                style="margin-left:4px; padding:6px 10px; min-width:auto; border:1px solid #edbf85; background:#fbead9; color:#a85d0a; border-radius:5px; cursor:pointer; font-size:12.5px; font-weight:bold;">VS</button>
+                style="margin-left:4px; padding:6px 10px; min-width:auto; border:1px solid #edbf85; background:#fbead9; color:#a85d0a; border-radius:6px; cursor:pointer; font-size:12.5px; font-weight:bold;">VS</button>
             <span style="display:inline-block; width:1px; height:16px; background:#ddd; margin:0 8px;"></span>
             <button id="mc-clear-price-btn" data-i18n="btn-mc-clear-price" onclick="window.mcClearAllPrices()" title="금액 전체 삭제" data-i18n-title="amount-delete-all" style="margin:0 8px 0 0; height:31px; box-sizing:border-box; padding:0 10px; display:inline-flex; align-items:center; min-width:auto; background:#fbe4e2; border:1px solid #eeb0ac; color:#b1432f; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; white-space:nowrap; transition:0.2s;">금액삭제</button>
             <div class="btn-group"></div>
@@ -2086,7 +2086,7 @@
 <script src="js/04e-core-app-undo-redo.js?v=2026112591"></script>
 <script src="js/04f-core-app-upload-utils-1.js?v=2026112591"></script>
 <script src="js/04g-core-app-upload-utils-2.js?v=2026112871"></script>
-<script src="js/04h-core-app-upload-utils-3.js?v=2026112831"></script>
+<script src="js/04h-core-app-upload-utils-3.js?v=2026112699q"></script>
 <script src="js/04i-core-app-upload-utils-4.js?v=2026112801"></script>
 <script src="js/04j-core-app-upload-utils-5.js?v=2026112594"></script>
 <script src="js/04k-core-app-filter-export.js?v=2026112501k"></script>
@@ -2113,7 +2113,7 @@
 <!-- 14-ai-mail-analysis.js 분리 (토큰 절약 · 협업용): 로딩 순서는 기존과 동일하게 유지 -->
 <script src="js/14a-ai-mail-analysis-1.js?v=2026112585"></script>
 <script src="js/14b-ai-mail-analysis-2.js?v=2026112591"></script>
-<script src="js/14c-task-inbox.js?v=2026112596"></script>
+<script src="js/14c-task-inbox.js?v=2026112699q"></script>
 <script src="js/14d-distribution-ledger.js?v=2026112591"></script>
 
 
@@ -2689,7 +2689,7 @@
 <script src="js/19-shared-modal-drag.js?v=2026112620"></script>
 <script src="js/19b-dropdown-reorder.js?v=20261125abs"></script>
 
-<script src="js/20-weekly-report.js?v=2026112733gw"></script>
+<script src="js/20-weekly-report.js?v=2026112699q"></script>
 
 </div> <!-- /#app-main -->
 
@@ -2735,11 +2735,11 @@
 <!-- 22-tabs-summary-mctable.js 분리 (토큰 절약 · 협업용): 로딩 순서는 기존과 동일하게 유지 -->
 <script src="js/22a-summary-mctable-parse.js?v=2026112596"></script>
 <script src="js/22b-summary-mctable-core1.js?v=2026112699r"></script>
-<script src="js/22c-summary-mctable-core2.js?v=2026112620"></script>
+<script src="js/22c-summary-mctable-core2.js?v=2026112699q"></script>
 <script src="js/22d-summary-mctable-core3.js?v=2026112801"></script>
 <script src="js/22e-summary-mctable-core4.js?v=2026112735"></script>
 <script src="js/22f-address-book.js?v=2026112811"></script>
-<script src="js/22g-name-autocomplete.js?v=2026112894"></script>
+<script src="js/22g-name-autocomplete.js?v=2026112699q"></script>
 <script src="js/22h-brief-mc-common-1.js?v=2026112701"></script>
 <script src="js/22i-brief-mc-common-2.js?v=2026112891"></script>
 
@@ -2809,7 +2809,7 @@
     <script src="js/66-doc-generate.js?v=20261124a4"></script>
     <script src="js/68-doc-checksheets.js?v=20261124a4"></script>
     <script src="js/69-resolution-spec.js?v=2026112699e"></script>
-    <script src="js/70-jira-tab.js?v=2026112699p"></script>
+    <script src="js/70-jira-tab.js?v=2026112699q"></script>
     <script src="js/67-document-page.js?v=2026112607dw"></script>
     <script src="js/72-labelspec-import.js?v=20261124a4"></script>
     <script src="js/64-qa-route-log.js?v=20261124a4"></script>
