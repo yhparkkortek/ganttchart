@@ -197,7 +197,7 @@
                     btn.innerHTML = `${val} <span class="badge" title="진행 모델 수 / 전체 모델 수">${countActive}/${countAll}</span>`;
                 } else {
                     const statusMap = LANG[window._currentLang].statusMap;
-                    btn.textContent = statusMap[val] || val;
+                    btn.textContent = window._ganttStatusFilterLabel ? window._ganttStatusFilterLabel(val) : (statusMap[val] || val);
                 }
 
                 btn.onclick = (e) => { updateFilter(e, col.index, val, groupDiv); window.updateGanttFilterTriggerState(col.index); };

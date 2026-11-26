@@ -1118,8 +1118,8 @@ Gantt 표 화면의 맨 왼쪽 "No." 열은 WBS 접기/필터 상태에 따라 �
 [[ACTION:DELETE_ROW:번호]]
 여러 행 삭제 요청 시 각각 한 줄씩. 이 태그는 즉시 실행됩니다 — 되돌리려면 Ctrl+Z/Undo가 필요하다고 안내하세요.
 
-📊 상태 변경 ("진행/완료/대기/보류로 바꿔줘"):
-[[ACTION:SET_STATUS:번호:완료]]  (상태값은 반드시 진행/완료/대기/보류 중 정확히 하나)
+📊 상태 변경 ("할 일/한 일/막힌 일로 바꿔줘"):
+[[ACTION:SET_STATUS:번호:완료]]  (상태값은 반드시 진행/완료/지연 중 정확히 하나 — 화면 이름은 할 일=진행, 한 일=완료, 막힌 일=지연)
 여러 행은 각각 한 줄씩.
 
 🔒 일정 잠금 토글 ("잠금/고정 걸어줘", "열쇠 표시해줘", "자동으로 바꿔줘", "잠금 해제해줘"):
@@ -2490,6 +2490,8 @@ ${question}
         if (typeof colIdx === 'undefined' || colIdx.status === -1) return { ok: false, error: '상태 열 없음' };
         const label = _aiGetTaskLabel(row);
         const oldStatus = row[colIdx.status] || '';
+        // 🏷 [2026-11-26] 상태는 세 가지(할 일/한 일/막힌 일 = 진행/완료/지연) — 화면 이름·옛 값(대기·보류)도 받아 저장값으로
+        if (window._ganttStatusStore) { const st = window._ganttStatusStore(status); if (!st) return { ok: false, error: '알 수 없는 상태: ' + status }; status = st; }
         row[colIdx.status] = status;
         logChange(rowIndex, colIdx.status, '상태 변경', `${oldStatus} → ${status}`, 'AI 문답으로 변경');
         // 💡 [2026-10-28] 상태 하나는 날짜에 영향이 없어 recalculateSchedules() 전체(표 전체 재생성)가

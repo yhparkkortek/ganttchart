@@ -4213,7 +4213,7 @@ ${docsJson}`;
         if (draft.assignee !== undefined && ci.assignee !== undefined && ci.assignee !== -1) row[ci.assignee] = draft.assignee;
         if (draft.startDate !== undefined && ci.start !== undefined && ci.start !== -1) { row[ci.start] = draft.startDate; row._explicitStartTs = draft.startDate ? new Date(draft.startDate).getTime() : null; row._startForced = !!draft.startDate; }
         if (draft.endDate !== undefined && ci.plan !== undefined && ci.plan !== -1) { row[ci.plan] = draft.endDate; row._explicitPlanTs = draft.endDate ? new Date(draft.endDate).getTime() : null; row._planForced = !!draft.endDate; }
-        if (draft.status !== undefined && ci.status !== undefined && ci.status !== -1) row[ci.status] = draft.status;
+        if (draft.status !== undefined && ci.status !== undefined && ci.status !== -1) row[ci.status] = (window._ganttStatusStore && window._ganttStatusStore(draft.status)) || draft.status; // 🏷 할 일/한 일/막힌 일·옛 값 → 진행/완료/지연
         if (draft.content !== undefined && ci.content !== undefined && ci.content !== -1) row[ci.content] = draft.content;
         logChange(draft.rowIdx, -1, '업무 수정', `"${draft.currentLabel}" AI 문답으로 수정`, 'AI 문답');
         window.recalculateSchedules();
@@ -4342,7 +4342,7 @@ ${docsJson}`;
         newRow._level = lv; newRow._origDev = ''; newRow._origT1 = ''; newRow._origT2 = ''; newRow._origT3 = ''; newRow._origT4 = '';
         if (lv === 0) newRow._origDev = draft.taskName; else if (lv === 1) newRow._origT1 = draft.taskName; else if (lv === 2) newRow._origT2 = draft.taskName; else if (lv === 3) newRow._origT3 = draft.taskName; else newRow._origT4 = draft.taskName;
         if (ci.assignee !== undefined && ci.assignee !== -1 && draft.assignee) newRow[ci.assignee] = draft.assignee;
-        if (ci.status !== undefined && ci.status !== -1) newRow[ci.status] = draft.status || '진행';
+        if (ci.status !== undefined && ci.status !== -1) newRow[ci.status] = (window._ganttStatusStore && window._ganttStatusStore(draft.status)) || draft.status || '진행';
         if (ci.content !== undefined && ci.content !== -1 && draft.content) newRow[ci.content] = draft.content;
         newRow._explicitStartTs = null; newRow._explicitPlanTs = null; newRow._startForced = false; newRow._planForced = false; newRow._finalDuration = 1;
         if (draft.startDate && ci.start !== undefined && ci.start !== -1) { newRow[ci.start] = draft.startDate; newRow._explicitStartTs = new Date(draft.startDate).getTime() || null; newRow._startForced = true; }

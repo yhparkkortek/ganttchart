@@ -42,7 +42,9 @@
         if (statusTd) {
             statusTd.setAttribute('data-raw', encodeURIComponent(newVal));
             const sel = statusTd.querySelector('select');
-            if (sel) sel.value = newVal;
+            if (sel) sel.innerHTML = window._ganttStatusOptionsHtml(newVal);
+            statusTd.classList.remove('st-todo', 'st-done', 'st-blocked');
+            statusTd.classList.add('st-' + window._ganttStatusKind(newVal));
         }
 
         tr.classList.remove('status-done', 'status-delay', 'status-pending');
@@ -52,7 +54,6 @@
         const _normSt = (_koKey ? _koMap[_koKey] : _rawSt);
         if (_normSt === '완료') tr.classList.add('status-done');
         else if (_normSt === '지연' || _normSt === '보류') tr.classList.add('status-delay');
-        else if (_normSt === '대기') tr.classList.add('status-pending');
 
         const chartTd = tr.querySelector('.chart-td');
         if (chartTd && typeof createStatusChart === 'function') {
@@ -737,6 +738,75 @@
         },
     };
     window._currentLang = 'ko';
+
+    // 🏷 [2026-11-26 사용자 결정] 간트 상태는 **세 가지 업무**로 — 할 일 / 한 일 / 막힌 일.
+    //    일일보고·Project Review·텔레그램 서식이 이미 쓰는 말이라 페이지끼리 같은 말이 된다.
+    //    ⚠️ **저장값은 그대로**(진행/완료/지연 — 필터·지연 판정·아침 브리핑(파이썬 사본)·JIRA·AI 문답·
+    //    엑셀 왕복이 전부 이 값을 읽는다). 바꾸는 건 **화면 이름**뿐이고 그 표가 이 데이터 한 곳이다.
+    //    '대기' 는 고를 수 없게 뺐다 — 이미 '대기' 로 저장된 행은 데이터를 안 고치고 '할 일' 로 보인다
+    //    (사람이 다시 고르면 그때 '진행' 으로 바뀐다). '보류' 도 옛 값이라 '막힌 일' 로 보인다.
+    window.GANTT_STATUS_LABELS = {
+        ko: { '진행': '할 일', '완료': '한 일', '지연': '막힌 일', '대기': '할 일', '보류': '막힌 일' },
+        en: { '진행': 'To do', '완료': 'Done',  '지연': 'Blocked', '대기': 'To do', '보류': 'Blocked' }
+    };
+    window.GANTT_STATUS_CHOICES = ['진행', '완료', '지연'];          // 드롭다운에 보이는 셋(한국어 저장값 기준)
+    window.GANTT_STATUS_KIND = { '진행': 'todo', '대기': 'todo', '완료': 'done', '지연': 'blocked', '보류': 'blocked' };
+    /** 어떤 표기(영문·소문자·옛 '보류' 등)든 한국어 저장값 넷 중 하나로. 모르면 원래 글자 그대로. */
+    window._ganttStatusKo = function (v) {
+        var s = (v == null ? '' : String(v)).trim();
+        if (!s) return '';
+        var m = LANG.ko.statusMap, low = s.toLowerCase();
+        for (var k in m) { if (k.toLowerCase() === low) return k === '보류' ? '보류' : m[k]; }
+        return s;
+    };
+    /** 화면 이름 — 할 일 / 한 일 / 막힌 일 (언어 따라) */
+    window._ganttStatusLabel = function (v) {
+        var ko = window._ganttStatusKo(v);
+        var map = window.GANTT_STATUS_LABELS[window._currentLang === 'en' ? 'en' : 'ko'] || {};
+        return map[ko] || (v == null ? '' : String(v));
+    };
+    /** 필터 버튼 이름 — 옛 값(대기·보류)이 남은 프로젝트에서 같은 이름 버튼이 둘 생기지 않게 꼬리를 단다 */
+    window._ganttStatusFilterLabel = function (v) {
+        var ko = window._ganttStatusKo(v), lb = window._ganttStatusLabel(v);
+        if (ko === '대기' || ko === '보류') lb += window._currentLang === 'en' ? ' (old: ' + ko + ')' : ' (옛 ' + ko + ')';
+        return lb;
+    };
+    /** 사람/AI 가 말한 상태 낱말 → 저장값(진행/완료/지연). 화면 이름·옛 값·영문 다 받는다. 모르면 ''. */
+    window.GANTT_STATUS_WORDS = {
+        '진행': ['할 일', '할일', '진행', '진행중', '대기', 'to do', 'todo', 'on going', 'in progress', 'pending'],
+        '완료': ['한 일', '한일', '완료', 'done', 'complete', 'completed'],
+        '지연': ['막힌 일', '막힌일', '막힘', '지연', '보류', 'blocked', 'delay', 'on hold']
+    };
+    window._ganttStatusStore = function (word) {
+        var w = (word == null ? '' : String(word)).trim().toLowerCase();
+        if (!w) return '';
+        for (var k in window.GANTT_STATUS_WORDS) {
+            if (window.GANTT_STATUS_WORDS[k].indexOf(w) >= 0) return k;
+        }
+        return '';
+    };
+    /** 칩 종류 — todo / done / blocked (모르는 값은 todo) */
+    window._ganttStatusKind = function (v) {
+        return window.GANTT_STATUS_KIND[window._ganttStatusKo(v)] || 'todo';
+    };
+    /** 상태 드롭다운 옵션 — value 는 **지금 언어의 저장값**(예전과 같다), 글자는 화면 이름.
+     *  지금 값이 고를 수 없는 옛 값(대기·보류)이면 그 값 그대로 한 줄 더 넣어 selected —
+     *  안 넣으면 select 가 첫 옵션을 보여 줘 데이터와 화면이 어긋난다. */
+    window._ganttStatusOptionsHtml = function (statusVal) {
+        var lang = LANG[window._currentLang || 'ko'] || LANG.ko;
+        var curKo = window._ganttStatusKo(statusVal);
+        var html = '', found = false;
+        window.GANTT_STATUS_CHOICES.forEach(function (ko) {
+            var stored = lang.statusMap[ko] || ko;
+            var sel = (curKo === ko);
+            if (sel) found = true;
+            html += '<option value="' + stored + '"' + (sel ? ' selected' : '') + '>' + window._ganttStatusLabel(ko) + '</option>';
+        });
+        if (!found && statusVal) {
+            html += '<option value="' + String(statusVal).replace(/"/g, '&quot;') + '" selected hidden>' + window._ganttStatusLabel(statusVal) + '</option>';
+        }
+        return html;
+    };
 
     // 💡 안전장치 팝업 메시지 번역 헬퍼
     window._t = function(ko, en) { return window._currentLang === 'en' ? en : ko; };
@@ -1913,8 +1983,6 @@
                     trClass = trClass.replace('class="', 'class="status-done ');
                 } else if (_normSt === '지연' || _normSt === '보류') {
                     trClass = trClass.replace('class="', 'class="status-delay ');
-                } else if (_normSt === '대기') {
-                    trClass = trClass.replace('class="', 'class="status-pending ');
                 }
             }
             const _hidden = !!(_vis && !_vis[i]);
@@ -2149,13 +2217,9 @@
                             const lang = LANG[window._currentLang||'ko'];
                             // 대소문자 무시로 statusMap 조회 (엑셀 저장값이 소문자인 경우도 대응)
                             const statusVal = RT.smLower[statusRaw.toLowerCase()] || statusRaw;
-                            const statusSelectHtml = `<select class=\"status-select\" title=\"✅ 더블클릭하면 하위까지 한 번에 '완료' · 여러 행은 Ctrl/Shift 로 고른 뒤 No. 칸 메뉴에서\" onchange=\"window.updateStatus(this, ${i}, ${colIdx.status})\" ondblclick=\"window.setStatusDone(this, ${i}, ${colIdx.status})\">                                ${lang.status.map((s, idx) => {
-                                    const optColor = ['', 'rgba(0,0,0,0.45)', '#f08c00', '#e03131'][idx] || '';
-                                    const colorAttr = optColor ? ` style=\"color:${optColor};\"` : '';
-                                    return `<option value=\"${s}\" ${statusVal===s?'selected':''}${colorAttr}>${s}</option>`;
-                                }).join('')}
+                            const statusSelectHtml = `<select class=\"status-select\" title=\"✅ 더블클릭하면 하위까지 한 번에 '완료' · 여러 행은 Ctrl/Shift 로 고른 뒤 No. 칸 메뉴에서\" onchange=\"window.updateStatus(this, ${i}, ${colIdx.status})\" ondblclick=\"window.setStatusDone(this, ${i}, ${colIdx.status})\">                                ${window._ganttStatusOptionsHtml(statusVal)}
                             </select>`;
-                            bodyHtml += `<td class="status-td" data-raw="${encodeURIComponent(statusVal)}">${statusSelectHtml}</td>`;
+                            bodyHtml += `<td class="status-td st-${window._ganttStatusKind(statusVal)}" data-raw="${encodeURIComponent(statusVal)}">${statusSelectHtml}</td>`;
                         }
                         let taskTxt = "";
                         if (row._level === 0) taskTxt = row._origDev; else if (row._level === 1) taskTxt = row._origT1; else if (row._level === 2) taskTxt = row._origT2; else if (row._level === 3) taskTxt = row._origT3; else if (row._level === 4) taskTxt = row._origT4;

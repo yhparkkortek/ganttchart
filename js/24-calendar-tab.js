@@ -205,7 +205,7 @@ window.calShowDayPopup = function(dateKey, targetIdx) {
         if (!ev) return;
         const row = globalData[ev.idx];
         const sMap = (typeof LANG !== 'undefined' && window._currentLang && LANG[window._currentLang]) ? LANG[window._currentLang].statusMap : null;
-        const statusLabel = (sMap && sMap[ev.status]) || ev.status || '-';
+        const statusLabel = (window._ganttStatusLabel && ev.status) ? window._ganttStatusLabel(ev.status) : ((sMap && sMap[ev.status]) || ev.status || '-');
         
         // ✅ [수정된 부분] \r 제거, 다중 줄바꿈 압축, 다중 공백 압축을 먼저 수행한 뒤 기존 로직 처리
         const contentText = (colIdx.content !== -1 && row[colIdx.content]) 
@@ -241,7 +241,7 @@ window.calShowDayPopup = function(dateKey, targetIdx) {
         } else {
             const sMap = (typeof LANG !== 'undefined' && window._currentLang && LANG[window._currentLang]) ? LANG[window._currentLang].statusMap : null;
             body.innerHTML = events.map(function(ev) {
-                const statusLabel = (sMap && sMap[ev.status]) || ev.status || '-';
+                const statusLabel = (window._ganttStatusLabel && ev.status) ? window._ganttStatusLabel(ev.status) : ((sMap && sMap[ev.status]) || ev.status || '-');
                 const alarmCls = ev.alarm ? ' cal-alarm-on' : '';
                 const bell = ev.alarm ? '📌 ' : '';
                 return '<div class="cal-day-popup-item' + alarmCls + '" onclick="window.calShowDayPopup(\'' + dateKey + '\', ' + ev.idx + ');">'

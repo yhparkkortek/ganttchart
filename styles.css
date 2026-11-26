@@ -610,14 +610,6 @@ thead th { text-align: center; }
     #myTable tbody tr.status-done .content-cell-trans * {
         color: rgba(0, 0, 0, 0.2) !important;
     }
-    #myTable tbody tr.status-delay .content-cell-trans,
-    #myTable tbody tr.status-delay .content-cell-trans * {
-        color: #e03131 !important;
-    }
-    #myTable tbody tr.status-pending .content-cell-trans,
-    #myTable tbody tr.status-pending .content-cell-trans * {
-        color: #f08c00 !important;
-    }
     /* 번역 결과물(.trans-result)은 행 상태색보다 항상 파란색이 우선 — [대괄호] bold 태그 포함 전체 */
     #myTable tbody tr .content-cell-trans .trans-result,
     #myTable tbody tr .content-cell-trans .trans-result * {
@@ -633,21 +625,24 @@ thead th { text-align: center; }
         color: rgba(0, 0, 0, 0.2) !important;
     }
 
-    /* 💡 업무 상태가 "지연(구 보류)"인 행 — 글자색 빨강 */
-    #myTable tbody tr.status-delay td {
-        color: #e03131 !important;
+    /* 🏷 [2026-11-26] 상태는 줄 전체가 아니라 **상태 칸의 칩**으로 보인다(할 일 / 한 일 / 막힌 일).
+       예전엔 지연=줄 전체 빨강·대기=줄 전체 주황이라 칸 자체는 눈에 안 띄고 줄만 튀었다.
+       '한 일' 줄의 흐림(위 status-done)은 그대로 둔다. 상태 데이터는 js/04j GANTT_STATUS_* 한 곳. */
+    #myTable tbody tr td.status-td .status-select {
+        display: inline-block; min-width: 46px; max-width: 100%; box-sizing: border-box;
+        padding: 1px 6px; border-radius: 10px; border: 1px solid transparent;
+        font-size: 11.5px; line-height: 16px; text-align: center; text-align-last: center; cursor: pointer;
     }
-    #myTable tbody tr.status-delay.parent-row .no-td .row-num-span {
-        color: #e03131 !important;
+    #myTable tbody tr td.status-td.st-todo .status-select {
+        background: #fff !important; color: var(--ui-accent, #00707d) !important; border-color: var(--ui-accent, #00707d) !important;
     }
-
-    /* 💡 업무 상태가 "대기(Pending)"인 행 — 글자색 주황 */
-    #myTable tbody tr.status-pending td {
-        color: #f08c00 !important;
+    #myTable tbody tr td.status-td.st-done .status-select {
+        background: #e9ecef !important; color: #868e96 !important; border-color: #dee2e6 !important;
     }
-    #myTable tbody tr.status-pending.parent-row .no-td .row-num-span {
-        color: #f08c00 !important;
+    #myTable tbody tr td.status-td.st-blocked .status-select {
+        background: #e03131 !important; color: #fff !important; border-color: #e03131 !important; font-weight: bold;
     }
+    #myTable tbody tr td.status-td .status-select option { background: #fff; color: #333; font-weight: normal; }
 
     /* 알림 켜진 행 표시 (전체 행에 옅은 푸른 배경 + 좌측 강조선) — 지브라(줄무늬) 행보다 우선 적용되도록 tbody까지 포함해 우선순위 보강 */
     #myTable tbody tr.alarm-on td {
@@ -2415,19 +2410,11 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
     @media print {
         /* 0. 업무상태 색상 / 번역 강조색 — 인쇄 사본은 id="myTable"이 없으므로 #gantt-print-area 기준으로 재선언 */
         #gantt-print-area tbody tr.status-done td { color: rgba(0, 0, 0, 0.2) !important; }
-        #gantt-print-area tbody tr.status-delay td { color: #e03131 !important; }
-        #gantt-print-area tbody tr.status-pending td { color: #f08c00 !important; }
         #gantt-print-area tbody tr.status-done.parent-row .no-td .row-num-span { color: rgba(0, 0, 0, 0.2) !important; }
-        #gantt-print-area tbody tr.status-delay.parent-row .no-td .row-num-span { color: #e03131 !important; }
-        #gantt-print-area tbody tr.status-pending.parent-row .no-td .row-num-span { color: #f08c00 !important; }
         /* 0-1. 제브라 줄무늬도 #myTable 기준이라 인쇄 사본엔 안 먹으므로 동일하게 재선언 */
         #gantt-print-area tbody tr.gantt-zebra-b td { background: #f5f5f5 !important; }
         #gantt-print-area tbody tr.status-done .content-cell-trans,
         #gantt-print-area tbody tr.status-done .content-cell-trans * { color: rgba(0, 0, 0, 0.2) !important; }
-        #gantt-print-area tbody tr.status-delay .content-cell-trans,
-        #gantt-print-area tbody tr.status-delay .content-cell-trans * { color: #e03131 !important; }
-        #gantt-print-area tbody tr.status-pending .content-cell-trans,
-        #gantt-print-area tbody tr.status-pending .content-cell-trans * { color: #f08c00 !important; }
         #gantt-print-area tbody tr .content-cell-trans .trans-result,
         #gantt-print-area tbody tr .content-cell-trans .trans-result * { color: var(--trans-text) !important; }
 
