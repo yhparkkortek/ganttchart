@@ -1045,6 +1045,10 @@
                     : '<div style="padding:24px 10px; text-align:center; color:#999; font-size:12.5px;">' + esc(T('이 기간에 메일 분석으로 들어온 업무가 없습니다.', 'No mail-derived tasks in this period.')) + (P.includeNonMail ? '' : '<br>' + esc(T('(사람이 직접 적은 업무는 세지 않습니다 — PERIOD_SUMMARY.includeNonMail)', '(hand-typed tasks are not counted)'))) + '</div>'));
         } else {
             var factsShown = _psTbl.pinned ? col.facts.filter(factPinned) : col.facts;
+            // ✅ [2026-11-26] 현황이 '완료' 인 업무는 회의에서 정리된 것 — 기본으로 숨기고 "숨김 N건 보기" 로 되돌린다(열린 프로젝트는 지금 간트 값).
+            var doneAll = col.facts.filter(function (f) { return window._rr.isDone(factGanttRow(f), f.status); }).length;
+            if (!_psTbl.showDone) factsShown = factsShown.filter(function (f) { return !window._rr.isDone(factGanttRow(f), f.status); });
+            if (doneAll) h.push('<div style="margin:0 0 5px;"><button onclick="window._psTblSet({showDone:' + (!_psTbl.showDone) + '})" title="' + esc(T('간트 상태가 완료인 업무 — 회의에서 정리된 것', 'Gantt status = Done')) + '" style="' + window._uiPillStyle(!!_psTbl.showDone) + '">✅ ' + esc(_psTbl.showDone ? T('완료 ' + doneAll + '건 포함 중 — 숨기기', 'Done ' + doneAll + ' shown — hide') : T('완료 ' + doneAll + '건 숨김 — 보기', 'Done ' + doneAll + ' hidden — show')) + '</button></div>');
             _psLast.factsShown = factsShown;   // 표를 다시 그릴 때(정렬·필터) 쓴다 — paintFacts
             if (_psTbl.pinned && !factsShown.length) h.push('<div style="padding:24px 10px; text-align:center; color:#999; font-size:12.5px;">' + esc(T('📌 핀셋을 켠 업무가 없습니다 — 열린 프로젝트의 업무만 셉니다', 'No pinned tasks (open project only)')) + '</div>');
             else h.push('<div id="ps-facts-body">' + factsTableHtml(factsShown) + '</div>');
@@ -1068,7 +1072,7 @@
     }
 
     // ── 📊 AI 요약 표 ───────────────────────────────────────────────────────────
-    var _psTbl = { sort: 'cat', dir: 1, cats: {}, proj: '', who: '', q: '', common: false, pinned: false, view: 'brief', by: 'proj', big: false };
+    var _psTbl = { sort: 'cat', dir: 1, cats: {}, proj: '', who: '', q: '', common: false, pinned: false, view: 'brief', by: 'proj', big: false, showDone: false };
     var _psView = null;      // 📚 보관본을 열어 보는 중이면 그 기록
     var _psLooked = {};      // 같은 조건으로 보관함을 이미 찾아봤는가(렌더마다 NAS 를 두드리지 않게)
     var _psLast = null;
@@ -1228,35 +1232,10 @@
         return hits.length === 1 ? hits[0] : -1;
     }
     /** rows: 간트 행 번호들 → 칸 하나(켜짐/꺼짐/일부). onclick 은 미리 만든 호출문. */
-    function pinBtnHtml(rows, onclick, closedWhy) {
-        var gd = (typeof globalData !== 'undefined' && globalData) ? globalData : window.globalData;
-        var base = 'display:inline-flex; align-items:center; justify-content:center; width:22px; height:20px; padding:0; border-radius:5px; font-size:12px; line-height:1; box-sizing:border-box;';
-        if (!rows.length) {
-            return '<span title="' + esc(closedWhy || T('이 프로젝트를 열면 핀셋(알람)을 켤 수 있습니다', 'Open this project to pin')) + '" style="' + base + ' border:1px solid #eee; color:#ccc; opacity:.45; filter:grayscale(1); cursor:not-allowed;">📌</span>';
-        }
-        var on = rows.filter(function (ri) { return gd[ri] && gd[ri]._알림; }).length;
-        var all = on === rows.length, some = on > 0 && !all;
-        var tip = all ? T('📌 알람 켜짐 — 누르면 끄기', 'Pinned — click to unpin')
-                : some ? T('📌 일부(' + on + '/' + rows.length + ') 켜짐 — 누르면 전부 켜기', 'Partly pinned — click to pin all')
-                : T('🔕 알람 꺼짐 — 누르면 켜기(간트 핀셋과 같음)', 'Not pinned — click to pin');
-        return '<button class="ps-pin-btn' + (all ? ' on' : '') + '" onclick="event.stopPropagation(); ' + onclick + '" title="' + esc(tip) + '" style="' + base + ' cursor:pointer; border:1px solid ' + (all ? '#f08c00' : some ? '#ffd8a8' : '#dde3ea') + '; background:' + (all ? '#fff4e6' : '#fff') + ';' + (all || some ? '' : ' opacity:.4; filter:grayscale(1);') + '">📌</button>';
-    }
-    function applyPins(rows, lost) {
-        var gd = (typeof globalData !== 'undefined' && globalData) ? globalData : window.globalData;
-        if (!rows.length) {
-            if (window.showToast) window.showToast(T('⚠️ 간트에서 이 업무를 찾지 못해 핀셋을 바꾸지 않았습니다', '⚠️ Task not found in the Gantt — nothing pinned'), 'warning');
-            return;
-        }
-        var newState = !rows.every(function (ri) { return gd[ri] && gd[ri]._알림; });   // 하나라도 꺼져 있으면 전부 켠다
-        rows.forEach(function (ri) { if (gd[ri]) { gd[ri]._알림 = newState; if (window._patchPinRowDom) window._patchPinRowDom(ri); } });
-        if (typeof logChange === 'function') logChange(rows[0], -1, '알림 설정', (newState ? '알림 켜짐' : '알림 꺼짐') + (rows.length > 1 ? ' (' + rows.length + '건)' : '') + ' — Project Review');
-        if (typeof applyFilters === 'function') { try { applyFilters(); } catch (e) {} }
-        var ap = document.getElementById('tab-alarm');
-        if (ap && ap.classList.contains('active') && window.renderAlarmTab) window.renderAlarmTab();
-        if (lost && window.showToast) window.showToast(T('⚠️ 근거 행 ' + lost + '개는 간트에서 같은 업무를 찾지 못해 바꾸지 않았습니다', '⚠️ ' + lost + ' source row(s) not found — skipped'), 'warning');
-        if (window.showToast) window.showToast(T((newState ? '📌 핀셋(알람)을 켰습니다' : '🔕 핀셋(알람)을 껐습니다') + ' — 간트 ' + rows.length + '행', (newState ? 'Pinned ' : 'Unpinned ') + rows.length + ' row(s)'), 'info');
-        if (window._renderAiProjectSummaryBody) window._renderAiProjectSummaryBody();
-    }
+    // 🚩 [2026-11-26 사용자 요청 "핀셋 아이콘 말고 간트처럼 붉은색 바로 통일"] 버튼 → 칸 왼쪽의 붉은 바(js/80 `_rr.barHtml`, `.rp-bar`).
+    //    onclick 인자는 옛 호출부 모양을 지키려고 남겼다 — 바는 자기 레지스트리(행 번호 + 그때의 업무명)로 눌린다. 쓰는 칸엔 `rp-cell` 클래스가 있어야 한다.
+    function pinBtnHtml(rows, onclick, closedWhy) { return window._rr.barHtml(rows, closedWhy); }
+    function applyPins(rows, lost) { window._rrPinRows(rows, lost); }   // 켜고 끄기·간트/알람 탭/보고 화면 새로고침은 js/80 한 곳
     /** 📌 이 요약 행(근거 간트 행 중 하나라도) / 이 사실이 핀셋 켜져 있나 — '핀셋만' 필터가 쓴다. */
     function rowPinned(r) {
         var res = resolveGanttRows(r);
@@ -1302,7 +1281,7 @@
             repaint: function () { paintFacts(); },
             rowAttr: function (f) { return 'id="ps-fact-' + factKey(f) + '" onclick="window._psFactBack(event)" style="transition:box-shadow .3s, background .3s;"'; },
             cols: [
-                { id: 'pin', label: '📌', w: '28px', align: 'center', html: function (f) {
+                { id: 'pin', label: '', w: '14px', tdCls: function () { return 'rp-cell rp-slim'; }, html: function (f) {
                     var ri = factGanttRow(f);
                     return pinBtnHtml(ri >= 0 ? [ri] : [], "window._psPinFact('" + factKey(f) + "')");
                 } },
@@ -1326,6 +1305,11 @@
                            (f.todo ? '<div style="color:#1971c2; margin-top:2px;">To do: ' + esc(f.todo) + '</div>' : '') +
                            (f.issue ? '<div style="color:#b1432f; margin-top:2px;">⚠️ ' + esc(f.issue) + (f.fix ? ' → ' + esc(f.fix) : '') + '</div>' : '') +
                            (f.answer ? '<div style="color:#2f9e44; margin-top:2px;">↩ ' + esc(f.answer) + '</div>' : '');
+                } },
+                // 🚩 [2026-11-26] 회의하며 바로 — 현황(간트 상태 칸)을 바꾸거나 간트 행을 지운다. 완료로 보내면 이 목록에서 숨는다.
+                { id: 'ops', label: T('현황·삭제', 'Status'), w: '112px', nowrap: true, align: 'center', html: function (f) {
+                    var ri = factGanttRow(f);
+                    return window._rr.opsHtml(ri >= 0 ? [ri] : [], f.status);
                 } },
                 { id: 'src', label: T('원문', 'Source'), w: '66px', nowrap: true, align: 'center', html: function (f) {
                     return (f.mailRaw && window.showMailRawModal)
@@ -1455,12 +1439,13 @@
                 var sub = by === 'who' ? (t.proj ? '<div style="color:#888; font-size:11px;">' + esc(t.proj) + '</div>' : '') :
                     (t.sub ? '<div style="color:#888; font-size:11px;">' + esc(t.sub) + '</div>' : ((t.people.length || t.roles.length) ? '<div style="color:#666; font-size:11.5px;">' + whoTip(t.people, t.roles) + '</div>' : ''));
                 body += '<tr' + (ti % 2 ? ' class="ft-zebra-b"' : '') + '>' +
-                    '<td style="' + td + '">' + pinBtnHtml(rg, 'window._psPinBrief(' + n + ')') + ' <b>' + esc(t.task) + '</b>' + sub + '</td>' +
+                    '<td class="rp-cell rp-pad" style="' + td + '">' + pinBtnHtml(rg, 'window._psPinBrief(' + n + ')') + '<b>' + esc(t.task) + '</b>' + sub + '</td>' +
                     '<td style="' + td + '">' + briefLines(t.rows.done) + '</td>' +
                     '<td style="' + td + '">' + briefLines(t.rows.blocked) +
                       (t.age >= 1 && t.rows.blocked.length ? '<span style="' + window._uiBadgeStyle() + ' background:#ffe3e3; color:#c92a2a;" title="' + esc(T('근거 메일 중 가장 이른 날짜 기준', 'Since the earliest source mail')) + '">' + esc(T(t.age + '일 경과', t.age + 'd')) + '</span>' : '') + '</td>' +
                     '<td style="' + td + '">' + briefLines(t.rows.todo.concat(t.rows.decision), true) + '</td>' +
-                    '<td style="' + td + ' font-size:11px;">' + t.refs.map(function (x) { return refHtml(x, t.refs.some(function (y) { return y.p !== t.refs[0].p; }), t.ai[0]); }).join('<br>') + '</td></tr>';
+                    '<td style="' + td + ' font-size:11px;">' + t.refs.map(function (x) { return refHtml(x, t.refs.some(function (y) { return y.p !== t.refs[0].p; }), t.ai[0]); }).join('<br>') +
+                      (rg.length ? '<div style="margin-top:5px;">' + window._rr.opsHtml(rg, '') + '</div>' : '') + '</td></tr>';
             });
         });
         return box + '<table class="ui-round-tbl" style="width:100%; border-collapse:separate; border-spacing:0; border-left:1px solid var(--ui-cell-line, #cfe3e5); border-top:1px solid var(--ui-cell-line, #cfe3e5); table-layout:fixed; background:#fff;"><thead><tr>' +
@@ -1491,7 +1476,7 @@
             var c = catOf(r.cat);
             var ai = all.indexOf(r);   // 돌아올 자리 — 정렬·필터가 바뀌어도 같은 행을 가리키게 원본 순번
             return '<tr id="ps-row-' + ai + '"' + (vi % 2 ? ' class="ps-zebra-b"' : '') + ' style="transition:background .4s;">' +
-                '<td style="' + td + ' text-align:center; padding:4px 3px;">' + pinBtnHtml(resolveGanttRows(r).rows, 'window._psPinRow(' + ai + ')') + '</td>' +
+                '<td class="rp-cell rp-slim" style="' + td + '">' + pinBtnHtml(resolveGanttRows(r).rows, 'window._psPinRow(' + ai + ')') + '</td>' +
                 '<td style="' + td + ' white-space:nowrap;"><span style="padding:1px 7px; border-radius:9px; font-size:11px; font-weight:bold; color:' + c.color + '; background:' + c.bg + ';">' + esc(catName(r.cat)) + '</span></td>' +
                 '<td style="' + td + '" title="' + esc(r.projects.join('\n')) + '">' + (r.common ? '<span style="padding:1px 6px; border-radius:8px; background:#fff3bf; color:#8f5a00; font-size:11px; font-weight:bold;">🔗 ' + esc(rowProj(r)) + '</span>' : esc(r.projects[0] || '')) + '</td>' +
                 '<td style="' + td + '">' + whoCellHtml(r, ai) + '</td>' +
@@ -1503,7 +1488,7 @@
         if (!rows.length) body = '<tr><td colspan="7" style="' + td + ' text-align:center; color:#999; padding:14px;">' + esc(all.length ? T('조건에 맞는 행이 없습니다', 'No rows match') : T('근거 있는 항목이 없었습니다 — 아래 사실 목록을 보세요', 'No grounded items')) + '</td></tr>';
         // ⭕ [2026-11-24] 모서리 둥글게 — sticky 머리글이라 overflow:hidden 상자로 못 감싼다 → 표·모서리 칸에 R(.ui-round-tbl)
         return '<table class="ui-round-tbl" style="width:100%; border-collapse:separate; border-spacing:0; border-left:1px solid var(--ui-cell-line, #cfe3e5); border-top:1px solid var(--ui-cell-line, #cfe3e5); table-layout:auto; background:#fff;"><thead><tr>' +
-            '<th style="position:sticky; top:0; z-index:20; width:28px; padding:10px 3px; background:#eef6f7; color:#2c5f8a; border-right:1px solid var(--ui-cell-line, #cfe3e5); border-bottom:1px solid var(--ui-cell-line, #cfe3e5); font-size:12.5px; font-weight:600; text-align:center;" title="' + esc(T('핀셋(알람) — 간트 No. 칸의 막대와 같다. 열린 프로젝트의 업무만', 'Pin (alarm) — same as the Gantt pin bar; open project only')) + '">📌</th>' +
+            '<th style="position:sticky; top:0; z-index:20; width:14px; padding:0; background:#eef6f7; color:#2c5f8a; border-right:1px solid var(--ui-cell-line, #cfe3e5); border-bottom:1px solid var(--ui-cell-line, #cfe3e5); font-size:12.5px; font-weight:600; text-align:center;" title="' + esc(T('붉은 바 = 핀셋(알람) — 간트 No. 칸의 막대와 같다. 열린 프로젝트의 업무만', 'Red bar = pin (alarm) — same as the Gantt bar; open project only')) + '"></th>' +
             th('cat', T('분류', 'Type'), '74px') + th('proj', T('프로젝트', 'Project'), '') + th('who', T('업무 담당자', 'Assignee'), '') + th('date', T('날짜', 'Date'), '82px') + th('text', T('내용', 'Content'), '46%') +
             '<th style="position:sticky; top:0; z-index:20; padding:10px 8px; background:#eef6f7; color:#2c5f8a; border-right:1px solid var(--ui-cell-line, #cfe3e5); border-bottom:1px solid var(--ui-cell-line, #cfe3e5); font-size:12.5px; font-weight:600; text-align:center; white-space:nowrap;">' + esc(T('근거', 'Source')) + '</th>' +
             '</tr></thead><tbody>' + body + '</tbody></table>' +
@@ -1652,11 +1637,11 @@
     };
     window._psTblSet = function (patch) {
         patch = patch || {};
-        if (patch.reset) _psTbl = { sort: 'cat', dir: 1, cats: {}, proj: '', who: '', q: '', common: false, pinned: false, view: _psTbl.view, by: _psTbl.by, big: _psTbl.big };   // 보기 방식은 필터가 아니라 유지
+        if (patch.reset) _psTbl = { sort: 'cat', dir: 1, cats: {}, proj: '', who: '', q: '', common: false, pinned: false, view: _psTbl.view, by: _psTbl.by, big: _psTbl.big, showDone: false };   // 보기 방식은 필터가 아니라 유지
         if (patch.toggleCat) _psTbl.cats[patch.toggleCat] = !_psTbl.cats[patch.toggleCat];
-        ['proj', 'who', 'common', 'pinned', 'view', 'by', 'big'].forEach(function (k) { if (k in patch) _psTbl[k] = patch[k]; });
+        ['proj', 'who', 'common', 'pinned', 'view', 'by', 'big', 'showDone'].forEach(function (k) { if (k in patch) _psTbl[k] = patch[k]; });
         // 📌 핀셋만 / 초기화는 아래 사실 카드도 거르므로 전체를 다시 그린다.
-        if (('pinned' in patch || patch.reset) && window._renderAiProjectSummaryBody) window._renderAiProjectSummaryBody();
+        if (('pinned' in patch || 'showDone' in patch || patch.reset) && window._renderAiProjectSummaryBody) window._renderAiProjectSummaryBody();
         else rerenderAi();
     };
     // 🎯 [2026-11-23 사용자 요청] 근거 → 그 사실 카드로 이동(상세·📧 원문) → 카드를 누르면 표의 그 행으로 돌아온다.
