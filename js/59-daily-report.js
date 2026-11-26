@@ -1175,6 +1175,7 @@
     // 📒 후보 목록을 좁혀 둔 프로젝트(빈 값 = 전체). 창을 열 때마다 푼다 —
     //    좁혀 둔 채로 다시 열면 "업무가 없다" 로 보여 사람이 까닭을 모른다.
     var _candProj = '';
+    var _candShowDone = false;   // ✅ 간트 상태가 완료인 후보도 보이게(기본은 숨김 — 회의에서 정리된 것)
     // 📅 [2026-11-12 요청] 기본은 "오늘" — 최근 기간 업무도 골라야 할 때가 있어 기간으로 넓힌다.
     var _candPeriod = { mode: 'today', start: '', end: '' };
     // 🔍 간트 후보 검색 — **디바운스 없음**. Enter/버튼으로만 적용(타이핑마다 다시 거르지 않는다,
@@ -1199,6 +1200,7 @@
         _deleted = null;
         _candProj = '';              // 📒 프로젝트 좁히기도 풀고 연다(좁힌 채 열면 "없다" 로 보인다)
         try { window._ft.reset('daily-cand'); } catch (e) { /* 표 정렬·필터도 처음부터 */ }
+        _candShowDone = false;
         _candPeriod = { mode: 'today', start: '', end: '' };
         _candQuery = '';
         // 🪪 계정을 모르면 쓸 파일이 정해지지 않는다 — 열기 전에 한 번 확보하고,
@@ -1364,12 +1366,27 @@
                    esc(T('오늘 날짜가 걸린 업무가 없습니다.', 'No tasks dated today.')) + '</div>';
         }
         var max = +(window.DAILY_SCAN || {}).maxCandidates || 80;
+        // 🚩 [2026-11-26 사용자 요청 "회의하면서 정리된·관련 없는 업무를 숨김·삭제, 중요한 건 하이라이트, 간트에도 반영"]
+        //    붉은 바(핀셋)·현황 상자·🗑️ 는 **지금 열린 프로젝트의 간트 행**에만 쓴다(js/80) — 다른 프로젝트 행은 눌러도 안 바뀐다(이유는 말풍선).
+        //    현황이 '완료' 인 후보는 기본으로 숨긴다("완료 N건 숨김 — 보기").
+        var gdNow = window.globalData || [];
+        var candRows = function (c) {
+            if (c.idx == null || String(c.project || '').trim() !== openName) return [];
+            return (gdNow[c.idx] && rowName(gdNow[c.idx]) === c.name) ? [c.idx] : [];
+        };
+        var isDoneC = function (c) { return window._rr.isDone(candRows(c)[0], c.status); };
+        var doneAll = cand.filter(isDoneC).length;
+        if (!_candShowDone) cand = cand.filter(function (c) { return !isDoneC(c); });
+        var doneChip = doneAll ? '<div style="margin:0 0 5px;"><button onclick="window._dailyToggleDone()" title="' + esc(T('간트 상태가 완료인 업무 — 회의에서 정리된 것', 'Gantt status = Done')) + '" style="' + uiPill(_candShowDone) + '">✅ ' +
+            esc(_candShowDone ? T('완료 ' + doneAll + '건 포함 중 — 숨기기', 'Done ' + doneAll + ' shown — hide') : T('완료 ' + doneAll + '건 숨김 — 보기', 'Done ' + doneAll + ' hidden — show')) + '</button></div>' : '';
         var cfg = {
             // 기본 정렬 없음 — 내 일을 먼저 모은 순서(위에서 그렇게 합쳤다)를 깨지 않는다. 열 머리글을 눌렀을 때만 정렬한다.
             max: max,
+            empty: T('보여 줄 업무가 없습니다 — 완료로 정리된 것은 위 칩에서 다시 볼 수 있습니다.', 'Nothing to show — Done items can be shown with the chip above.'),
             repaint: paintCands,
             rowAttr: function (c, i) { return 'onclick="window._dailyAdd(' + i + ')" title="' + esc(T('눌러서 오늘 보고에 담기', 'Click to add to today\'s report')) + '" style="cursor:pointer;"'; },
             cols: [
+                { id: 'bar', label: '', w: '14px', thPad: '0', tdCls: function () { return 'rp-cell rp-slim'; }, html: function (c) { return window._rr.barHtml(candRows(c)); } },
                 { id: 'add', label: '', w: '24px', align: 'center', html: function () { return '<span style="color:#2c5f8a; font-weight:bold;">+</span>'; } },
                 { id: 'cat', label: T('구분', 'Role'), w: '58px', nowrap: true, sort: function (c) { return c.cat || '~'; }, opt: function (c) { return c.cat || ''; },
                   html: function (c) { return catBadge(c.cat); } },
@@ -1397,19 +1414,22 @@
                   html: function (c) {
                       if (!c.start) return '';
                       return (c.end && md(c.start) !== md(c.end)) ? esc(md(c.start)) + '~' + esc(md(c.end)) : esc(md(c.start));
-                  } }
+                  } },
+                { id: 'ops', label: T('현황·삭제', 'Status'), w: '112px', nowrap: true, align: 'center', html: function (c) { return window._rr.opsHtml(candRows(c), c.status); } }
             ]
         };
         var built = window._ft.build('daily-cand', cfg, cand);
         // ⚠️ 정렬·필터가 끝난 순서 그대로 — `_dailyAdd(i)`·`_dailyCandShowMailRaw(i)` 가 이 배열의 자리로 집는다.
         window._dailyCand = built.view;
-        return carryTxt + noteTxt + errTxt + built.html;
+        return carryTxt + noteTxt + errTxt + doneChip + built.html;
     }
 
     function paintCands() {
         var el = document.getElementById('daily-cand');
         if (el) el.innerHTML = candHtml();
     }
+    window._dailyRepaint = function () { if (_doc) paintCands(); };   // js/80 — 간트 현황·삭제·핀셋이 바뀌면 후보 목록도 다시
+    window._dailyToggleDone = function () { _candShowDone = !_candShowDone; paintCands(); };
 
     /** 📒 후보 목록을 한 프로젝트로 좁힌다(빈 값 = 전체). 목록만 다시 그린다 — 모달 전체를
      *  다시 그리면 사람이 치던 칸에서 포커스가 날아간다. */

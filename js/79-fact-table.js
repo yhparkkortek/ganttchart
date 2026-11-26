@@ -88,7 +88,7 @@
             var head = cols.map(function (c) {
                 var on = c.sort && s.col === c.id;
                 return '<th' + (c.sort ? ' onclick="window._ftSort(\'' + id + '\', \'' + c.id + '\')" title="' + esc(T('눌러서 정렬 (오름↔내림)', 'Click to sort (asc/desc)')) + '"' : '') +
-                       ' style="' + thBase + (c.sort ? ' cursor:pointer; user-select:none;' : '') + (c.w ? ' width:' + c.w + ';' : '') + '">' +
+                       ' style="' + thBase + (c.sort ? ' cursor:pointer; user-select:none;' : '') + (c.w ? ' width:' + c.w + ';' : '') + (c.thPad ? ' padding:' + c.thPad + ';' : '') + '">' +
                        esc(c.label || '') + (on && window._uiSortMark ? window._uiSortMark(s.dir > 0) : '') + '</th>';
             }).join('');
             var shown = cfg.max ? view.slice(0, cfg.max) : view;

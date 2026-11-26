@@ -386,7 +386,10 @@ window._cpApplyLive = function(hex, skipSave) {
         //    border-box로 되돌려, 클릭 여유로 둔 투명 테두리(styles.css)까지 색칠해 막대가 14px로
         //    뚱뚱해 보인다(겉모습 6px 유지가 깨진다).
         + '#myTable tbody tr.alarm-on .row-pin-bar { background-color: ' + alarmAccent + ' !important; }\n'
-        + '#myTable .row-pin-bar:hover { background-color: ' + alarmAccent + ' !important; opacity: 0.5; }\n';
+        + '#myTable .row-pin-bar:hover { background-color: ' + alarmAccent + ' !important; opacity: 0.5; }\n'
+        // 🚩 보고 화면의 붉은 바(js/80)도 같은 색 — 간트와 통일(켜짐=팔레트 보색)
+        + '.rp-bar.on, .rp-bar.some { background-color: ' + alarmAccent + ' !important; }\n'
+        + '.rp-bar:not(.closed):hover { background-color: ' + alarmAccent + ' !important; opacity: 0.5; }\n';
 
     // 💡 [2026-08-30 추가] 셀 안 번역(🌐) 버튼/번역 결과 글자색이 옛 고정 파랑(#0056b3)이었음 —
     // "완료" 행에서만 회색으로 바뀌는 예외는 더 구체적인 선택자라 그대로 유지됨.
