@@ -798,4 +798,16 @@ zip 을 다시 가져오면 바코드 16개×(report+log) = **최대 32개 파�
 - 검증 `tests/document-page.browser.js` **128/128**(목차 줄 수·목차 이동·여백 메모 내용·쪽지 안 뜸·고친 칸 own·모아보기 숫자,
   폭이 모자란 화면에선 쪽지 쪽 검사로 갈린다 — 하네스가 지금 어느 모양인지 `ℹ️ 본문 폭` 으로 적는다).
   실제 화면에서 클릭·타이핑·Tab 으로도 확인(2,560px 창, 목차+여백).
-- 남은 단계(미구현): ③ Tab/Enter 로 다음 칸 · 늘어나는 칸.
+- 3단계는 아래 절.
+
+### ⌨️ 3단계 — 키보드로 이어 쓰기 · 늘어나는 긴 글 칸 (`_docDeskSetup`, 2026-11-26)
+
+- 한 줄 칸에서 **Enter = 다음 칸, Shift+Enter = 앞 칸**. 긴 글 칸(textarea)은 Enter 가 줄바꿈이라 **Ctrl+Enter** 로 넘어간다.
+  Tab 은 브라우저 기본 그대로. 순서는 화면에 보이는 칸의 DOM 순서(접힌 장·숨은 칸은 건너뛴다), 커서는 칸 **끝**에 둔다
+  (통째 선택하면 다음 글자가 값을 덮어쓴다). 두 보기 모두에서 듣는다(종이 안 `input.doc-in`/`textarea.doc-in` 만).
+- ⚠️ **한글 확정 Enter**(`isComposing` / keyCode 229)는 건드리지 않는다 — 안 거르면 마지막 글자가 확정되기 전에 칸이 넘어가 깨진다.
+- 📏 작성 보기에선 긴 글 칸이 **적는 만큼 늘어난다**(`grow`: 높이 auto → scrollHeight, CSS `resize:none; overflow:hidden`).
+  접힌 장 안 칸은 높이를 잴 수 없어(0) 건너뛰고, 펼칠 때 다시 그려지며 맞춘다.
+- 검증 `tests/document-page.browser.js` **134/134**(키보드 6건 추가 — 합성 KeyboardEvent). 실제 크롬에서 진짜 키 입력으로
+  Enter·Shift+Enter·Ctrl+Enter 와 4줄 입력 시 높이 50→64px(잘림 없음)도 확인. ⚠️ **진짜 한글 IME 조합 중 Enter 는 못 돌렸다**
+  (자동화 입력은 조합을 거치지 않는다 — 하네스는 `isComposing:true` 로 흉내만 낸다).

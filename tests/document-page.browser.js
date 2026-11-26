@@ -224,6 +224,37 @@
                 ok('[작성] 목차를 누르면 그 장이 위로 온다', dy < 60 || body.scrollTop + body.clientHeight >= body.scrollHeight - 2, Math.round(dy));
                 body.scrollTop = 0;
             }
+            // ⌨️ 3단계 — Enter = 다음 칸, Shift+Enter = 앞 칸, 한글 확정 Enter 는 안 넘어감, 긴 글 칸은 Ctrl+Enter
+            var kIns = [].slice.call(body.querySelectorAll('.doc-paper input.doc-in')).filter(function (x) { return x.getClientRects().length; });
+            var kd = function (el, opt) {
+                var ev = new KeyboardEvent('keydown', Object.assign({ key: 'Enter', bubbles: true, cancelable: true }, opt || {}));
+                el.dispatchEvent(ev); return ev;
+            };
+            if (kIns.length >= 3) {
+                kIns[0].focus(); kd(kIns[0]);
+                ok('[작성] Enter 를 누르면 다음 칸으로 간다', document.activeElement === kIns[1]);
+                kd(kIns[1], { shiftKey: true });
+                ok('[작성] Shift+Enter 는 앞 칸으로 간다', document.activeElement === kIns[0]);
+                kd(kIns[0], { isComposing: true });
+                ok('[작성] 한글 확정 중 Enter 는 칸을 안 넘긴다', document.activeElement === kIns[0]);
+                kIns[0].blur();
+            }
+            var kTa = [].slice.call(body.querySelectorAll('.doc-paper textarea.doc-in')).filter(function (x) { return x.getClientRects().length; })[0];
+            if (kTa) {
+                kTa.focus();
+                var evNl = kd(kTa);
+                ok('[작성] 긴 글 칸에서 Enter 는 줄바꿈(막지 않는다)', !evNl.defaultPrevented && document.activeElement === kTa);
+                var h0 = kTa.offsetHeight, v0 = kTa.value;
+                kTa.value = '1\n2\n3\n4\n5\n6'; kTa.dispatchEvent(new Event('input', { bubbles: true }));
+                ok('[작성] 긴 글 칸은 적는 만큼 늘어난다', kTa.offsetHeight > h0 && kTa.scrollHeight <= kTa.clientHeight + 1, h0 + '→' + kTa.offsetHeight);
+                kd(kTa, { ctrlKey: true });
+                ok('[작성] 긴 글 칸에서 Ctrl+Enter 는 다음 칸으로 간다', document.activeElement !== kTa);
+                kTa.value = v0; kTa.dispatchEvent(new Event('input', { bubbles: true }));
+                if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+                var kKey = kTa.getAttribute('data-doc-key');
+                if (kKey && !v0) window._docResetField(window._docState.formId, kKey);
+                body = document.getElementById('doc-page-body');
+            }
             window._docSetView(_viewKeep); await sleep(30);
             // 색이 **클래스**로 와야 팔레트가 덮을 수 있다 — 주입 <style> 이 남아 있으면 안 된다
             ok('주입 <style> 없이 styles.css 가 맡는다', !document.getElementById('doc-page-style'));

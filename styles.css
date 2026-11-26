@@ -2845,6 +2845,8 @@ tr.jira-zebra-b { background: #e8f2f3; }
 #doc-page-body.doc-mode-write .doc-in.own { border-color:transparent; background:transparent; font-weight:normal;
     box-shadow:inset 3px 0 0 #f0b429; }
 #doc-page-body.doc-mode-write .doc-in::placeholder { color:#c4c9ce; }
+/* 📏 3단계: 긴 글 칸은 적는 만큼 늘어난다(js/67 `_docDeskSetup` 의 grow) — 손잡이·스크롤바를 없앤다 */
+#doc-page-body.doc-mode-write textarea.doc-in { resize:none !important; overflow:hidden; }
 #doc-page-body.doc-mode-write .doc-src-field { display:none; }
 #doc-page-body.doc-mode-write td:focus-within > .doc-src-field { display:block; position:absolute; left:6px; top:calc(100% - 3px);
     z-index:6; margin:0; padding:3px 8px; background:#fff; border:1px solid #ced4da; border-radius:4px;

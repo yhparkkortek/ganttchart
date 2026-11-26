@@ -5040,6 +5040,40 @@
             }
             setTimeout(renderSummary, 0);
         });
+        // ⌨️ 3단계 [2026-11-26] 키보드로 이어 쓰기 — 한 줄 칸에서 Enter = 다음 칸, Shift+Enter = 앞 칸.
+        //    긴 글 칸(textarea)은 Enter 가 줄바꿈이라 Ctrl+Enter 로 넘어간다. Tab 은 브라우저 기본 그대로.
+        //    ⚠️ 한글 입력 중의 Enter(isComposing / keyCode 229)는 **글자를 확정하는 Enter** 라 건드리지 않는다 —
+        //       안 거르면 마지막 글자가 확정되기 전에 다음 칸으로 넘어가 글자가 깨진다.
+        //    순서는 화면에 보이는 칸의 DOM 순서(접힌 장·숨은 칸은 건너뛴다). 커서는 칸 **끝**에 둔다(통째 선택하면 덮어쓰기 사고).
+        paper.addEventListener('keydown', function (e) {
+            if (e.key !== 'Enter' || e.isComposing || e.keyCode === 229 || e.altKey) return;
+            var el = e.target;
+            if (!el || !el.classList || !el.classList.contains('doc-in')) return;
+            var ta = el.tagName === 'TEXTAREA';
+            if (ta && !(e.ctrlKey || e.metaKey)) return;
+            e.preventDefault();
+            var list = [].slice.call(paper.querySelectorAll('input.doc-in, textarea.doc-in')).filter(function (x) {
+                return !x.disabled && x.type !== 'hidden' && x.getClientRects().length > 0;
+            });
+            var nx = list[list.indexOf(el) + (e.shiftKey ? -1 : 1)];
+            if (!nx) return;
+            nx.focus();
+            try { if (nx.type === 'text' || nx.tagName === 'TEXTAREA') { var L = (nx.value || '').length; nx.setSelectionRange(L, L); } } catch (er) { /* date 등 */ }
+        });
+        // 📏 긴 글 칸은 적는 만큼 늘어난다(작성 보기) — 손잡이로 끌어 늘리지 않아도 글이 다 보이게.
+        //    ⚠️ 접힌 장 안의 칸은 높이를 잴 수 없어(0) 건너뛴다 — 펼치면 다시 그려지면서 그때 맞춘다.
+        var grow = function (t) {
+            if (!t.getClientRects().length) return;
+            t.style.height = 'auto';
+            t.style.height = (t.scrollHeight + 2) + 'px';
+        };
+        if (body.classList.contains('doc-mode-write')) {
+            [].forEach.call(paper.querySelectorAll('textarea.doc-in'), grow);
+            paper.addEventListener('input', function (e) {
+                var t = e.target;
+                if (t && t.tagName === 'TEXTAREA' && t.classList.contains('doc-in') && body.classList.contains('doc-mode-write')) grow(t);
+            });
+        }
         if (!window._docDeskResizeBound) {
             window._docDeskResizeBound = true;
             window.addEventListener('resize', function () { _docDeskFit(document.getElementById('doc-page-body')); });
@@ -5173,7 +5207,7 @@
                 return '<span style="display:inline-flex; margin-right:8px;">'
                     + '<button class="elec-mode-btn elec-mode-btn-l' + (w ? ' elec-mode-btn-active' : '') + '"'
                     + ' onclick="window._docSetView(\'write\')" style="height:31px;"'
-                    + ' title="' + _esc(_t('문서처럼 보며 적습니다 — 출처는 그 칸을 누르면 보입니다', 'Write like a document — sources show when a field is focused')) + '">'
+                    + ' title="' + _esc(_t('문서처럼 보며 적습니다 — 출처는 그 칸을 누르면 보입니다 · Enter = 다음 칸, Shift+Enter = 앞 칸, 긴 글 칸은 Ctrl+Enter', 'Write like a document — sources show when a field is focused · Enter = next field, Shift+Enter = previous, Ctrl+Enter in long text')) + '">'
                     + '✍️ ' + _esc(_t('작성', 'Write')) + '</button>'
                     + '<button class="elec-mode-btn elec-mode-btn-r' + (w ? '' : ' elec-mode-btn-active') + '"'
                     + ' onclick="window._docSetView(\'check\')" style="height:31px;"'
