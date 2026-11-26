@@ -2733,8 +2733,10 @@ tr.jira-zebra-b { background: #e8f2f3; }
 /* ⭕ [2026-11-24 "도표 모서리 R 전부"] .concept-table 과 같은 6px.
    .ui-round-wrap = collapse 표를 감싸는 상자(바깥 칸 테두리는 margin:-1px 로 상자 테두리 밑에 숨긴다, sticky 없는 표만)
    .ui-round-tbl  = separate 표(표 자신 + 네 모서리 칸) — sticky 머리글이 있어도 된다 */
-.ui-round-wrap { border: 1px solid #cfe3e5; border-radius: 6px; overflow: hidden; }
+.ui-round-wrap { border: 1px solid #cfe3e5; border-radius: 6px; overflow: clip; }   /* 📌 [2026-11-26] hidden → clip: 모서리는 그대로 깎고 스크롤 상자는 안 만든다 — hidden 이면 그 안 sticky 머리글이 바깥 스크롤을 못 따라가 흘러갔다(Daily 실측) */
 .ui-round-wrap > table { margin: -1px; width: calc(100% + 2px) !important; }
+/* 📌 [2026-11-26] Daily 표는 스크롤 상자(.concept-section, 위 여백 12px) 바로 안에 있어 top:0 이면 머리글 위 12px 틈으로 지나가는 줄이 비쳤다 → 여백만큼 올려 가장자리에 붙인다 */
+#daily-report-page .ui-round-wrap thead th { top: -12px; }
 .ui-round-tbl { border-radius: 6px; }
 .ui-round-tbl > thead > tr:first-child > th:first-child { border-top-left-radius: 6px; }
 .ui-round-tbl > thead > tr:first-child > th:last-child { border-top-right-radius: 6px; }

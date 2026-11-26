@@ -844,6 +844,12 @@ Sample Report **원본저장** 구간이 옛 `/doc/docx` 한 길만 기대해서
   같은 날(사용자 "네, 맞춰줘") 그 두 표의 **여백·글자도** 맞췄다: 머리글 11.5px·700·좌우 6px → **12.5px·600·10px 8px**, 본문 12px·5px 6px → **12.5px·6px 8px**(📌 핀 열 좌우 3px 는 그대로). 근거 사실 표 머리글 줄 38px(다른 표와 같음) 실측. ⚠️ AI 요약 표(js/62 `tableHtml`)는 AI 요약을 만들어야 그려져서 화면으로는 못 봤다 — 같은 문자열 교체라 근거 사실 표와 같게 나와야 한다.
 - 검증: 고친 뒤 실제 화면에서 JIRA·Alarm·Notice(공지 한 건을 메모리에만 넣어 그림, 저장 안 함)·Daily·주소록 칸 선이 전부 `1px rgb(213,230,226)`(그 테마의 칸 선), 테마를 `#6741d9` 로 바꾸면 Daily·주소록이 같이 `rgb(218,213,230)` 으로 바뀌는 것.
 
+## 📌 표 머리글 고정(sticky) — 한 벌 (2026-11-26)
+- 모든 페이지 표 머리글은 `position:sticky; top:0`. **스크롤하는 상자 바로 안**에 있어야 붙는다 — 사이에 `overflow:hidden` 상자가 끼면 그 상자를 기준으로 붙으려다 같이 흘러간다.
+- 실제로 스크롤해서 잰 것: Project list·Customer SPEC·PARTS·M.C·Project Review·주소록 고정됨. JIRA·Alarm·BOM·간트는 지금 줄이 적어 스크롤이 안 생기지만 각자 스크롤 상자(`jira-table-wrap`·`alarm-table-scroll`·`bom-table-scroll`·`gantt-table-scroll`) 바로 안이라 길어지면 붙는다. Summary 는 작은 표 여럿이 페이지와 같이 흘러가는 화면이라 해당 없음.
+- 고친 것: **Daily** — 둥근 모서리 상자 `.ui-round-wrap` 이 `overflow:hidden` 이라 머리글이 줄과 같이 흘러갔다(줄을 화면에서만 4배로 늘려 스크롤: 70px → -230px) → **`overflow:clip`**(모서리는 그대로 깎고 스크롤 상자는 안 만든다). 그다음 스크롤 상자(`.concept-section`)의 위 여백 12px 틈으로 지나가는 줄이 비쳐 `#daily-report-page .ui-round-wrap thead th { top:-12px }` → 가장자리에 붙음(→ 1px).
+- ⚠️ 새 표를 둥근 상자로 감쌀 땐 `overflow:hidden` 대신 `clip`. 스크롤 상자에 위 여백이 있으면 머리글 `top` 을 그 여백만큼 음수로.
+
 ### 드롭다운 끌기 — 마무리 검증 (2026-11-25, 실제 프로젝트)
 **실제 마우스 드래그**(`computer.left_click_drag`)를 실제 프로젝트(`LNW_STELLAR32_32.0.json`)가 열린 상태에서: 주요부품(PARTS) `TOUCH CTRL` 을 맨 위로 — **새로고침 직후 첫 드래그로 3/3 성공**(앞서 두 칸만 올라갔던 조건과 같다), 보고/리뷰 `프로젝트 리뷰` 위로 1/1(순서를 바꾼 뒤 클릭 선택·반대편 화면 드롭다운도 같은 순서·사이드바 `보고/리뷰` 켜짐), 알람/공지·Document·사이드바도 각 1회 이상 성공. 사이드바·네 드롭다운 모두 **같은 `_ddReorder`**. 앞서 **한 번 재현된 "두 칸만 올라감"은 이후 실제 드래그 15번 이상에서 다시 안 나왔다** — `drop` 반영(위)이 정상 경로의 경합은 막았고, 남은 1건은 드라이버(합성 마우스) 타이밍으로 보이나 **확정하지 못했다**. 같은 증상이 보이면 `dragstart/dragover/drop` 이벤트를 `document` capture 로 기록해 어느 이벤트가 빠졌는지부터 볼 것.
 ⚠️ 시험 중 **`#app-user-gate`(로그인 가림막)가 프로젝트를 연 뒤 다시 덮을 수 있다** — 화면 위에서 하는 진짜 마우스 시험은 가림막을 치운 뒤에(`getComputedStyle(g).display` 가 `flex` 면 드래그가 가림막으로 간다). 앱을 쓰는 사람에겐 해당 없음.
