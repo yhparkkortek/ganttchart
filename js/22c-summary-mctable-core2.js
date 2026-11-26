@@ -324,7 +324,7 @@ window.renderAlarmTab = async function() {
                      onclick="window._alarmCbClick(event, this, ${idx})"
                      style="cursor:pointer; width:14px; height:14px; display:block; margin:0 auto;">
             </td>
-            <td style="padding:6px 6px; text-align:center; font-size:11.5px; color:#888; font-weight:bold;">${idx + 1}</td>
+            <td style="padding:6px 6px; text-align:center; font-size:11.5px; color:#888;">${idx + 1}</td>
             <td style="padding:6px 8px; text-align:left; font-size:12.5px; ${_ell}" title="${_esc(item.taskName)}">${item.taskName}</td>
             <td style="padding:6px 8px; text-align:center; font-size:12.5px; ${_ell}">${(item.status && _isEn ? (_statusEn[item.status] || item.status) : item.status) || '-'}</td>
             <td style="padding:6px 8px; text-align:center; font-size:12.5px; ${_ell}">${nameCell(item.assignee)}</td>

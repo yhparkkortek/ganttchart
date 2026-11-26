@@ -108,7 +108,7 @@ window.renderNoticeTab = function() {
                    onclick="window._noticeCbClick(event, this, ${i})"
                    style="cursor:pointer; width:14px; height:14px;">
           </td>
-          <td style="padding:6px 6px;text-align:center;font-size:11.5px;color:#888;font-weight:bold;" title="#NI${no}">${no}</td>
+          <td style="padding:6px 6px;text-align:center;font-size:11.5px;color:#888;" title="#NI${no}">${no}</td>
           <td style="padding:6px 8px;text-align:center;font-size:16px;">${statusDot}</td>
           <td style="padding:6px 8px;">
             <div style="font-weight:bold;color:#333;font-size:12.5px;">${n.title}</div>

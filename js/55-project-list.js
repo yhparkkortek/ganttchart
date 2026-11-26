@@ -1099,7 +1099,7 @@
         var stickyCss = '<style>' + Object.keys(leftOf).map(function (k) {
             return '#pl-table td[data-k="' + k + '"]{position:sticky;left:' + leftOf[k] + 'px;z-index:3;}'
                  + '#pl-table th[data-k="' + k + '"]{position:sticky;left:' + leftOf[k] + 'px;z-index:5;background:' + P.headerTint + ';}';
-        }).join('') + '#pl-table td.pl-no{text-align:center;cursor:pointer;font-weight:bold;color:' + P.darkText + ';}</style>';
+        }).join('') + '#pl-table td.pl-no{text-align:center;cursor:pointer;color:' + P.darkText + ';}</style>';
 
         wrap.innerHTML = stickyCss + '<table id="pl-table" class="concept-table pl-table" style="width:' + totalW + 'px;"><thead><tr>' + th + '</tr></thead><tbody>'
                        + (body || '<tr><td colspan="' + cols.length + '" style="padding:30px; text-align:center; color:#888;">'
