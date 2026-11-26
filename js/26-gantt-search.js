@@ -1674,6 +1674,9 @@
     //    거르지 않는다: ① 검색이 걸려 있으면 푼다 ② WBS 를 전부 펼친다 ③ 보이는 하위 업무(리프) 중 시작일이 오늘 이후인
     //    첫 행을 표 머리 바로 아래로 스크롤하고 잠깐 반짝인다(없으면 오늘 이전에 시작한 마지막 행). 그 위가 지난 일, 아래가 앞으로의 일.
     //    부모 행은 기간이 하위 전부를 덮어 오늘에 늘 걸리므로 기준으로 삼지 않는다. 오늘 날짜로 찾기는 검색 바의 📅 로 그대로 된다.
+    // 📅 [2026-11-26 2차 사용자 요청 "오늘이 포함된 업무가 아니라 **시작일이 오늘인 첫 행**으로"] 1순위는 시작일이 **오늘인** 표의 첫 행(부모·하위 가리지 않고 —
+    //    오늘 시작이라는 사실 자체가 기준이라 기간이 덮는 문제가 없다). 오늘 시작 행이 없을 때만 위의 옛 규칙(오늘 이후 첫 하위 업무 → 없으면 직전 하위 업무)으로
+    //    가고, 그 사실을 토스트로 알린다(조용히 다른 곳으로 가지 않는다).
     window.ganttSearchToday = function() {
         var gd = window.globalData;
         if (!gd || gd.length <= 1) return;
@@ -1694,19 +1697,22 @@
         var tbody = document.getElementById('table-body');
         var scrollBox = document.getElementById('gantt-table-scroll');
         if (!tbody || !scrollBox) return;
-        var after = null, before = null;
+        var after = null, before = null, startsToday = null;
+        var todayEnd = today + 86400000;
         var trs = tbody.querySelectorAll('tr[data-row-index]');
         for (var k = 0; k < trs.length; k++) {
             var tr = trs[k];
             if (tr.style.display === 'none') continue;
             var idx = +tr.getAttribute('data-row-index'), r = gd[idx];
             if (!r || !r._calcStartTs) continue;
+            if (!startsToday && r._calcStartTs >= today && r._calcStartTs < todayEnd) startsToday = tr;   // 시작일이 오늘인 첫 행(부모 포함)
             var leaf = !(idx + 1 < gd.length && gd[idx + 1] && ((gd[idx + 1]._level || 0) > (r._level || 0)));
             if (!leaf) continue;
-            if (r._calcStartTs >= today) { after = tr; break; }
-            before = tr;
+            // ⚠️ 조기 종료 금지 — 표 순서가 날짜순이 아닐 수 있어(다른 묶음) 더 뒤에 '오늘 시작' 행이 있을 수 있다
+            if (r._calcStartTs >= today) { if (!after) after = tr; }
+            else if (!after) before = tr;
         }
-        var target = after || before;
+        var target = startsToday || after || before;
         if (!target) { if (window.showToast) window.showToast(window._t('📅 날짜가 있는 업무가 없습니다.', '📅 No dated tasks.'), 'info'); return; }
         if (window._ganttHydrateRow) target = window._ganttHydrateRow(target) || target;
         var thead = document.getElementById('table-head');
@@ -1719,8 +1725,8 @@
         target.classList.remove('ai-ref-flash'); void target.offsetWidth; target.classList.add('ai-ref-flash');
         setTimeout(function() { target.classList.remove('ai-ref-flash'); }, 1700);
         if (window.showToast) window.showToast(window._t(
-            '📅 오늘(' + _gsTodayIso() + ') 위치로 이동했습니다' + (opened ? ' — 접힌 묶음 ' + opened + '개를 펼쳤습니다' : '') + '.',
-            '📅 Moved to today (' + _gsTodayIso() + ')' + (opened ? ' — expanded ' + opened + ' group(s)' : '') + '.'), 'info');
+            '📅 ' + (startsToday ? '오늘(' + _gsTodayIso() + ') 시작 업무로 이동했습니다' : '오늘(' + _gsTodayIso() + ') 시작하는 업무가 없어 가장 가까운 위치로 이동했습니다') + (opened ? ' — 접힌 묶음 ' + opened + '개를 펼쳤습니다' : '') + '.',
+            '📅 ' + (startsToday ? 'Moved to the task starting today (' + _gsTodayIso() + ')' : 'No task starts today (' + _gsTodayIso() + ') — moved to the nearest position') + (opened ? ' — expanded ' + opened + ' group(s)' : '') + '.'), 'info');
     };
 
     // MutationObserver: table-body가 재렌더링될 때마다 검색 재적용

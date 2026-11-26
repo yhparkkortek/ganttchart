@@ -65,13 +65,27 @@ f.onload = async function () {
     chk(['지난업무', '오늘걸친업무', '오늘하루업무', '다음업무', '일월업무'].every(function (n) { return s1.indexOf(n) !== -1; }), '접힌 가지까지 전체 업무가 보인다 — ' + s1.join(','));
     chk(!W.globalData[2]._wbsCollapsed, '접혀 있던 WBS 가 펼쳐졌다');
     var fl = [].slice.call(D.querySelectorAll('#table-body tr.ai-ref-flash')).map(function (tr) { var r = W.globalData[+tr.getAttribute('data-row-index')]; return r._origT2 || r._origT1; });
-    chk(fl.length === 1 && fl[0] === '오늘하루업무', '오늘 위치(시작일이 오늘 이후인 첫 업무)가 반짝인다 — ' + fl.join(','));
+    chk(fl.length === 1 && fl[0] === '오늘하루업무', '오늘 위치(시작일이 오늘인 첫 행)가 반짝인다 — ' + fl.join(','));
+    // 📅 [2026-11-26 2차] 시작일이 **오늘인** 행이 1순위 — 오늘에 걸치기만 한 행(오늘걸친업무: 어제 전 시작)은 안 고른다
+    chk(fl[0] !== '오늘걸친업무', '기간이 오늘에 걸치기만 한 행은 고르지 않는다');
+    // 토스트는 W._toastStack 에 문구(dataset.msg)와 함께 쌓인다(js/04c) — 떠 있는 동안만 보인다
+    var toastTxt = function () { return (W._toastStack || []).map(function (x) { return x.dataset.msg; }).join(' | '); };
+    chk(/시작 업무로 이동/.test(toastTxt()), '오늘 시작 행으로 갔다고 알린다 — ' + toastTxt().slice(0, 80));
     var sb = D.getElementById('gantt-table-scroll'), th = D.getElementById('table-head'), tt = D.querySelector('#table-body tr.ai-ref-flash');
     var gap = Math.round(tt.getBoundingClientRect().top - sb.getBoundingClientRect().top - th.getBoundingClientRect().height);
     var canScroll = sb.scrollHeight > sb.clientHeight;
     chk(!canScroll || Math.abs(gap) <= 2 || sb.scrollTop + sb.clientHeight >= sb.scrollHeight - 2, '그 줄이 표 머리 바로 아래로 스크롤 — 간격 ' + gap + ' (스크롤 가능 ' + canScroll + ')');
     btn.click(); await sleep(500);
     chk(shown().length === s1.length && inp.value === '', '한 번 더 눌러도 같은 상태(토글 아님) — ' + shown().length);
+    // ── 오늘 시작 행이 없을 때: 옛 규칙(오늘 이후 첫 하위 업무)으로 가되 그 사실을 알린다 ──
+    var hadToday = W.globalData.filter(function (r) { return r && r._origT2 === '오늘하루업무'; })[0];
+    var save = [hadToday[5], hadToday[6]];
+    hadToday[5] = ymd(3); hadToday[6] = ymd(3); W.recalculateSchedules(); await sleep(500);
+    btn.click(); await sleep(600);
+    var fl2 = [].slice.call(D.querySelectorAll('#table-body tr.ai-ref-flash')).map(function (tr) { var r = W.globalData[+tr.getAttribute('data-row-index')]; return r._origT2 || r._origT1; });
+    chk(fl2.length === 1 && fl2[0] !== '오늘걸친업무' && fl2[0] !== '지난업무', '오늘 시작 행이 없으면 오늘 이후 첫 업무로 간다 — ' + fl2.join(','));
+    chk(/시작하는 업무가 없어/.test(toastTxt()), '그 경우 "오늘 시작하는 업무가 없어" 라고 알린다 — ' + toastTxt().slice(0, 90));
+    hadToday[5] = save[0]; hadToday[6] = save[1]; W.recalculateSchedules(); await sleep(400);
     // 날짜 찾기 기본은 시작일만(2026-11-25 2차) — 아래 기대값(기간 한가운데·완료일로도 걸림)은 '기간 포함' 을 켠 상태
     var dsp = D.getElementById('gantt-ai-search-datespan'), dspWas = dsp.checked;
     if (!dsp.checked) dsp.click();
