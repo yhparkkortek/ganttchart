@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>IMETEST-KORTEK loading</title>
+<!--
+  ⌨️ 한글 입력기(IME) 조합 중 Enter 실측 하네스 — Document 작성 보기(js/67 `_docDeskSetup` keydown).
+  자동화 도구의 글자 입력은 IME 를 거치지 않아서(insertText) "조합 중 Enter" 를 흉내만 낼 수 있다.
+  이 페이지는 앱을 iframe 으로 품고(같은 출처라 안을 들여다볼 수 있다) Customer 칸에 커서를 둔 뒤,
+  **Windows 키 입력(진짜 한/영·자판·Enter)** 이 들어오면 keydown·조합·포커스·값을 기록해 **창 제목**에 적는다
+  — 창 제목은 Windows 쪽에서 읽을 수 있다(창 제목 형식: IMETEST-KORTEK|at=<칸>|v=<값>|E=<Enter 기록>).
+  쓰는 법: python -m http.server 8934 → 크롬 새 창으로 http://localhost:8934/tests/ime-enter.html →
+           이 창이 맨 앞일 때 한/영 → ㄱ ㅏ ㄴ ㅏ → Enter → (Enter). 프로젝트는 열지 않는다(저장할 것이 없다).
+  E 기록: c = isComposing/229 인 Enter keydown, n = 일반 Enter keydown, 뒤의 @칸 = 그 keydown 이 났을 때 포커스.
+  p = Project Name 칸 값, K = 마지막 keydown 4개(* = 조합 중).
+  실측(2026-11-26, Windows 한국어 IME + Chrome): 조합 중 Enter 한 번 = keydown 두 번(Process* 와 Enter) — 앞의 것은 무시되고
+  뒤의 Enter 로 칸이 넘어간다. 값은 온전하다(가나). Shift+Enter 도 같다.
+-->
+<style>html,body{margin:0;height:100%} iframe{border:0;width:100%;height:100%}</style>
+</head>
+<body>
+<iframe id="app" src="../kortek_pm.html?_cb=ime"></iframe>
+<script>
+(function () {
+  var fr = document.getElementById('app');
+  var log = [];
+  // 창마다 이름을 다르게(여러 번 열어도 Windows 쪽에서 어느 창인지 고를 수 있게) — ?r=<번호>
+  var TAG = 'IMETEST-' + ((location.search.match(/[?&]r=([\w-]+)/) || [])[1] || 'KORTEK');
+  var summary = function () {
+    var w = fr.contentWindow, d = w && w.document;
+    var a = d && d.activeElement;
+    var c = d && d.querySelector('#doc-page-body [data-doc-key="Customer"]');
+    var E = log.filter(function (x) { return x.t === 'keydown' && x.key === 'Enter'; })
+               .map(function (x) { return (x.comp ? 'c' : 'n') + '@' + (x.at || '-'); }).join(',');
+    var C = log.filter(function (x) { return x.t === 'compositionend'; }).length;
+    document.title = TAG + '|at=' + ((a && a.getAttribute && a.getAttribute('data-doc-key')) || (a && a.tagName) || '-')
+      + '|v=' + (c ? c.value : '?') + '|E=' + E + '|ce=' + C
+      + '|p=' + ((d && d.querySelector('#doc-page-body [data-doc-key="Project Name"]')) || {}).value
+      + '|K=' + log.filter(function (x) { return x.t === 'keydown'; }).slice(-4).map(function (x) { return x.key + (x.comp ? '*' : ''); }).join(',')
+      + '|kd=' + log.filter(function (x) { return x.t === 'keydown'; }).length
+      + '|f=' + (document.hasFocus() ? 1 : 0) + (w && w.document.hasFocus() ? 1 : 0);
+  };
+  fr.addEventListener('load', function () {
+    var w = fr.contentWindow;
+    setTimeout(function () {
+      try {
+        var d = w.document;
+        var ov = d.getElementById('drive-file-modal-overlay'); if (ov) ov.style.display = 'none';
+        w.switchTab('document'); w._docSetView('write'); w._docPick('sample-report');
+        setTimeout(function () {
+          var rec = function (t) { return function (e) {
+            var a = d.activeElement;
+            log.push({ t: t, key: e.key, comp: !!e.isComposing || e.keyCode === 229, at: a && a.getAttribute && a.getAttribute('data-doc-key') });
+            setTimeout(summary, 30);
+          }; };
+          ['keydown', 'compositionend'].forEach(function (ty) { d.addEventListener(ty, rec(ty), true); });
+          d.addEventListener('input', function () { setTimeout(summary, 30); }, true);
+          var c = d.querySelector('#doc-page-body [data-doc-key="Customer"]');
+          c.value = ''; var pn = d.querySelector('#doc-page-body [data-doc-key="Project Name"]'); if (pn) pn.value = '';
+          fr.focus(); c.focus();
+          window.__imeLog = log;
+          summary();
+          setInterval(summary, 500);
+        }, 800);
+      } catch (e) { document.title = TAG + '|ERR ' + e.message; }
+    }, 6000);
+  });
+})();
+</script>
+</body>
+</html>
