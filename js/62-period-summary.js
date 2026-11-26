@@ -1287,6 +1287,9 @@
             repaint: function () { paintFacts(); },
             rowClass: function (f) { return factPinned(f) ? 'rp-on' : ''; },   // 핀셋 켠 행은 간트처럼 행 전체가 옅게 물든다
             rowAttr: function (f) { return 'id="ps-fact-' + factKey(f) + '" onclick="window._psFactBack(event)" style="transition:box-shadow .3s, background .3s;"'; },
+            // 🔗≈ [2026-11-26 사용자 요청 "프로젝트 리뷰도 비슷한 기능"] 같은 메일 묶기·비슷한 업무 알림 — 일일보고와 같은 공용 모듈(js/81). 펼친 자식 줄도 근거 이동 id 를 갖는다.
+            children: function (f) { return window._fdup.children('ps-facts', f); },
+            childAttr: function (f) { return 'id="ps-fact-' + factKey(f) + '" onclick="window._psFactBack(event)" style="background:#f6f9fb; transition:box-shadow .3s, background .3s;"'; },
             cols: [
                 { id: 'date', label: T('날짜', 'Date'),
                   // 🚩 머리글 전체 바 — 간트 No. 머리글의 막대와 같다(하나라도 켜져 있으면 전체 해제, 아니면 전체 켜기 — 이 목록의 행만)
@@ -1294,16 +1297,19 @@
                   // 🚩 붉은 바는 **첫 칸 왼쪽 끝**에(간트 No. 칸과 같은 구조 — 별도 칸·테두리 없이)
                   tdCls: function (f) { return dateCls(f.date) + ' rp-cell rp-pad'; },
                   html: function (f) { var ri = factGanttRow(f); return pinBtnHtml(ri >= 0 ? [ri] : [], "window._psPinFact('" + factKey(f) + "')") + esc(f.date || ''); } },
-                { id: 'cat', label: T('구분', 'Role'), w: '58px', nowrap: true, align: 'center', sort: function (f) { return f.cat || '~'; }, opt: function (f) { return f.cat || ''; },
+                { id: 'cat', label: T('구분', 'Role'), w: '58px', nowrap: true, align: 'center', sort: function (f) { return f.cat || '~'; }, opt: function (f) { return window._fdup.members(f).map(function (m) { return m.cat || ''; }); },
                   html: function (f) { return f.cat ? '<span style="' + window._uiBadgeStyle() + ' background:#eef3f7; color:#2c5f8a;">' + esc(f.cat) + '</span>' : ''; } },
                 { id: 'who', label: T('담당자', 'Assignee'), w: '92px', nowrap: true, align: 'center', sort: function (f) { return f.assignee || '~'; },
-                  opt: function (f) { return String(f.assignee || '').split(',').map(function (x) { return x.trim(); }); },
+                  opt: function (f) { return [].concat.apply([], window._fdup.members(f).map(function (m) { return String(m.assignee || '').split(',').map(function (x) { return x.trim(); }); })); },
                   // 👤 이름이 많으면 면적을 다 먹었다(2026-11-26 신고) — 첫 이름 + "외 N", 전체는 말풍선
                   html: function (f) { return whoTip(String(f.assignee || '').split(',').map(function (x) { return x.trim(); }), []); } },
-                { id: 'proj', label: T('프로젝트', 'Project'), sort: function (f) { return f.project || ''; }, opt: function (f) { return f.project || ''; },
-                  html: function (f) { return '<span style="font-size:11.5px;">' + esc(f.project || '') + (f.project && f.project === thisProj ? ' <span title="' + esc(T('지금 열린 프로젝트', 'Open project')) + '">📂</span>' : '') + '</span>'; } },
-                { id: 'task', label: T('업무', 'Task'), w: '24%', sort: function (f) { return f.task || ''; }, html: function (f) {
-                    return (f.local ? link(f.idx) : '<span style="color:#bbb;">#G' + f.idx + '</span>') + ' <b>' + esc(f.task) + '</b>' +
+                { id: 'proj', label: T('프로젝트', 'Project'), sort: function (f) { return f.project || ''; }, opt: function (f) { return f._g ? f._g.projects : (f.project || ''); },
+                  html: function (f, i, isChild) {
+                      var more = (!isChild && f._g && f._g.projects.length > 1) ? ' <span style="color:#888;" title="' + esc(f._g.projects.join('\n')) + '">' + esc(T('외 ' + (f._g.projects.length - 1), '+' + (f._g.projects.length - 1))) + '</span>' : '';
+                      return '<span style="font-size:11.5px;">' + esc(f.project || '') + (f.project && f.project === thisProj ? ' <span title="' + esc(T('지금 열린 프로젝트', 'Open project')) + '">📂</span>' : '') + more + '</span>';
+                  } },
+                { id: 'task', label: T('업무', 'Task'), w: '24%', sort: function (f) { return f.task || ''; }, html: function (f, i, isChild) {
+                    return (isChild ? window._fdup.childMark(f) : '') + (f.local ? link(f.idx) : '<span style="color:#bbb;">#G' + f.idx + '</span>') + ' <b>' + esc(f.task) + '</b>' + window._fdup.cellHtml('ps-facts', f, isChild) +
                            ((f.sender || f.receiver) ? '<div style="color:#888; font-size:11px;">' + esc(f.sender || '?') + ' → ' + esc(f.receiver || '?') + '</div>' : '');
                 } },
                 { id: 'text', label: T('내용', 'Content'), w: '38%', sort: function (f) { return f.core || f.todo || f.issue || ''; }, html: function (f) {
@@ -1325,7 +1331,16 @@
             ]
         };
     }
-    function factsTableHtml(facts) { return window._ft.build('ps-facts', factsCfg(), facts).html; }
+    function factsTableHtml(facts) {
+        // 🔗≈ 묶기·비슷한 업무는 **표 엔진 앞에서**(js/81) — 대표 줄만 엔진에 넣고, 칩 줄을 표 위에 둔다. 열린 프로젝트의 사실이 대표(간트 조작이 거기서만 된다).
+        var dup = window._fdup.build('ps-facts', facts, {
+            name: function (f) { return f.task; }, core: function (f) { return f.core; }, mail: function (f) { return f.mailRaw; }, project: function (f) { return f.project; },
+            prefer: function (f) { return factGanttRow(f) >= 0; },
+            repaint: paintFacts
+        });
+        var chips = window._fdup.chipsHtml('ps-facts');
+        return (chips ? '<div style="margin:0 0 5px; display:flex; gap:5px; flex-wrap:wrap;">' + chips + '</div>' : '') + window._ft.build('ps-facts', factsCfg(), dup.rows).html;
+    }
     function paintFacts() {
         var el = document.getElementById('ps-facts-body');
         if (el && _psLast && _psLast.factsShown) el.innerHTML = factsTableHtml(_psLast.factsShown);
@@ -1721,6 +1736,8 @@
         var det = document.getElementById('ps-facts-det');
         if (det) det.open = true;
         var el = document.getElementById('ps-fact-' + key);
+        // 🔗≈ 접힌 묶음 안의 행이면 펼친 뒤 다시 찾는다(펼치면 표가 다시 그려진다)
+        if (!el && window._fdup.reveal('ps-facts', function (f) { return factKey(f) === key; })) el = document.getElementById('ps-fact-' + key);
         if (!el) {
             if (window.showToast) window.showToast(T('이 근거는 지금 조건의 사실 목록에 없습니다(보관본이 다른 조건으로 만들어졌거나 그 사이 바뀜).', 'This source is not in the current fact list.'), 'info');
             return;

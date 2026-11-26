@@ -10,9 +10,9 @@
         await w(800);
         var c = function () { return document.getElementById('daily-cand'); };
         var mainRows = function () { return c().querySelectorAll('tbody tr[onclick]:not(.ft-child)').length; };
-        var simBtns = function () { return [].slice.call(c().querySelectorAll('button[onclick*="_dailyToggleSim("]')); };
-        var SIM = window.DAILY_SIMILAR;
-        ok('수치가 데이터로 있다(DAILY_SIMILAR)', !!SIM && SIM.minShared === 2 && SIM.genericRatio > 0, SIM);
+        var simBtns = function () { return [].slice.call(c().querySelectorAll('button[onclick*="_fdupSim("]')); };
+        var SIM = window.DUP_SIMILAR;
+        ok('수치가 데이터로 있다(DUP_SIMILAR)', !!SIM && SIM.minShared === 2 && SIM.genericRatio > 0, SIM);
         ok('비슷한 업무 칩("≈ 비슷한 업무 N묶음")이 있다', /≈ 비슷한 업무 \d+묶음/.test(c().innerText));
         var anchor = (window._dailyCand || []).filter(function (x) { return x._sim; })[0];
         ok('비슷한 업무 묶음이 있다', !!anchor);
@@ -25,24 +25,24 @@
         var before = mainRows();
         ok('접힌 상태에선 비슷한 업무도 각자 줄로 나온다', cl.members.every(function (m) { return !m._simOf.open; }));
         // 펼치기
-        c().querySelector('button[onclick*="_dailyToggleSim(' + cl.n + ')"]').click(); await w(400);
+        c().querySelector('button[onclick*="_fdupSim(\'daily-cand\', ' + cl.n + ')"]').click(); await w(400);
         var kids = c().querySelectorAll('tbody tr.ft-child').length;
         ok('펼치면 비슷한 업무가 앵커 아래 자식 줄로 모인다', kids >= cl.members.length, [kids, cl.members.length]);
         ok('자식 줄은 ≈ 로 표시한다', /≈/.test(c().querySelector('tbody tr.ft-child').innerText));
         ok('원래 자리에서는 빠진다(줄 수가 멤버 수만큼 줄어든다)', mainRows() === before - cl.members.length, [before, mainRows()]);
-        ok('[＋ 모두 담기] 가 나온다', !!c().querySelector('button[onclick*="_dailyAddSim(' + cl.n + ')"]'));
+        ok('[＋ 모두 담기] 가 나온다', !!c().querySelector('button[onclick*="_fdupAddAll(\'daily-cand\', ' + cl.n + ')"]'));
         // 모두 담기 — 각각 한 건씩
         var items0 = document.querySelectorAll('[data-daily-item]').length;
-        window._dailyAddSim(cl.n); await w(600);
+        window._fdupAddAll('daily-cand', cl.n); await w(600);
         ok('모두 담으면 앵커+비슷한 업무가 각각 한 건씩 담긴다', document.querySelectorAll('[data-daily-item]').length === items0 + size, [items0, document.querySelectorAll('[data-daily-item]').length, size]);
         // 원상복구
         for (var k = 0; k < size; k++) { window._dailyDropItem(document.querySelectorAll('[data-daily-item]').length - 1); await w(200); }
         // 접기
         var b2 = simBtns()[0]; if (b2) { b2.click(); await w(300); }
         // 끄기
-        window._dailyToggleSimMode(); await w(400);
+        window._fdupMode('daily-cand', 'sim'); await w(400);
         ok('끄면 ≈ 칩이 없다', simBtns().length === 0 && /비슷한 업무 알림 켜기/.test(c().innerText));
-        window._dailyToggleSimMode(); await w(300);
+        window._fdupMode('daily-cand', 'sim'); await w(300);
         ok('다시 켜면 칩이 돌아온다', /≈ 비슷한 업무 \d+묶음/.test(c().innerText));
     } catch (e) { ok('실행', false, e && e.message); }
     finally { window.dailyCloseModal(); localStorage.removeItem(window.DAILY_POLICY.draftKey); }

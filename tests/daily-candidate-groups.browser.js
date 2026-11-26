@@ -11,7 +11,7 @@
         var c = function () { return document.getElementById('daily-cand'); };
         var rowsNow = function () { return c().querySelectorAll('tbody tr[onclick]:not(.ft-child)').length; };
         var all = window._dailyCandAll || [];
-        var grpBtns = function () { return [].slice.call(c().querySelectorAll('button[onclick*="_dailyToggleGrp"]')); };
+        var grpBtns = function () { return [].slice.call(c().querySelectorAll('button[onclick*="_fdupGrp("]')); };
         ok('후보가 있다', all.length > 0, all.length);
         ok('같은 메일 묶음 줄(🔗 ×N)이 있다', grpBtns().length > 0, grpBtns().length);
         var n0 = rowsNow();
@@ -19,12 +19,12 @@
         ok('칩이 묶은 건수를 말한다', /같은 메일 \d+건을 묶었습니다/.test(c().innerText));
         // 펼치기
         var repG = (window._dailyCand || []).filter(function (x) { return x._g; })[0], members = repG._g.members.length;
-        c().querySelector('button[onclick*="_dailyToggleGrp(' + repG._g.n + ')"]').click(); await w(400);
+        c().querySelector('button[onclick*="_fdupGrp(\'daily-cand\', ' + repG._g.n + ')"]').click(); await w(400);
         var kids = c().querySelectorAll('tbody tr.ft-child').length;
         ok('펼치면 묶음 안 나머지 줄이 아래에 나온다(N-1)', kids === members - 1, [kids, members]);
         ok('자식 줄은 └ 로 들여 쓴다', /└/.test(c().querySelector('tbody tr.ft-child').innerText));
         ok('자식 줄 때문에 줄 수(대표)는 안 변한다', rowsNow() === n0);
-        c().querySelector('button[onclick*="_dailyToggleGrp(' + repG._g.n + ')"]').click(); await w(300);
+        c().querySelector('button[onclick*="_fdupGrp(\'daily-cand\', ' + repG._g.n + ')"]').click(); await w(300);
         ok('다시 누르면 접힌다', c().querySelectorAll('tbody tr.ft-child').length === 0);
         // 프로젝트 필터 — 묶음 안 어느 프로젝트로 걸러도 그 묶음이 보인다
         var rep0 = (window._dailyCand || []).filter(function (x) { return x._g; })[0];
@@ -44,10 +44,10 @@
         // 원상복구 — 방금 담은 카드 빼기
         window._dailyDropItem(document.querySelectorAll('[data-daily-item]').length - 1); await w(400);
         // 묶기 끄기
-        window._dailyToggleGroupMode(); await w(400);
+        window._fdupMode('daily-cand', 'group'); await w(400);
         ok('묶기를 끄면 모든 후보가 줄마다 나온다', rowsNow() === (window._dailyCandAll || []).length || rowsNow() >= n0, [rowsNow(), n0]);
         // 자식 줄만 담기
-        window._dailyToggleGroupMode(); await w(300);
+        window._fdupMode('daily-cand', 'group'); await w(300);
         grpBtns()[0].click(); await w(400);
         var kid = c().querySelector('tbody tr.ft-child'), cid = +(/_dailyAddC\((\d+)\)/.exec(kid.getAttribute('onclick')) || [])[1];
         var before = document.querySelectorAll('[data-daily-item]').length;
