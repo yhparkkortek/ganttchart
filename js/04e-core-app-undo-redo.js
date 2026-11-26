@@ -1364,13 +1364,18 @@
     function _wbsTokenize(t) {
         return _wbsNormTitle(t).split(/[\s/·,()[\]]+/).filter(function(s) { return s.length >= 2; });
     }
+    // 🏷 [2026-11-26 사용자 요청 "[결재] 같은 문서 종류 표시는 당연히 빼야 한다"] 업무명 앞뒤의 **[대괄호] 표시**는 주제가 아니라 꼬리표다 —
+    //    전자결재에서 온 `[결재]`, 모델·프로젝트를 적은 `[LNW>STELLAR 32 …`(제목이 잘려 닫는 괄호가 없는 것 포함). 묶음 **판정에도 이름에도** 세지 않는다
+    //    (`[결재]` 하나가 "겹치는 낱말" 로 세어져 서로 무관한 결재 문서들이 묶이던 것을 같이 막는다). 어휘를 코드에 박지 않는다 — 괄호 **모양**으로만 가른다.
+    const _WBS_TITLE_TAG_RE = /\[[^\]]*(?:\]|$)|【[^】]*(?:】|$)/g;
+    function _wbsTitleTokens(t) { return _wbsTokenize(String(t || '').replace(_WBS_TITLE_TAG_RE, ' ')); }
     // 💡 [실측 보정] 이 시트의 업무명은 "주제(명사) + 동작(확인/검토/요청/검증 등, 마지막 토큰)" 순서를
     //    거의 항상 따른다 — 마지막 토큰만 떼고 비교하면, 토큰 빈도만으로 "흔한 말"을 걸러내려 할 때
     //    생기던 오탐(예: "확인"이 22개 중 6개에 나와 임계치를 살짝 못 넘겨 전혀 무관한 업무들까지
     //    한 덩어리로 묶이던 문제, 실측 LNW_STELLAR32_32.0 유사 데이터로 재현)을 훨씬 줄인다.
     //    토큰이 1개뿐이면(예: "밝기증가") 그대로 둔다 — 떼면 비교할 게 없어진다.
     function _wbsTopicTokens(t) {
-        const toks = _wbsTokenize(t);
+        const toks = _wbsTitleTokens(t);
         return toks.length > 1 ? toks.slice(0, -1) : toks;
     }
     // 💡 [2026-10-26 추가, 사용자 지적] 이름만 비슷하다고 묶으면 안 된다 — 7월 "밝기" 업무와
@@ -1474,7 +1479,7 @@
             //    남은 행끼리 다시 앵커를 잡아 나눈다.
             const titleToks = new Map();
             leafIdxs.forEach(function(i) {
-                titleToks.set(i, new Set(_wbsTokenize(_wbsRowOwnTitle(gd[i])).filter(function(t) { return !isCommon(t) && !/^\d+$/.test(t); }).map(function(t) { return t.toLowerCase(); })));
+                titleToks.set(i, new Set(_wbsTitleTokens(_wbsRowOwnTitle(gd[i])).filter(function(t) { return !isCommon(t) && !/^\d+$/.test(t); }).map(function(t) { return t.toLowerCase(); })));
             });
             const split = [];
             groups.forEach(function(members, bestTok) {
@@ -1517,7 +1522,7 @@
                     if (pick.length > 4) pick = pick.sort(function(x, y) { return cnt.get(y) - cnt.get(x); }).slice(0, 4);   // 이름이 너무 길어지지 않게
                     const want = new Set(pick), out = [], seen = new Set();
                     ids.forEach(function(i) {
-                        _wbsTokenize(_wbsRowOwnTitle(gd[i])).forEach(function(w) {
+                        _wbsTitleTokens(_wbsRowOwnTitle(gd[i])).forEach(function(w) {
                             const lw = String(w).toLowerCase();
                             if (want.has(lw) && !seen.has(lw)) { seen.add(lw); out.push(w); }
                         });
