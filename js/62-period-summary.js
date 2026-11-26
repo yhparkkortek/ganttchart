@@ -1283,14 +1283,13 @@
             defaultSort: { col: 'date', dir: -1 },
             empty: T('이 기간에 메일 분석으로 들어온 업무가 없습니다.', 'No mail-derived tasks in this period.'),
             repaint: function () { paintFacts(); },
+            rowClass: function (f) { return factPinned(f) ? 'rp-on' : ''; },   // 핀셋 켠 행은 간트처럼 행 전체가 옅게 물든다
             rowAttr: function (f) { return 'id="ps-fact-' + factKey(f) + '" onclick="window._psFactBack(event)" style="transition:box-shadow .3s, background .3s;"'; },
             cols: [
-                { id: 'pin', label: '', w: '14px', thPad: '0', tdCls: function () { return 'rp-cell rp-slim'; }, html: function (f) {
-                    var ri = factGanttRow(f);
-                    return pinBtnHtml(ri >= 0 ? [ri] : [], "window._psPinFact('" + factKey(f) + "')");
-                } },
                 { id: 'date', label: T('날짜', 'Date'), w: '82px', nowrap: true, firstDir: -1, sort: function (f) { return f.date || ''; },
-                  tdCls: function (f) { return dateCls(f.date); }, html: function (f) { return esc(f.date || ''); } },
+                  // 🚩 붉은 바는 **첫 칸 왼쪽 끝**에(간트 No. 칸과 같은 구조 — 별도 칸·테두리 없이)
+                  tdCls: function (f) { return dateCls(f.date) + ' rp-cell rp-pad'; },
+                  html: function (f) { var ri = factGanttRow(f); return pinBtnHtml(ri >= 0 ? [ri] : [], "window._psPinFact('" + factKey(f) + "')") + esc(f.date || ''); } },
                 { id: 'cat', label: T('구분', 'Role'), w: '58px', nowrap: true, sort: function (f) { return f.cat || '~'; }, opt: function (f) { return f.cat || ''; },
                   html: function (f) { return f.cat ? '<span style="' + window._uiBadgeStyle() + ' background:#eef3f7; color:#2c5f8a;">' + esc(f.cat) + '</span>' : ''; } },
                 { id: 'who', label: T('담당자', 'Assignee'), w: '92px', nowrap: true, sort: function (f) { return f.assignee || '~'; },
@@ -1469,7 +1468,8 @@
                 var rg = ganttRowsOfTask(t).rows;
                 var sub = by === 'who' ? (t.proj ? '<div style="color:#888; font-size:11px;">' + esc(t.proj) + '</div>' : '') :
                     (t.sub ? '<div style="color:#888; font-size:11px;">' + esc(t.sub) + '</div>' : ((t.people.length || t.roles.length) ? '<div style="color:#666; font-size:11.5px;">' + whoTip(t.people, t.roles) + '</div>' : ''));
-                body += '<tr id="ps-brief-' + n + '" onclick="window._psBriefBack(event)"' + (ti % 2 ? ' class="ft-zebra-b"' : '') + ' style="transition:background .4s;">' +
+                var allOn = rg.length && rg.every(function (ri) { var g0 = (typeof globalData !== 'undefined' && globalData) ? globalData : window.globalData; return g0[ri] && g0[ri]._알림; });
+                body += '<tr id="ps-brief-' + n + '" onclick="window._psBriefBack(event)"' + (ti % 2 || allOn ? ' class="' + (ti % 2 ? 'ft-zebra-b ' : '') + (allOn ? 'rp-on' : '') + '"' : '') + ' style="transition:background .4s;">' +
                     '<td class="rp-cell rp-pad" style="' + td + '">' + pinBtnHtml(rg, 'window._psPinBrief(' + n + ')') + '<b>' + esc(t.task) + '</b>' + sub + '</td>' +
                     '<td style="' + td + '">' + briefLines(t.rows.done) + '</td>' +
                     '<td style="' + td + '">' + briefLines(t.rows.blocked) +
@@ -1507,9 +1507,8 @@
         var body = rows.map(function (r, vi) {
             var c = catOf(r.cat);
             var ai = all.indexOf(r);   // 돌아올 자리 — 정렬·필터가 바뀌어도 같은 행을 가리키게 원본 순번
-            return '<tr id="ps-row-' + ai + '"' + (vi % 2 ? ' class="ps-zebra-b"' : '') + ' style="transition:background .4s;">' +
-                '<td class="rp-cell rp-slim" style="' + td + '">' + pinBtnHtml(resolveGanttRows(r).rows, 'window._psPinRow(' + ai + ')') + '</td>' +
-                '<td style="' + td + ' white-space:nowrap;"><span style="padding:1px 7px; border-radius:9px; font-size:11px; font-weight:bold; color:' + c.color + '; background:' + c.bg + ';">' + esc(catName(r.cat)) + '</span></td>' +
+            return '<tr id="ps-row-' + ai + '"' + (vi % 2 || rowPinned(r) ? ' class="' + (vi % 2 ? 'ps-zebra-b ' : '') + (rowPinned(r) ? 'rp-on' : '') + '"' : '') + ' style="transition:background .4s;">' +
+                '<td class="rp-cell rp-pad" style="' + td + ' white-space:nowrap;">' + pinBtnHtml(resolveGanttRows(r).rows, 'window._psPinRow(' + ai + ')') + '<span style="padding:1px 7px; border-radius:9px; font-size:11px; font-weight:bold; color:' + c.color + '; background:' + c.bg + ';">' + esc(catName(r.cat)) + '</span></td>' +
                 '<td style="' + td + '" title="' + esc(r.projects.join('\n')) + '">' + (r.common ? '<span style="padding:1px 6px; border-radius:8px; background:#fff3bf; color:#8f5a00; font-size:11px; font-weight:bold;">🔗 ' + esc(rowProj(r)) + '</span>' : esc(r.projects[0] || '')) + '</td>' +
                 '<td style="' + td + '">' + whoCellHtml(r, ai) + '</td>' +
                 '<td class="' + dateCls(r.date) + '" style="' + td + ' white-space:nowrap; color:#555;">' + esc(r.date || '') + '</td>' +
@@ -1517,10 +1516,9 @@
                 '<td style="' + td + ' font-size:11px;">' + uniqRefs(r.refs).map(function (x) { return refHtml(x, r.common, ai); }).join(r.common ? '<br>' : ' ') + '</td></tr>';
         }).join('');
         findSync(rows.length, all.length);   // 🔍 헤더 찾기 버튼의 개수·입력칸을 지금 표와 맞춘다
-        if (!rows.length) body = '<tr><td colspan="7" style="' + td + ' text-align:center; color:#999; padding:14px;">' + esc(all.length ? T('조건에 맞는 행이 없습니다', 'No rows match') : T('근거 있는 항목이 없었습니다 — 아래 사실 목록을 보세요', 'No grounded items')) + '</td></tr>';
+        if (!rows.length) body = '<tr><td colspan="6" style="' + td + ' text-align:center; color:#999; padding:14px;">' + esc(all.length ? T('조건에 맞는 행이 없습니다', 'No rows match') : T('근거 있는 항목이 없었습니다 — 아래 사실 목록을 보세요', 'No grounded items')) + '</td></tr>';
         // ⭕ [2026-11-24] 모서리 둥글게 — sticky 머리글이라 overflow:hidden 상자로 못 감싼다 → 표·모서리 칸에 R(.ui-round-tbl)
         return '<table class="ui-round-tbl" style="width:100%; border-collapse:separate; border-spacing:0; border-left:1px solid var(--ui-cell-line, #cfe3e5); border-top:1px solid var(--ui-cell-line, #cfe3e5); table-layout:auto; background:#fff;"><thead><tr>' +
-            '<th style="position:sticky; top:0; z-index:20; width:14px; padding:0; background:#eef6f7; color:#2c5f8a; border-right:1px solid var(--ui-cell-line, #cfe3e5); border-bottom:1px solid var(--ui-cell-line, #cfe3e5); font-size:12.5px; font-weight:600; text-align:center;" title="' + esc(T('붉은 바 = 핀셋(알람) — 간트 No. 칸의 막대와 같다. 열린 프로젝트의 업무만', 'Red bar = pin (alarm) — same as the Gantt bar; open project only')) + '"></th>' +
             th('cat', T('분류', 'Type'), '74px') + th('proj', T('프로젝트', 'Project'), '') + th('who', T('업무 담당자', 'Assignee'), '') + th('date', T('날짜', 'Date'), '82px') + th('text', T('내용', 'Content'), '46%') +
             '<th style="position:sticky; top:0; z-index:20; padding:10px 8px; background:#eef6f7; color:#2c5f8a; border-right:1px solid var(--ui-cell-line, #cfe3e5); border-bottom:1px solid var(--ui-cell-line, #cfe3e5); font-size:12.5px; font-weight:600; text-align:center; white-space:nowrap;">' + esc(T('근거', 'Source')) + '</th>' +
             '</tr></thead><tbody>' + body + '</tbody></table>' +
