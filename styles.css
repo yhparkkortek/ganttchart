@@ -972,7 +972,7 @@ thead th { text-align: center; }
 .pl-table td.pl-has-ico { position: relative; padding-right: 22px; }
 .pl-table td.pl-has-ico .pl-ico-fix {
     position: absolute; right: 3px; top: 50%; transform: translateY(-50%);
-    margin: 0; font-size: 12px; line-height: 1; white-space: nowrap;
+    margin: 0; font-size: 11px; line-height: 1; white-space: nowrap;   /* 🔣 [2026-11-26] 표 안 아이콘 11px(옆 🏭·👤 와 같게) */
 }
 .pl-table td.pl-no { color: #888; font-size: 11.5px; }
 

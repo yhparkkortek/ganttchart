@@ -336,7 +336,7 @@ window.renderAlarmTab = async function() {
             <td style="padding:6px 8px; text-align:center; font-size:12.5px;">${sentStatus(item.sentLog, item.diffDays, item.sentHidden, idx)}</td>
             <td style="padding:6px 8px; text-align:center; font-size:11.5px; color:#888;">${lastSent(item.sentLog)}</td>
             <td style="padding:6px 8px; text-align:center;">
-                <span onclick="event.stopPropagation(); window.openAlarmScheduleModal(${idx});" title="이 업무만 알람 일정을 다르게 설정" style="cursor:pointer; font-size:14px;">${item.alarmDays.length !== 3 || item.alarmDays.slice().sort((a,b)=>a-b).join(',') !== '1,3,7' ? '⚙️<span style="color:#2c5f8a; font-size:9px; vertical-align:top;">●</span>' : '⚙️'}</span>
+                <span onclick="event.stopPropagation(); window.openAlarmScheduleModal(${idx});" title="이 업무만 알람 일정을 다르게 설정" style="cursor:pointer; font-size:11px;">${item.alarmDays.length !== 3 || item.alarmDays.slice().sort((a,b)=>a-b).join(',') !== '1,3,7' ? '⚙️<span style="color:#2c5f8a; font-size:9px; vertical-align:top;">●</span>' : '⚙️'}</span>
                 <span id="as-recur-badge-${idx}"></span>
             </td>
         </tr>`).join('');
