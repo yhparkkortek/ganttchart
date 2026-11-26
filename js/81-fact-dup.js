@@ -18,7 +18,8 @@
         minShared: 2,          // 업무명에서 흔한 말을 뺀 낱말이 이만큼 겹치면 비슷하다고 알린다
         minTokenLen: 2,        // 한 글자 낱말(및·건…)은 세지 않는다
         genericRatio: 0.12,    // 업무명의 이 비율 넘게 나오는 낱말은 흔한 말(일정·확인·요청…)이라 뺀다 — 실측에서 이 값으로 걸러졌다
-        genericMinRows: 12     // 행이 이보다 적으면 비율이 의미가 없어 흔한 말 거르기를 안 한다
+        genericMinRows: 12,    // 행이 이보다 적으면 비율이 의미가 없어 흔한 말 거르기를 안 한다
+        genericMinProjects: 2  // 목록에 프로젝트가 여럿이면 이만큼의 프로젝트에 나와야 흔한 말(한 프로젝트에만 몰린 말은 비슷함의 신호)
     };
     var ST = {};
     function st(id) { return ST[id] || (ST[id] = { groupOn: true, simOn: true, expanded: {}, simOpen: {}, o: null, all: [], gKeys: [], sims: [], merged: 0, groups: 0 }); }
@@ -56,9 +57,20 @@
         var eng = S.groupOn ? reps : rows;
         // ── 2단계 ──
         if (S.simOn && eng.length >= 2) {
-            var df = {};
-            eng.forEach(function (c) { c._st = new Set(tokOf(o.name(c), SIM)); c._st.forEach(function (t) { df[t] = (df[t] || 0) + 1; }); });
-            if (eng.length >= SIM.genericMinRows) eng.forEach(function (c) { c._st.forEach(function (t) { if (df[t] / eng.length > SIM.genericRatio) c._st.delete(t); }); });
+            var df = {}, dp = {}, projAll = {};
+            eng.forEach(function (c) {
+                var p = String(o.project(c) || '');
+                projAll[p] = 1;
+                c._st = new Set(tokOf(o.name(c), SIM));
+                c._st.forEach(function (t) { df[t] = (df[t] || 0) + 1; (dp[t] = dp[t] || {})[p] = 1; });
+            });
+            // 🩹 [2026-11-26 실측 — 회의 브리핑 18줄에서 "이동용 계측 선반 …" 4줄이 안 걸렸다] 한 프로젝트 안에서 여러 번 나오는 말(이동용·계측·선반)은
+            //    흔한 말이 아니라 **바로 그 비슷함의 신호**다. 목록에 프로젝트가 둘 이상이면 **여러 프로젝트에 퍼진 말**만 흔한 말로 뺀다
+            //    (확인·요청·일정 같은 말은 여러 프로젝트에 나온다). 프로젝트가 하나뿐인 목록은 예전 규칙 그대로.
+            var multiProj = Object.keys(projAll).length >= 2;
+            if (eng.length >= SIM.genericMinRows) eng.forEach(function (c) { c._st.forEach(function (t) {
+                if (df[t] / eng.length > SIM.genericRatio && (!multiProj || Object.keys(dp[t]).length >= (SIM.genericMinProjects || 2))) c._st.delete(t);
+            }); });
             var taken = {};
             eng.forEach(function (a, ai) {
                 if (taken[ai] || !a._st.size) return;
