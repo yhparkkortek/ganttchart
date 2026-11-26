@@ -165,6 +165,8 @@ window._noticeUpdateSelectState = function() {
     const selAllCb = document.getElementById('notice-select-all');
     const delSelBtn = document.getElementById('btn-notice-delete-selected');
     if (selAllCb) selAllCb.checked = cbs.length > 0 && checked.length === cbs.length;
+    // 🟨 [2026-11-26 "행 강조 통일"] 체크한 행은 다른 표의 선택 행(.bm-selected)과 같은 노란 배경 — 전엔 체크박스만 바뀌고 줄은 그대로였다
+    cbs.forEach(c => { const tr = c.closest('tr'); if (tr) tr.classList.toggle('ui-row-checked', c.checked); });
     if (delSelBtn) {
         if (checked.length > 0) {
             const _en = window._currentLang === 'en';

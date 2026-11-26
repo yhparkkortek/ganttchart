@@ -1301,6 +1301,8 @@ tbody[id^="sum-materials-rows-"] input { font-size: inherit; font-family: inheri
 .bm-no { cursor:pointer; text-align:center; user-select:none; font-size:11.5px; color:#888; }
 .bm-no:hover { background-color:#e9ecef; }
 tr.bm-selected > td { background-color:#fff3cd !important; }
+/* 🟨 [2026-11-26] 체크박스로 고른 행(Alarm·Notice)도 같은 노란 배경 — 테두리는 No. 칸 선택(.bm-selected)만 */
+tr.ui-row-checked > td { background-color:#fff3cd !important; }
 /* 💡 [2026-08-31 신규] 노란 배경만으로는 선택된 행 경계가 잘 안 보인다는 지적 — 위/아래 테두리로
    행 전체를 감싸고, border-collapse로 인접 셀과 선이 겹치는 좌/우 끝 칸에는 별도로 좌/우 테두리도 추가. */
 tr.bm-selected > td { border-top:2px solid #ffc107 !important; border-bottom:2px solid #ffc107 !important; }
