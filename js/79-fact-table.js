@@ -87,7 +87,9 @@
             var tdBase = 'padding:6px 8px; border-right:1px solid var(--ui-cell-line, #cfe3e5); border-bottom:1px solid var(--ui-cell-line, #cfe3e5); vertical-align:top; font-size:12.5px;';
             var head = cols.map(function (c) {
                 var on = c.sort && s.col === c.id;
+                // 🚩 [2026-11-26 사용자 요청 "아래 행들과 동일하게"] thHtml 로 머리글 바(`.rp-bar-head`)를 놓는 칸은 아래 행의 `.rp-cell.rp-pad` 와 같은 자리에 — 그래야 바가 칸 왼쪽 끝에 붙는다.
                 return '<th' + (c.sort ? ' onclick="window._ftSort(\'' + id + '\', \'' + c.id + '\')" title="' + esc(T('눌러서 정렬 (오름↔내림)', 'Click to sort (asc/desc)')) + '"' : '') +
+                       (c.thHtml ? ' class="rp-cell rp-pad"' : '') +
                        ' style="' + thBase + (c.sort ? ' cursor:pointer; user-select:none;' : '') + (c.w ? ' width:' + c.w + ';' : '') + (c.thPad ? ' padding:' + c.thPad + ';' : '') + '">' +
                        (c.thHtml ? '<span style="display:inline-flex; align-items:center; gap:4px;">' + c.thHtml(view) + esc(c.label || '') + (on && window._uiSortMark ? window._uiSortMark(s.dir > 0) : '') + '</span>'
                                  : esc(c.label || '') + (on && window._uiSortMark ? window._uiSortMark(s.dir > 0) : '')) + '</th>';

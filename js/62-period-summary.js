@@ -1504,7 +1504,8 @@
         // ── 표 ──
         var td = 'padding:6px 8px; border-right:1px solid var(--ui-cell-line, #cfe3e5); border-bottom:1px solid var(--ui-cell-line, #cfe3e5); vertical-align:top; font-size:' + fs + 'px; line-height:1.5;';
         var allRg = [];
-        var th = function (label, w, pre) { return '<th style="position:sticky; top:0; z-index:20; width:' + w + '; padding:10px 8px; background:#eef6f7; color:#2c5f8a; border-right:1px solid var(--ui-cell-line, #cfe3e5); border-bottom:1px solid var(--ui-cell-line, #cfe3e5); font-size:12.5px; font-weight:600; text-align:center; white-space:nowrap;">' + (pre || '') + esc(label) + '</th>'; };
+        // 🚩 [2026-11-26 사용자 요청 "아래 행들과 동일하게"] pre(머리글 바)가 있으면 아래 행의 `.rp-cell.rp-pad` 와 같은 자리에 — 바가 칸 왼쪽 끝에 붙는다.
+        var th = function (label, w, pre) { return '<th' + (pre ? ' class="rp-cell rp-pad"' : '') + ' style="position:sticky; top:0; z-index:20; width:' + w + '; padding:10px 8px; background:#eef6f7; color:#2c5f8a; border-right:1px solid var(--ui-cell-line, #cfe3e5); border-bottom:1px solid var(--ui-cell-line, #cfe3e5); font-size:12.5px; font-weight:600; text-align:center; white-space:nowrap;">' + (pre || '') + esc(label) + '</th>'; };
         var body = '';
         groups.forEach(function (g) {
             body += '<tr><td colspan="5" style="padding:6px 8px; background:#e3eef6; border-bottom:1px solid var(--ui-cell-line, #cfe3e5); font-weight:bold; color:#2c5f8a; font-size:' + fs + 'px;">' +
@@ -1560,9 +1561,10 @@
     function rowsTableHtml() {
         var rows = viewRows();
         var all = (_psLast && _psLast.shown && _psLast.shown.rows) || [];
+        // 🚩 [2026-11-26 사용자 요청 "아래 행들과 동일하게"] pre(머리글 바)가 있으면 아래 행의 `.rp-cell.rp-pad` 와 같은 자리에 — 바가 칸 왼쪽 끝에 붙는다.
         var th = function (id, label, w, pre) {
             var on = _psTbl.sort === id;
-            return '<th onclick="window._psTblSort(\'' + id + '\')" style="position:sticky; top:0; z-index:20; cursor:pointer; user-select:none; white-space:nowrap; padding:10px 8px; background:#eef6f7; color:#2c5f8a; border-right:1px solid var(--ui-cell-line, #cfe3e5); border-bottom:1px solid var(--ui-cell-line, #cfe3e5); font-size:12.5px; font-weight:600; text-align:center;' + (w ? ' width:' + w + ';' : '') + '" title="' + esc(T('눌러서 정렬 (오름↔내림)', 'Click to sort (asc/desc)')) + '">' +
+            return '<th' + (pre ? ' class="rp-cell rp-pad"' : '') + ' onclick="window._psTblSort(\'' + id + '\')" style="position:sticky; top:0; z-index:20; cursor:pointer; user-select:none; white-space:nowrap; padding:10px 8px; background:#eef6f7; color:#2c5f8a; border-right:1px solid var(--ui-cell-line, #cfe3e5); border-bottom:1px solid var(--ui-cell-line, #cfe3e5); font-size:12.5px; font-weight:600; text-align:center;' + (w ? ' width:' + w + ';' : '') + '" title="' + esc(T('눌러서 정렬 (오름↔내림)', 'Click to sort (asc/desc)')) + '">' +
                    (pre ? '<span style="display:inline-flex; align-items:center; gap:4px;">' + pre + esc(label) + (on ? window._uiSortMark(_psTbl.dir > 0) : '') + '</span>' : esc(label) + (on ? window._uiSortMark(_psTbl.dir > 0) : '')) + '</th>';
         };
         var td = 'padding:6px 8px; border-right:1px solid var(--ui-cell-line, #cfe3e5); border-bottom:1px solid var(--ui-cell-line, #cfe3e5); vertical-align:top; font-size:12.5px;';
