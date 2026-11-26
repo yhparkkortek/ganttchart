@@ -5,6 +5,8 @@
     var w = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
     try {
         window.dailyOpenModal(); await w(3000);
+        // 📅 [2026-11-26] 후보 기준이 **시작일**이라 '오늘' 만 보면 5건 안팎이다 — 묶을 중복이 있는 **이번주**로 본다(기간 모드도 같이 시험된다)
+        window._dailySetCandPeriodMode('week'); await w(1500);
         // ⚠️ 다른 프로젝트 훑기가 끝나기 전엔 묶음 크기가 바뀐다(훑을 때마다 목록이 다시 그려진다) — 끝날 때까지 기다린다
         for (var wi = 0; wi < 40 && window._dailyOtherScan && window._dailyOtherScan.busy; wi++) await w(500);
         await w(800);

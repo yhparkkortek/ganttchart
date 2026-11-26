@@ -83,7 +83,11 @@
         //       맡은 경우를 색인으로는 알 수 없으므로 확인은 파일에서 한다.)
         //   ⚠️ 끄면 팀의 모든 프로젝트 업무가 후보에 뜬다(실측 170건 중 154건이 남의 일이었다).
         onlyMyProjects: true,
-        maxCandidates: 80        // 후보 목록에 한 번에 보일 수 상한(여러 프로젝트가 섞인다)
+        maxCandidates: 80,       // 후보 목록에 한 번에 보일 수 상한(여러 프로젝트가 섞인다)
+        // 📅 [2026-11-26 사용자 요청 "일일보고에 오늘 소팅된 업무가 많다 — 기간이 걸린 모든 업무가 아니라 **시작일(메일 수신일)만**"]
+        //    후보에 드는 기준. 'start' = 그 날짜(기간이면 그 기간 안)에 **시작한** 업무만(기본). 'overlap' = 예전처럼 기간이 걸치기만 해도 든다.
+        //    ⚠️ 메일에서 들어온 행은 시작일이 곧 메일 수신일이라 "그날 들어온 일" 이 된다. 시작일이 비어 있으면 완료일로 대신한다.
+        matchBy: 'start'
     };
 
     window.DAILY_PATHS = window.DAILY_PATHS || {
@@ -667,7 +671,8 @@
             if (!s && ci.start != null && ci.start !== -1) s = tsOf(row[ci.start]);
             if (!e && ci.plan != null && ci.plan !== -1) e = tsOf(row[ci.plan]);
             if (!s && !e) continue;
-            if (!((s || e) <= dayEnd && (e || s) >= day)) continue;
+            if ((window.DAILY_SCAN || {}).matchBy === 'overlap') { if (!((s || e) <= dayEnd && (e || s) >= day)) continue; }
+            else { var sd = s || e; if (!(sd >= day && sd <= dayEnd)) continue; }   // 시작일만 — 진행 중이라 기간이 걸쳤을 뿐인 업무는 안 든다
             var nm = rowName(row);
             if (!nm) continue;
             if (!catByName[nm]) catByName[nm] = catOf(row);
@@ -689,10 +694,8 @@
                 late: (typeof window._ganttIsOverdue === 'function')
                     ? window._ganttIsOverdue(row, ci, day)
                     : !!(e && e < day && String((ci.status !== -1 && row[ci.status]) || '') !== '완료'),
-                // 📅 [2026-11-17 요청] "이 업무가 왜 이 날짜에 뜨지?" — 기간이 겹치기만 해도
-                //    후보로 든다(진행 중인 업무도 매일 다시 챙기라고 일부러 넓게 잡은 설계).
-                //    여러 날에 걸친 업무(회의 시리즈·출하 일정 등)는 화면에 그 기간을 같이
-                //    보여 줘서 "오늘만의 일"로 오인하지 않게 한다.
+                // 📅 [2026-11-17 요청] "이 업무가 왜 이 날짜에 뜨지?" — 예전엔 기간이 겹치기만 해도 후보로 들었다(진행 중인 업무도
+                //    매일 다시 챙기라는 설계). **[2026-11-26] 시작일만 든다**(`DAILY_SCAN.matchBy`) — 그래도 기간은 화면에 같이 보여 준다.
                 start: s || 0, end: e || 0
             };
             (isMine(row, ctx) ? out.mine : out.others).push(item);

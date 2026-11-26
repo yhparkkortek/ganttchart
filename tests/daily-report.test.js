@@ -96,6 +96,9 @@ win.nasAppFile = {
 // ── 진짜 js/79(공용 사실 표 — js/59 가 후보 목록을 그릴 때 쓴다, 2026-11-26) ──
 new Function('window', 'document', 'localStorage',
     fs.readFileSync(path.join(__dirname, '..', 'js', '79-fact-table.js'), 'utf8'))(win, global.document, global.localStorage);
+// ── 진짜 js/80(간트 행 조작 — 붉은 바·현황·삭제, 2026-11-26)과 js/81(같은 메일 묶기·비슷한 업무) — js/59 가 후보 표를 그릴 때 쓴다 ──
+['80-report-row-ops.js', '81-fact-dup.js'].forEach((f) => new Function('window', 'document', 'localStorage',
+    fs.readFileSync(path.join(__dirname, '..', 'js', f), 'utf8'))(win, global.document, global.localStorage));
 // ── 진짜 js/59 로드 ─────────────────────────────────────────────────────────
 const src = fs.readFileSync(path.join(__dirname, '..', 'js', '59-daily-report.js'), 'utf8');
 new Function('window', 'document', 'localStorage', src)(win, global.document, global.localStorage);
@@ -177,7 +180,9 @@ win.globalData = [
     //    lvl4 를 lvl3 뒤에 둬서 "업무가 하나 사라진다"고 오해했다 — 코드가 아니라 픽스처가 틀렸다.
     row(3, '사출물 견적', '[자료제공][a → b] 2026-11-04\n[핵심내용]견적 접수\n[To do]검토\n[출처]x', t0, t0, 'HW'), // 남의 일
     row(3, '영업 확인', '[핵심내용]가격 확인\n[출처]y', t0, t0, '영업'),     // 정규화되면 SAL=장영익 → 남의 일
-    row(3, '지난 업무', '[핵심내용]옛것\n[출처]z', t0 - 86400000 * 9, t0 - 86400000 * 8, 'PM') // 오늘 아님
+    row(3, '지난 업무', '[핵심내용]옛것\n[출처]z', t0 - 86400000 * 9, t0 - 86400000 * 8, 'PM'), // 오늘 아님
+    // 📅 [2026-11-26 사용자 요청 "시작일(메일 수신일)만"] 어제 시작해 오늘까지 **이어지는** 업무 — 기간만 걸쳤을 뿐 오늘 시작이 아니다
+    row(3, '진행 중 장기 업무', '[핵심내용]어제 시작\n[출처]w', t0 - 86400000, t0 + 86400000 * 2, 'PM')
 ];
 win.changeLogs = [];
 win._dailyRosterSet = null;
@@ -268,6 +273,18 @@ nas[win.DAILY_PATHS.roster] = JSON.stringify({ members: [
         d3.mine.concat(d3.others).some((x) => x.name.indexOf('인증비용 문의') === 0));
     ok('기간이 오늘까지 걸치면 "손댄 업무"(changeLogs)도 그대로 잡힌다',
         d3.touched.length === 1 && d3.touched[0].name === '사출물 견적', JSON.stringify(d3.touched));
+    // 📅 [2026-11-26] 후보 기준은 **시작일**(DAILY_SCAN.matchBy) — 기간이 걸치기만 한 업무는 안 든다
+    ok('어제 시작해 오늘까지 이어지는 업무는 오늘 후보에 안 든다(시작일만)',
+        !win.dailyBuildDraft(today).mine.concat(win.dailyBuildDraft(today).others).some((x) => x.name === '진행 중 장기 업무'));
+    const yStr = win._dailyYmd(new Date(t0 - 86400000));
+    const dY = win.dailyBuildDraft(yStr);
+    ok('시작한 날(어제)엔 그 업무가 후보에 든다', dY.mine.concat(dY.others).some((x) => x.name === '진행 중 장기 업무'));
+    ok('기간을 주면 그 안에서 **시작한** 업무가 든다(어제~오늘)',
+        d3.mine.concat(d3.others).some((x) => x.name === '진행 중 장기 업무'));
+    win.DAILY_SCAN.matchBy = 'overlap';
+    const dOv = win.dailyBuildDraft(today);
+    ok('matchBy=overlap 이면 예전처럼 기간이 걸친 업무도 든다(되돌리는 스위치)', dOv.mine.concat(dOv.others).some((x) => x.name === '진행 중 장기 업무'));
+    win.DAILY_SCAN.matchBy = 'start';
     const d4 = win.dailyBuildDraft(today);   // endDateStr 생략
     ok('endDateStr 생략하면(하루만) 지난 업무는 여전히 안 보인다 — 하위호환',
         !d4.mine.concat(d4.others).some((x) => x.name === '지난 업무'));

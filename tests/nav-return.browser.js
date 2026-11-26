@@ -25,10 +25,13 @@
         bb.click(); await w(500);
         ok('돌아가기를 누르면 원문 창이 닫힌다', !shown('inbox-mailraw-modal'));
         ok('목록 스크롤이 원래 자리로 돌아온다', Math.abs(sc.scrollTop - top0) < 80 || !!document.getElementById(tr.id), [sc.scrollTop, top0]);
+        // ⚠️ 깜빡임은 클릭 60ms 뒤 켜져 1.6초 유지된다 — 숨은 탭은 타이머가 1초 단위로 늦으니 **나타날 때까지** 기다린다(고정 대기는 가짜 실패)
+        for (var fi = 0; fi < 30 && !/240, 140, 0|f08c00/i.test(String((document.getElementById(tr.id) || tr).style.boxShadow)); fi++) await w(100);
         ok('연 줄을 깜빡여 보여 준다(테두리 그림자)', /inset|rgb\(240, 140, 0\)/.test(getComputedStyle(document.getElementById(tr.id) || tr).boxShadow) || /240, 140, 0/.test(String(document.getElementById(tr.id).style.boxShadow)), document.getElementById(tr.id).style.boxShadow);
         ok('프로젝트 리뷰 탭에 그대로 있다', window._nav.activeTab() === 'psummary');
         // ── 2) 탭이 바뀐 뒤에도 연 탭으로 ──
-        var ctx = (function () { var f = document.querySelector('#ps-facts-body tbody tr[id^="ps-fact-"]'); var ev = { target: f.querySelector('td') }; window.event = undefined; return window._nav.capture(); })();
+        // ⚠️ `window.event = undefined` 금지 — event 는 대체 가능 속성이라 대입하면 페이지의 window.event 가 영구히 덮어써져 이후 capture 가 줄을 못 잡는다(2026-11-26 실제로 가짜 실패)
+        var ctx = window._nav.capture();
         window.switchTab('gantt'); await w(400);
         ok('다른 탭(간트)으로 옮겼다', window._nav.activeTab() === 'gantt');
         window._nav.restore(ctx); await w(500);
