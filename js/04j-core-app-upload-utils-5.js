@@ -43,7 +43,7 @@
             statusTd.setAttribute('data-raw', encodeURIComponent(newVal));
             const sel = statusTd.querySelector('select');
             if (sel) sel.innerHTML = window._ganttStatusOptionsHtml(newVal);
-            statusTd.classList.remove('st-todo', 'st-done', 'st-blocked');
+            statusTd.classList.remove('st-todo', 'st-done', 'st-blocked', 'st-decision');
             statusTd.classList.add('st-' + window._ganttStatusKind(newVal));
         }
 
@@ -743,14 +743,17 @@
     //    일일보고·Project Review·텔레그램 서식이 이미 쓰는 말이라 페이지끼리 같은 말이 된다.
     //    ⚠️ **저장값은 그대로**(진행/완료/지연 — 필터·지연 판정·아침 브리핑(파이썬 사본)·JIRA·AI 문답·
     //    엑셀 왕복이 전부 이 값을 읽는다). 바꾸는 건 **화면 이름**뿐이고 그 표가 이 데이터 한 곳이다.
-    //    '대기' 는 고를 수 없게 뺐다 — 이미 '대기' 로 저장된 행은 데이터를 안 고치고 '할 일' 로 보인다
-    //    (사람이 다시 고르면 그때 '진행' 으로 바뀐다). '보류' 도 옛 값이라 '막힌 일' 로 보인다.
+    //    🟣 (같은 날 2차, 사용자 결정) **넷으로 — Project Review 와 같은 분류**: 한 일 / 할 일 / 막힌 일 /
+    //    결정·요청. 색·모양도 리뷰 칩과 같다(styles.css `.status-td.st-*` — 값은 js/62 P.summaryCats 와 같다).
+    //    '결정·요청' 의 저장값은 **기존 '대기'** 를 다시 쓴다 — 새 값을 만들면 필터·지연 판정·아침 브리핑
+    //    (파이썬 사본)·JIRA·엑셀이 모르는 값이 되지만 '대기' 는 다들 이미 안다. 그래서 옛 '대기' 행은
+    //    '결정·요청' 으로 보인다(기다리는 일 ≈ 정해 줘야 할 일). '보류' 는 옛 값이라 '막힌 일' 로 보인다.
     window.GANTT_STATUS_LABELS = {
-        ko: { '진행': '할 일', '완료': '한 일', '지연': '막힌 일', '대기': '할 일', '보류': '막힌 일' },
-        en: { '진행': 'To do', '완료': 'Done',  '지연': 'Blocked', '대기': 'To do', '보류': 'Blocked' }
+        ko: { '진행': '할 일', '완료': '한 일', '지연': '막힌 일', '대기': '결정·요청', '보류': '막힌 일' },
+        en: { '진행': 'To do', '완료': 'Done',  '지연': 'Blocked', '대기': 'Decision', '보류': 'Blocked' }
     };
-    window.GANTT_STATUS_CHOICES = ['진행', '완료', '지연'];          // 드롭다운에 보이는 셋(한국어 저장값 기준)
-    window.GANTT_STATUS_KIND = { '진행': 'todo', '대기': 'todo', '완료': 'done', '지연': 'blocked', '보류': 'blocked' };
+    window.GANTT_STATUS_CHOICES = ['완료', '진행', '지연', '대기'];   // 드롭다운 순서 = 리뷰 순서(한 일·할 일·막힌 일·결정·요청)
+    window.GANTT_STATUS_KIND = { '진행': 'todo', '대기': 'decision', '완료': 'done', '지연': 'blocked', '보류': 'blocked' };
     /** 어떤 표기(영문·소문자·옛 '보류' 등)든 한국어 저장값 넷 중 하나로. 모르면 원래 글자 그대로. */
     window._ganttStatusKo = function (v) {
         var s = (v == null ? '' : String(v)).trim();
@@ -768,14 +771,15 @@
     /** 필터 버튼 이름 — 옛 값(대기·보류)이 남은 프로젝트에서 같은 이름 버튼이 둘 생기지 않게 꼬리를 단다 */
     window._ganttStatusFilterLabel = function (v) {
         var ko = window._ganttStatusKo(v), lb = window._ganttStatusLabel(v);
-        if (ko === '대기' || ko === '보류') lb += window._currentLang === 'en' ? ' (old: ' + ko + ')' : ' (옛 ' + ko + ')';
+        if (ko === '보류') lb += window._currentLang === 'en' ? ' (old: ' + ko + ')' : ' (옛 ' + ko + ')';
         return lb;
     };
     /** 사람/AI 가 말한 상태 낱말 → 저장값(진행/완료/지연). 화면 이름·옛 값·영문 다 받는다. 모르면 ''. */
     window.GANTT_STATUS_WORDS = {
-        '진행': ['할 일', '할일', '진행', '진행중', '대기', 'to do', 'todo', 'on going', 'in progress', 'pending'],
+        '진행': ['할 일', '할일', '진행', '진행중', 'to do', 'todo', 'on going', 'in progress'],
         '완료': ['한 일', '한일', '완료', 'done', 'complete', 'completed'],
-        '지연': ['막힌 일', '막힌일', '막힘', '지연', '보류', 'blocked', 'delay', 'on hold']
+        '지연': ['막힌 일', '막힌일', '막힘', '지연', '보류', 'blocked', 'delay', 'on hold'],
+        '대기': ['결정·요청', '결정 요청', '결정/요청', '결정요청', '결정', '요청', '대기', 'decision', 'request', 'pending']
     };
     window._ganttStatusStore = function (word) {
         var w = (word == null ? '' : String(word)).trim().toLowerCase();
@@ -785,7 +789,7 @@
         }
         return '';
     };
-    /** 칩 종류 — todo / done / blocked (모르는 값은 todo) */
+    /** 칩 종류 — todo / done / blocked / decision (모르는 값은 todo) */
     window._ganttStatusKind = function (v) {
         return window.GANTT_STATUS_KIND[window._ganttStatusKo(v)] || 'todo';
     };

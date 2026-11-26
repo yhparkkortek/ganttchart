@@ -625,23 +625,20 @@ thead th { text-align: center; }
         color: rgba(0, 0, 0, 0.2) !important;
     }
 
-    /* 🏷 [2026-11-26] 상태는 줄 전체가 아니라 **상태 칸의 칩**으로 보인다(할 일 / 한 일 / 막힌 일).
+    /* 🏷 [2026-11-26] 상태는 줄 전체가 아니라 **상태 칸의 칩**으로 보인다(한 일 / 할 일 / 막힌 일 / 결정·요청).
+       🟣 모양·색은 Project Review 분류 칩과 **같은 값**(js/62 P.summaryCats — 연한 바탕 + 진한 글자, 둥근 9px,
+       11px 굵게). 한쪽을 바꾸면 다른 쪽도 같이 바꿀 것.
        예전엔 지연=줄 전체 빨강·대기=줄 전체 주황이라 칸 자체는 눈에 안 띄고 줄만 튀었다.
        '한 일' 줄의 흐림(위 status-done)은 그대로 둔다. 상태 데이터는 js/04j GANTT_STATUS_* 한 곳. */
     #myTable tbody tr td.status-td .status-select {
         display: inline-block; min-width: 46px; max-width: 100%; box-sizing: border-box;
-        padding: 1px 6px; border-radius: 10px; border: 1px solid transparent;
-        font-size: 11.5px; line-height: 16px; text-align: center; text-align-last: center; cursor: pointer;
+        padding: 1px 7px; border-radius: 9px; border: none !important;
+        font-size: 11px; font-weight: bold !important; line-height: 16px; text-align: center; text-align-last: center; cursor: pointer;
     }
-    #myTable tbody tr td.status-td.st-todo .status-select {
-        background: #fff !important; color: var(--ui-accent, #00707d) !important; border-color: var(--ui-accent, #00707d) !important;
-    }
-    #myTable tbody tr td.status-td.st-done .status-select {
-        background: #e9ecef !important; color: #868e96 !important; border-color: #dee2e6 !important;
-    }
-    #myTable tbody tr td.status-td.st-blocked .status-select {
-        background: #e03131 !important; color: #fff !important; border-color: #e03131 !important; font-weight: bold;
-    }
+    #myTable tbody tr td.status-td.st-done .status-select     { background: #ebfbee !important; color: #2f9e44 !important; }
+    #myTable tbody tr td.status-td.st-todo .status-select     { background: #e7f5ff !important; color: #1971c2 !important; }
+    #myTable tbody tr td.status-td.st-blocked .status-select  { background: #fff5f5 !important; color: #c92a2a !important; }
+    #myTable tbody tr td.status-td.st-decision .status-select { background: #f3f0ff !important; color: #7048e8 !important; }
     #myTable tbody tr td.status-td .status-select option { background: #fff; color: #333; font-weight: normal; }
 
     /* 알림 켜진 행 표시 (전체 행에 옅은 푸른 배경 + 좌측 강조선) — 지브라(줄무늬) 행보다 우선 적용되도록 tbody까지 포함해 우선순위 보강 */
