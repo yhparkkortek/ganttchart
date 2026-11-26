@@ -1065,8 +1065,10 @@
         //    ② 머리에 불투명 팔레트 배경(#e0f5f7 — js/21 이 테마색으로 바꾼다)과 쌓임 순서.
         if (body.id === 'psummary-page') { body.style.display = 'flex'; body.style.flexDirection = 'column'; body.style.overflow = 'hidden'; body.style.minHeight = '0'; }
         body.innerHTML = '<div id="ps-sticky" style="flex-shrink:0; position:relative; z-index:6; background:#e0f5f7; padding-bottom:4px; margin-bottom:6px; border-bottom:1px solid #a3d9e0;">' +
-            toolbarHtml(kind, col) + headHtml + secHtml + '</div>' +
+            toolbarHtml(kind, col) + headHtml + secHtml + '<div id="ps-meet-slot"></div></div>' +
             '<div id="ps-scroll" style="flex:1; min-height:0; overflow:auto;">' + h.join('') + '</div>';
+        if (!(shown && shown.rows.length)) _psMeetHtml = '';   // 표가 없으면 회의 상자도 없다(지난번 것이 남지 않게)
+        paintMeet();
         syncHeadH();
         fillArchiveSelect();
     }
@@ -1444,7 +1446,7 @@
         _psMeetTargets = [];
         function meetBox() {   // 표(업무 줄 번호)가 먼저 만들어져야 각 줄이 갈 자리를 안다
         if (items.length) {
-            box = '<div style="border:1px solid #f1b8b8; background:#fff5f5; border-radius:8px; padding:8px 12px; margin-bottom:10px; font-size:' + fs + 'px;">' +
+            box = '<div style="border:1px solid #f1b8b8; background:#fff5f5; border-radius:8px; padding:8px 12px; margin:6px 0 2px; max-height:32vh; overflow:auto; font-size:' + fs + 'px;">' +
                 '<div style="font-weight:bold; color:#c92a2a; margin-bottom:4px;">🚩 ' + esc(T('오늘 회의에서 정할 것 ' + items.length + '건', 'To settle in the meeting: ' + items.length)) + '</div>' +
                 items.map(function (it, i) {
                     var r = it.r, ppl = peopleOf(r), roles = rolesOf(r);
@@ -1484,7 +1486,8 @@
             });
         });
         meetBox();
-        return box + '<table class="ui-round-tbl" style="width:100%; border-collapse:separate; border-spacing:0; border-left:1px solid var(--ui-cell-line, #cfe3e5); border-top:1px solid var(--ui-cell-line, #cfe3e5); table-layout:fixed; background:#fff;"><thead><tr>' +
+        _psMeetHtml = box;   // 📌 회의 상자는 표와 같이 스크롤하지 않는다 — 고정 머리(#ps-meet-slot)에 따로 그린다(paintMeet)
+        return '<table class="ui-round-tbl" style="width:100%; border-collapse:separate; border-spacing:0; border-left:1px solid var(--ui-cell-line, #cfe3e5); border-top:1px solid var(--ui-cell-line, #cfe3e5); table-layout:fixed; background:#fff;"><thead><tr>' +
             th(T('업무', 'Task'), '22%', window._rr.headHtml(allRg)) + th(T('지금 상태', 'Status'), '25%') + th(T('이슈·막힌 점', 'Issues'), '21%') + th(T('필요한 조치', 'Next actions'), '23%') + th(T('근거', 'Source'), '9%') +
             '</tr></thead><tbody>' + body + '</tbody></table>' +
             '<div style="font-size:11px; color:#888; margin-top:4px;">' + esc(T(rows.length + ' / ' + all.length + '행 · 문장마다 근거(#번호)가 있고 근거 없는 문장은 제거됩니다 · 담당자·경과일은 코드가 계산 · 담당자 변경은 📊 행 목록에서', rows.length + ' / ' + all.length + ' rows')) + '</div>';
@@ -1496,7 +1499,16 @@
         return '<span title="' + esc(ppl.join(', ')) + '" style="white-space:nowrap; cursor:default;"><span style="display:inline-block; max-width:84px; overflow:hidden; text-overflow:ellipsis; vertical-align:bottom;">' + esc(ppl[0]) + '</span>' +
                (ppl.length > 1 ? '<span style="color:#888;"> ' + esc(T('외 ' + (ppl.length - 1), '+' + (ppl.length - 1))) + '</span>' : '') + '</span>';
     }
-    function tableHtml() { return _psTbl.view === 'rows' ? rowsTableHtml() : briefHtml(); }
+    // 📌 [2026-11-26 사용자 요청 "오늘 회의에서 정할 것은 고정"] 브리핑의 회의 상자는 스크롤 밖 고정 머리(#ps-sticky 안 #ps-meet-slot)에 둔다.
+    //    표를 다시 그리는 모든 길이 tableHtml() 을 지나므로 여기서 같이 칠한다(첫 그리기는 body 를 만든 뒤 한 번 더 — paintMeet).
+    var _psMeetHtml = '';
+    function paintMeet() { var s = document.getElementById('ps-meet-slot'); if (s) s.innerHTML = _psMeetHtml; }
+    function tableHtml() {
+        _psMeetHtml = '';
+        var html = _psTbl.view === 'rows' ? rowsTableHtml() : briefHtml();
+        paintMeet();
+        return html;
+    }
     function rowsTableHtml() {
         var rows = viewRows();
         var all = (_psLast && _psLast.shown && _psLast.shown.rows) || [];

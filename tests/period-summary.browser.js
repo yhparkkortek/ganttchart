@@ -187,6 +187,11 @@
             window._psTblSet({ view: 'brief' });
             var meet = document.getElementById('ps-meet-0');
             ok('회의에서 정할 것 줄이 눌린다', !!meet && /_psGoBrief/.test(meet.getAttribute('onclick') || ''));
+            ok('회의 상자는 스크롤 밖 고정 머리에 있다', !!meet && !!meet.closest('#ps-sticky') && !meet.closest('#ps-scroll'));
+            window._psTblSet({ big: true });
+            ok('표를 다시 그려도(크게 보기) 회의 상자가 고정 머리에 하나만', document.querySelectorAll('#ps-sticky [id^="ps-meet-"]').length >= 1 && !document.querySelector('#ps-scroll [id^="ps-meet-"]') && document.querySelectorAll('#ps-meet-0').length === 1);
+            window._psTblSet({ big: false });
+            meet = document.getElementById('ps-meet-0');
             if (meet) {
                 meet.click();
                 var hint = document.getElementById('ps-meet-hint'), tr = hint && hint.closest('tr[id^="ps-brief-"]');
@@ -204,6 +209,7 @@
             }
             ok('"프로젝트를 열어야 바꿀 수 있다" 안내 띠는 없다', !/그 프로젝트를 열어야/.test(document.getElementById('psummary-page').textContent));
             window._psTblSet({ view: 'rows' });
+            ok('행 목록 보기로 바꾸면 회의 상자가 없다', !document.getElementById('ps-meet-0'));
         }
         // 🔁 [2026-11-23 "엑셀에 근거가 2번"] 같은 행의 두 사본(열린 쪽 #G7 · 훑은 쪽 #G200007)을 근거로 집어도 하나로
         var dup = window._psRowsFromAi({ items: [{ 분류: '한 일', 내용: 'x', 근거: ['#G7', '#G200007', '#G7'] }] },
