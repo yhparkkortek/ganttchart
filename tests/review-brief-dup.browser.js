@@ -38,6 +38,17 @@
             if (!document.getElementById('ps-meet-hint')) bad.push(i); else window._psBriefBack({ target: document.getElementById('ps-meet-hint') });
         }
         ok('회의 줄은 모두 업무 줄로 간다(' + meets.length + '건)', !bad.length, bad);
+        // 근거(#번호) → 사실 카드 → 카드를 누르면 **그 브리핑 업무 줄**로 돌아온다(2026-11-26 "근거 클릭시 위치 이동 안 됨"). 색은 한 가지.
+        var refA = document.querySelector('#ps-ai-tbl a[onclick*="_psGoFact"]');
+        if (refA) {
+            var fromTr = refA.closest('tr');
+            refA.click(); await w(400);
+            var hint = document.getElementById('ps-back-hint'), card = hint && hint.closest('[id^="ps-fact-"]');
+            ok('근거를 누르면 사실 카드로 가서 하이라이트', !!card && /255, 243, 191|fff3bf/.test(card.style.background), card && card.style.background);
+            window._psFactBack({ target: hint }); await w(400);
+            ok('카드를 누르면 그 브리핑 업무 줄로 돌아와 같은 색으로', !!fromTr && /255, 243, 191|fff3bf/.test(fromTr.style.background) && !document.getElementById('ps-back-hint'), fromTr && fromTr.id);
+            document.getElementById('psummary-page').dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+        }
         window._fdupMode('ps-brief', 'group'); await w(300);
         ok('묶기를 끄면 업무 수만큼 줄이 나온다', rows().length >= n0, [rows().length, n0]);
         window._fdupMode('ps-brief', 'group'); await w(300);

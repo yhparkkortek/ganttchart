@@ -202,7 +202,7 @@
                 var md = function (el) { el.dispatchEvent(new MouseEvent('mousedown', { bubbles: true })); };
                 if (tr) { md(tr.querySelector('td:nth-child(2)')); tr.querySelector('td:nth-child(2)').click(); }
                 var meet2 = document.getElementById('ps-meet-0');
-                ok('업무 줄을 누르면 안내·업무 줄 하이라이트가 지워지고 회의 줄이 하이라이트된다', !document.getElementById('ps-meet-hint') && !!meet2 && /ffe3e3|255, 227, 227/.test(meet2.style.background) && !!tr && !tr.style.background);
+                ok('업무 줄을 누르면 안내·업무 줄 하이라이트가 지워지고 회의 줄이 하이라이트된다', !document.getElementById('ps-meet-hint') && !!meet2 && /fff3bf|255, 243, 191/.test(meet2.style.background) && !!tr && !tr.style.background);
                 if (tr) tr.click();
                 ok('돌아온 뒤 업무 줄을 또 눌러도 아무 일 없다', !document.getElementById('ps-meet-hint'));
                 md(document.getElementById('psummary-page'));

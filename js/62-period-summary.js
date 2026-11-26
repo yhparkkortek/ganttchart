@@ -1363,7 +1363,7 @@
         el.firstElementChild.insertAdjacentHTML('afterbegin', '<div id="ps-meet-hint" style="float:right; font-size:10.5px; color:#1971c2;">↩ ' + esc(T('누르면 위로 돌아갑니다', 'Click to go back')) + '</div>');
         el.style.cursor = 'pointer';
         el.scrollIntoView({ block: 'center', behavior: 'smooth' });
-        flash(el, '#fff3bf');
+        flash(el);
     };
     window._psBriefBack = function (ev) {
         if (_psMeetBack == null) return;
@@ -1374,7 +1374,7 @@
         var hint = document.getElementById('ps-meet-hint'); if (hint) { var tr = hint.closest('tr'); hint.remove(); if (tr) tr.style.cursor = ''; }
         if (!back) return;
         back.scrollIntoView({ block: 'center', behavior: 'smooth' });
-        flash(back, '#ffe3e3');
+        flash(back);
     };
     function daysSince(d) {
         if (!d) return 0;
@@ -1746,7 +1746,7 @@
         else rerenderAi();
     };
     // 🎯 [2026-11-23 사용자 요청] 근거 → 그 사실 카드로 이동(상세·📧 원문) → 카드를 누르면 표의 그 행으로 돌아온다.
-    var _psBackRow = null;
+    var _psBackRow = null, _psBackId = '';
     // ✨ [2026-11-26 사용자 요청 "너무 빨리 사라진다 — 유지했다가 다른 곳을 누르거나 돌아가면 사라지게"]
     //    세 번 깜빡인 뒤 **켜진 채로 둔다**. 지우는 건 ① 다른 곳을 누를 때(그 칸 안을 누르면 유지 — 돌아가기 단추가 거기 있다)
     //    ② 다른 칸이 하이라이트될 때(돌아가기) — 한 번에 하나만.
@@ -1755,11 +1755,13 @@
         var el = _psHold; _psHold = null;
         if (el) { el.style.background = ''; el.style.boxShadow = ''; }
     }
-    function flash(el, color) {
+    // 🎨 [2026-11-26 사용자 요청 "깜박 하이라이트 통일화"] 이동한 곳은 어디든(회의 줄↔업무 줄, 근거↔사실 카드, 돌아오기) **같은 색 하나**.
+    var PS_HOLD_BG = '#fff3bf';
+    function flash(el) {
         if (!el) return;
         unflash();
         _psHold = el;
-        el.style.background = color; el.style.boxShadow = '0 0 0 2px #1971c2';
+        el.style.background = PS_HOLD_BG; el.style.boxShadow = '0 0 0 2px #1971c2';
         try { el.animate([{ opacity: 1 }, { opacity: 0.35 }, { opacity: 1 }], { duration: 500, iterations: 3 }); } catch (e) { /* 애니메이션 없는 브라우저 — 색은 남는다 */ }
     }
     document.addEventListener('mousedown', function (ev) {
@@ -1776,24 +1778,28 @@
             return;
         }
         _psBackRow = rowI;
+        // ↩ [2026-11-26 "근거 클릭시 위치 이동 안 됨"] 돌아올 자리 — 행 목록이면 그 행(ps-row-), **브리핑이면 그 업무 줄**(ps-brief-).
+        //    전엔 ps-row- 만 찾아서 브리핑에서 근거를 누르면 돌아올 곳이 없었다.
+        _psBackId = 'ps-row-' + rowI;
+        if (_psTbl.view !== 'rows') _psBriefTasks.forEach(function (t, n) { if (_psBackId.indexOf('ps-brief-') && t.ai.indexOf(rowI) >= 0) _psBackId = 'ps-brief-' + n; });
         var old = document.getElementById('ps-back-hint'); if (old) old.remove();
         // 표 행(TR) 안에 div 를 바로 넣을 수 없다 → 내용 칸(td)에 넣는다
         var host = el.tagName === 'TR' ? (el.querySelector('[data-ft-main]') || el.lastElementChild).parentNode : el;
         host.insertAdjacentHTML('afterbegin', '<div id="ps-back-hint" style="float:right; font-size:10.5px; color:#1971c2; cursor:pointer;">↩ ' + esc(T('누르면 표로 돌아갑니다', 'Click to go back')) + '</div>');
         el.style.cursor = 'pointer';
         el.scrollIntoView({ block: 'center', behavior: 'smooth' });
-        flash(el, '#e7f5ff');
+        flash(el);
     };
     window._psFactBack = function (ev) {
         if (_psBackRow == null) return;
         var t = ev && ev.target;
         if (t && t.closest && t.closest('button, a, select, input, textarea') && !t.closest('#ps-back-hint')) return;   // 카드 안 단추(원문·간트)는 그대로
-        var row = document.getElementById('ps-row-' + _psBackRow);
-        _psBackRow = null;
+        var row = document.getElementById(_psBackId || ('ps-row-' + _psBackRow));
+        _psBackRow = null; _psBackId = '';
         var hint = document.getElementById('ps-back-hint'); if (hint) { var card = hint.closest('[id^="ps-fact-"]'); hint.remove(); if (card) card.style.cursor = ''; }
         if (!row) return;
         row.scrollIntoView({ block: 'center', behavior: 'smooth' });
-        flash(row, '#fff3bf');
+        flash(row);
     };
     window._psShowMail = function (key) {
         var f = _psLast && _psLast.factByKey && _psLast.factByKey[key];
