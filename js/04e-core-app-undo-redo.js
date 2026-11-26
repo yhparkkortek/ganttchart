@@ -1386,6 +1386,7 @@
         return null;
     }
     const _WBS_GROUP_MAX_GAP_DAYS = 30; // 같은 그룹으로 볼 수 있는 시작일 간 최대 간격(1차 기본값)
+    const _WBS_GROUP_MIN_SHARED = 2;    // 묶음 제안 = 업무명의 안 흔한 낱말이 이만큼 이상 겹칠 때만(2026-11-26 사용자 요청, 1단어는 안 묶는다)
     // 💡 [2026-10-26 추가, 사용자 지적] 업무명만 보면 "승인원 요청"처럼 짧고 뭉뚱그린 제목은 서로
     //    다른 안건인데도 제목만으로는 구분이 안 된다 — 상세내용의 [핵심내용] 줄(AI가 메일 본문에서
     //    뽑은 요약, 26-topic-profile.js가 같은 태그를 같은 방식으로 이미 쓰고 있음)에 모델코드·부품명
@@ -1467,7 +1468,29 @@
                 if (!groups.has(key)) groups.set(key, []);
                 groups.get(key).push(idx);
             });
+            // 💡 [2026-11-26 사용자 요청 "1 단어만 같으면 묶음 제안 → 최소 2단어 이상"] 대표 토큰이 같아도
+            //    **업무명의 안 흔한 낱말이 _WBS_GROUP_MIN_SHARED 개 이상** 겹쳐야 같은 묶음이다(일일보고·리뷰의
+            //    비슷한 업무 알림 js/81 과 같은 기준). 앞사슬이 생기지 않게 첫 행(앵커)과 직접 비교하고,
+            //    남은 행끼리 다시 앵커를 잡아 나눈다.
+            const titleToks = new Map();
+            leafIdxs.forEach(function(i) {
+                titleToks.set(i, new Set(_wbsTokenize(_wbsRowOwnTitle(gd[i])).filter(function(t) { return !isCommon(t) && !/^\d+$/.test(t); }).map(function(t) { return t.toLowerCase(); })));
+            });
+            const split = [];
             groups.forEach(function(members, bestTok) {
+                let rest = members.slice();
+                while (rest.length >= 2) {
+                    const a = titleToks.get(rest[0]), keep = [rest[0]], left = [];
+                    rest.slice(1).forEach(function(i) {
+                        let sh = 0; titleToks.get(i).forEach(function(t) { if (a.has(t)) sh++; });
+                        (sh >= _WBS_GROUP_MIN_SHARED ? keep : left).push(i);
+                    });
+                    if (keep.length >= 2) split.push([keep, bestTok]);
+                    rest = left;
+                }
+            });
+            split.forEach(function(pair) {
+                const members = pair[0], bestTok = pair[1];
                 if (members.length < 2) return;
                 // 3) 주제가 같아도 시기가 동떨어져 있으면 별개로 본다 — 시작일 기준으로 정렬한 뒤,
                 //    연속한 두 업무의 간격이 _WBS_GROUP_MAX_GAP_DAYS를 넘으면 거기서 끊는다(날짜를
