@@ -1450,6 +1450,30 @@
         if (!rows.length) return '<div style="padding:18px 10px; text-align:center; color:#999; font-size:12.5px;">' + esc(all.length ? T('조건에 맞는 행이 없습니다', 'No rows match') : T('근거 있는 항목이 없었습니다 — 아래 사실 목록을 보세요', 'No grounded items')) + '</div>';
         var groups = briefModel(rows, all);
         _psBriefTasks = [];
+        // 🔗≈ [2026-11-26 사용자 요청 "브리핑에도 넣기"] 근거 사실 표와 **같은 공용 모듈(js/81)** — 같은 메일이 여러 프로젝트로 간 업무는 한 줄(🔗 ×N, 펼치면 프로젝트별),
+        //    같은 프로젝트에서 업무명 낱말이 2개 이상 겹치면 ≈ 로 알리기만. 프로젝트별 보기에서만(담당자별은 같은 업무가 사람마다 따로 있어야 한다).
+        var dupChips = '';
+        if (by === 'proj' && window._fdup) {
+            var flat = []; groups.forEach(function (g) { g.list.forEach(function (t) { flat.push(t); }); });
+            var taskMail = function (t) {
+                var m = null;
+                t.ai.forEach(function (ai) { if (!m && all[ai]) liveFacts(all[ai]).forEach(function (f) { if (!m && f.mailRaw) m = f.mailRaw; }); });
+                return m;
+            };
+            var dupB = window._fdup.build('ps-brief', flat, {
+                // 🔗 공통 이슈 줄은 이미 여러 프로젝트를 한 줄로 묶은 것이고 이름("공통 이슈")이 다 같다 — 묶기·비슷 판정에서 뺀다(서로 다른 문장이 하나로 합쳐졌다, 실측)
+                name: function (t) { return t.sub ? '\u0001' + t.ai.join('_') : t.task; },
+                core: function (t) { return t.ai.map(function (ai) { return (all[ai] || {}).text || ''; }).join('|'); },
+                mail: taskMail,
+                project: function (t) { return t.proj; },
+                prefer: function (t) { return ganttRowsOfTask(t).rows.length > 0; },   // 열린 프로젝트 업무가 대표(간트 조작이 거기서만 된다)
+                repaint: rerenderAi
+            });
+            var keepT = new Set(dupB.rows);
+            groups.forEach(function (g) { g.list = g.list.filter(function (t) { return keepT.has(t); }); });
+            groups = groups.filter(function (g) { return g.list.length; });
+            dupChips = window._fdup.chipsHtml('ps-brief');
+        }
         // ── 오늘 회의에서 정할 것 ──
         var items = rows.filter(function (r) { return r.cat === 'blocked' || r.cat === 'decision'; }).map(function (r) {
             return { r: r, age: rowAge(r), ai: all.indexOf(r) };
@@ -1468,6 +1492,7 @@
                 items.map(function (it, i) {
                     var r = it.r, ppl = peopleOf(r), roles = rolesOf(r);
                     var tn = -1; _psBriefTasks.forEach(function (t, n) { if (tn < 0 && t.ai.indexOf(it.ai) >= 0) tn = n; });
+                    if (tn < 0) _psBriefTasks.forEach(function (t, n) { if (tn < 0 && ((t._g && t._g.members) || []).concat((t._sim && t._sim.members) || []).some(function (m) { return m.ai.indexOf(it.ai) >= 0; })) tn = n; });   // 🔗 묶음 안에 접혀 있으면 대표 줄로
                     _psMeetTargets[i] = tn;
                     return '<div id="ps-meet-' + i + '" onclick="window._psGoBrief(' + i + ')" title="' + esc(T('누르면 아래 그 업무 줄로 갑니다', 'Click to jump to the task')) + '" style="line-height:1.65; cursor:pointer; border-radius:4px; padding:0 4px; margin:0 -4px; break-inside:avoid; transition:background .4s;">' + (i + 1) + '. <b style="color:#555;">[' + esc(r.common ? T('공통', 'Common') : (r.projects[0] || '')) + ']</b> ' + esc(r.text) + ' ' +
                         '<span style="' + window._uiBadgeStyle() + ' background:' + (r.cat === 'blocked' ? '#ffe3e3; color:#c92a2a' : '#fff3bf; color:#8f5a00') + ';">' + esc(r.cat === 'blocked' ? T('막힘', 'Blocked') : T('결정 필요', 'Decide')) + '</span>' +
@@ -1486,25 +1511,31 @@
                 (g.common ? '🔗 ' : (by === 'who' ? '👤 ' : '📁 ')) + esc(g.name) +
                 ' <span style="font-weight:normal; color:#667; font-size:11.5px;">· ' + esc(T('업무 ' + g.list.length + (g.nb ? ' · 막힘 ' + g.nb : '') + (g.nd ? ' · 결정 ' + g.nd : ''), g.list.length + ' tasks' + (g.nb ? ' · ' + g.nb + ' blocked' : '') + (g.nd ? ' · ' + g.nd + ' to decide' : ''))) + '</span></td></tr>';
             g.list.forEach(function (t, ti) {
+                taskRow(t, ti, false);
+                if (by === 'proj' && window._fdup) window._fdup.children('ps-brief', t).forEach(function (k) { taskRow(k, ti, true); });
+            });
+        });
+        function taskRow(t, ti, isChild) {
                 var n = _psBriefTasks.push(t) - 1;
                 var rg = ganttRowsOfTask(t).rows;
                 rg.forEach(function (ri) { if (allRg.indexOf(ri) < 0) allRg.push(ri); });
                 var sub = by === 'who' ? (t.proj ? '<div style="color:#888; font-size:11px;">' + esc(t.proj) + '</div>' : '') :
                     (t.sub ? '<div style="color:#888; font-size:11px;">' + esc(t.sub) + '</div>' : ((t.people.length || t.roles.length) ? '<div style="color:#666; font-size:11.5px;">' + whoTip(t.people, t.roles) + '</div>' : ''));
+                if (isChild && t._ck === 'grp' && t.proj) sub = '<div style="color:#2c5f8a; font-size:11px;">📁 ' + esc(t.proj) + '</div>' + sub;   // 🔗 펼친 줄 = 다른 프로젝트
                 var allOn = rg.length && rg.every(function (ri) { var g0 = (typeof globalData !== 'undefined' && globalData) ? globalData : window.globalData; return g0[ri] && g0[ri]._알림; });
                 body += '<tr id="ps-brief-' + n + '" onclick="window._psBriefBack(event)"' + (ti % 2 || allOn ? ' class="' + (ti % 2 ? 'ft-zebra-b ' : '') + (allOn ? 'rp-on' : '') + '"' : '') + ' style="transition:background .4s;">' +
-                    '<td class="rp-cell rp-pad" style="' + td + '">' + pinBtnHtml(rg, 'window._psPinBrief(' + n + ')') + '<b>' + esc(t.task) + '</b>' + sub + '</td>' +
+                    '<td class="rp-cell rp-pad" style="' + td + '">' + pinBtnHtml(rg, 'window._psPinBrief(' + n + ')') + (isChild ? window._fdup.childMark(t) : '') + '<b>' + esc(t.task) + '</b>' +
+                      (by === 'proj' && window._fdup ? window._fdup.cellHtml('ps-brief', t, isChild) : '') + sub + '</td>' +
                     '<td style="' + td + '">' + briefLines(t.rows.done) + '</td>' +
                     '<td style="' + td + '">' + briefLines(t.rows.blocked) +
                       (t.age >= 1 && t.rows.blocked.length ? '<span style="' + window._uiBadgeStyle() + ' background:#ffe3e3; color:#c92a2a;" title="' + esc(T('근거 메일 중 가장 이른 날짜 기준', 'Since the earliest source mail')) + '">' + esc(T(t.age + '일 경과', t.age + 'd')) + '</span>' : '') + '</td>' +
                     '<td style="' + td + '">' + briefLines(t.rows.todo.concat(t.rows.decision), true) + '</td>' +
                     '<td style="' + td + ' font-size:11px;">' + t.refs.map(function (x) { return refHtml(x, t.refs.some(function (y) { return y.p !== t.refs[0].p; }), t.ai[0]); }).join('<br>') +
                       (rg.length ? '<div style="margin-top:5px;">' + window._rr.opsHtml(rg, '') + '</div>' : '') + '</td></tr>';
-            });
-        });
+        }
         meetBox();
         _psMeetHtml = box;   // 📌 회의 상자는 표와 같이 스크롤하지 않는다 — 고정 머리(#ps-meet-slot)에 따로 그린다(paintMeet)
-        return '<table class="ui-round-tbl" style="width:100%; border-collapse:separate; border-spacing:0; border-left:1px solid var(--ui-cell-line, #cfe3e5); border-top:1px solid var(--ui-cell-line, #cfe3e5); table-layout:fixed; background:#fff;"><thead><tr>' +
+        return (dupChips ? '<div style="margin:2px 0 5px; display:flex; gap:5px; flex-wrap:wrap;">' + dupChips + '</div>' : '') + '<table class="ui-round-tbl" style="width:100%; border-collapse:separate; border-spacing:0; border-left:1px solid var(--ui-cell-line, #cfe3e5); border-top:1px solid var(--ui-cell-line, #cfe3e5); table-layout:fixed; background:#fff;"><thead><tr>' +
             th(T('업무', 'Task'), '22%', window._rr.headHtml(allRg)) + th(T('지금 상태', 'Status'), '25%') + th(T('이슈·막힌 점', 'Issues'), '21%') + th(T('필요한 조치', 'Next actions'), '23%') + th(T('근거', 'Source'), '9%') +
             '</tr></thead><tbody>' + body + '</tbody></table>' +
             '<div style="font-size:11px; color:#888; margin-top:4px;">' + esc(T(rows.length + ' / ' + all.length + '행 · 문장마다 근거(#번호)가 있고 근거 없는 문장은 제거됩니다 · 담당자·경과일은 코드가 계산 · 담당자 변경은 📊 행 목록에서', rows.length + ' / ' + all.length + ' rows')) + '</div>';
