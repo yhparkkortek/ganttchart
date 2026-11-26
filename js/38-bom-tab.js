@@ -961,7 +961,7 @@
 
         var colCount = BOM_COLUMNS.length + 2;
         if (!st || !st.rows || !st.rows.length) {
-            tbody.innerHTML = '<tr><td colspan="' + colCount + '" style="padding:28px; text-align:center; color:#999; border:1px solid #cfe3e5;">'
+            tbody.innerHTML = '<tr><td colspan="' + colCount + '" style="padding:24px 10px; text-align:center; color:#999; font-size:12.5px; border:1px solid #cfe3e5;">'
                 + _esc(_t('아직 조회한 BOM이 없습니다. 위에서 자재번호를 확인하고 "🔄 SAP 조회"를 누르세요.',
                     'No BOM yet. Check the material number above and press "🔄 Fetch from SAP".'))
                 + '</td></tr>';
@@ -1671,7 +1671,7 @@
             + '</tr>';
 
         if (!st || !st.rows || !st.rows.length) {
-            tbody.innerHTML = '<tr><td colspan="' + colCount + '" style="padding:28px; text-align:center; color:#999; border:1px solid #cfe3e5;">'
+            tbody.innerHTML = '<tr><td colspan="' + colCount + '" style="padding:24px 10px; text-align:center; color:#999; font-size:12.5px; border:1px solid #cfe3e5;">'
                 + _esc(_t('아직 조회한 BOM이 없습니다. 위에서 자재번호를 확인하고 "SAP 조회"를 누르세요.', 'No BOM yet. Enter a material number and press "Fetch from SAP".'))
                 + '</td></tr>';
             return;

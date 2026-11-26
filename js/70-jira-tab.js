@@ -481,7 +481,7 @@
                 emptyMsg = note || T('연결된 JIRA 이슈가 없습니다 — ⚙️ 연결 설정에서 키/검색어를 등록해주세요.',
                                      'No linked JIRA issues — register keys/keyword under ⚙️ Link settings.');
             }
-            box.innerHTML = '<div style="padding:30px; text-align:center; color:#999; font-size:12.5px;">' + emptyMsg + '</div>' + filterBar;
+            box.innerHTML = '<div style="padding:24px 10px; text-align:center; color:#999; font-size:12.5px;">' + emptyMsg + '</div>' + filterBar;
             return;
         }
         // ⚠️ table-layout:fixed 가 없으면 th 의 width 는 힌트일 뿐이라 브라우저가 내용 기준으로

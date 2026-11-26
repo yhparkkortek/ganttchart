@@ -111,7 +111,7 @@
                     }).join('');
             }).join('');
             if (!shown.length) {
-                body = '<tr><td colspan="' + cols.length + '" style="' + tdBase + ' text-align:center; color:#999; padding:14px;">' +
+                body = '<tr><td colspan="' + cols.length + '" style="' + tdBase + ' text-align:center; color:#999; padding:24px 10px;">' +
                        esc(rows.length ? T('조건에 맞는 행이 없습니다', 'No rows match') : (cfg.empty || T('항목이 없습니다', 'Nothing to show'))) + '</td></tr>';
             }
             var more = (cfg.max && view.length > cfg.max)

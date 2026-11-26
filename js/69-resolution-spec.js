@@ -453,7 +453,7 @@
         var customs = _customRows();
         if (!rows.length && !customs.length) {
             // 왜 비었는지 갈라서 말한다 — 접혀 있어 빈 것과 정말 없는 것은 다른 사실이다.
-            h += '<tr><td colspan="' + (2 + ports.length) + '" style="padding:18px; text-align:center; color:#868e96;">'
+            h += '<tr><td colspan="' + (2 + ports.length) + '" style="padding:24px 10px; text-align:center; color:#999; font-size:12.5px;">'
                + _esc(_onlyChecked
                       ? _t('아직 고른 해상도가 없습니다 — 위 [🔽 전체 보기] 를 눌러 고르세요.', 'Nothing picked yet.')
                       : _t('찾는 해상도가 없습니다 — 아래 [＋ CUSTOMER RESOLUTION 행 추가] 로 적어 넣을 수 있습니다.', 'No match.')) + '</td></tr>';

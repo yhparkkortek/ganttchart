@@ -1102,7 +1102,7 @@
         }).join('') + '#pl-table td.pl-no{text-align:center;cursor:pointer;color:#888;}</style>';
 
         wrap.innerHTML = stickyCss + '<table id="pl-table" class="concept-table pl-table" style="width:' + totalW + 'px;"><thead><tr>' + th + '</tr></thead><tbody>'
-                       + (body || '<tr><td colspan="' + cols.length + '" style="padding:30px; text-align:center; color:#888;">'
+                       + (body || '<tr><td colspan="' + cols.length + '" style="padding:24px 10px; text-align:center; color:#999; font-size:12.5px;">'
                           + _esc(_t('표가 비어 있습니다 — [📥 엑셀 불러오기]로 제품 목록 엑셀을 넣어주세요.',
                                     'The table is empty — use [📥 Import Excel] to load the product list.')) + '</td></tr>')
                        + '</tbody></table>';
