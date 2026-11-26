@@ -909,8 +909,11 @@
         //    본문만 스크롤한다. flex 자식은 기본 min-height:auto 라 **min-height:0 이 없으면 안 줄어든다**
         //    (docs/modal-ux.md "섹션을 더하면 모달이 조용히 잘린다"와 같은 함정).
         wrap.innerHTML =
-            '<div id="jira-search-box" style="pointer-events:all; position:fixed; left:50%; top:50%; transform:translate(-50%,-50%);'
-            + ' width:min(860px,94vw); height:min(760px,88vh); max-height:94vh; background:#fff; box-shadow:0 8px 30px rgba(0,0,0,.3); border-radius:10px; overflow:hidden;'
+            // 🩹 [2026-11-26 사용자 제보 2차] "패딩만으론 그대로임" — 진짜 원인은 패딩이 아니라 하단
+            //    고정 taskbar(AI 문답 등, z-index 99999)가 모달 위에 그대로 덮이는 것이었다. 다른 페이지
+            //    본문처럼 `--mt-reserve`(js/19, taskbar 높이)만큼 위로 올리고 높이도 그만큼 줄인다.
+            '<div id="jira-search-box" style="pointer-events:all; position:fixed; left:50%; top:calc(50% - var(--mt-reserve, 0px) / 2); transform:translate(-50%,-50%);'
+            + ' width:min(860px,94vw); height:min(760px, calc(88vh - var(--mt-reserve, 0px))); max-height:calc(94vh - var(--mt-reserve, 0px)); background:#fff; box-shadow:0 8px 30px rgba(0,0,0,.3); border-radius:10px; overflow:hidden;'
             + ' display:flex; flex-direction:column;">'
             + '<div id="jira-search-drag" style="flex:0 0 auto; padding:13px 18px; background:#e7f3ff; border-bottom:1px solid #a5c8f0; color:#1971c2; border-radius:10px 10px 0 0;'
             + ' cursor:grab; display:flex; align-items:center; gap:8px;">'
@@ -1334,8 +1337,9 @@
             wrap.id = 'jira-link-modal';
             wrap.style.cssText = 'display:none; position:fixed; inset:0; z-index:9300; pointer-events:none; background:none;';
             wrap.innerHTML =
-                '<div id="jira-link-box" style="pointer-events:all; position:fixed; left:50%; top:50%; transform:translate(-50%,-50%);'
-                + ' width:min(420px,94vw); max-height:86vh; background:#fff; box-shadow:0 8px 30px rgba(0,0,0,.3); border-radius:10px; overflow:hidden;'
+                // 🩹 [2026-11-26] 하단 고정 taskbar 와 안 겹치게 — jira-search-box 와 같은 처리(--mt-reserve)
+                '<div id="jira-link-box" style="pointer-events:all; position:fixed; left:50%; top:calc(50% - var(--mt-reserve, 0px) / 2); transform:translate(-50%,-50%);'
+                + ' width:min(420px,94vw); max-height:calc(86vh - var(--mt-reserve, 0px)); background:#fff; box-shadow:0 8px 30px rgba(0,0,0,.3); border-radius:10px; overflow:hidden;'
                 + ' display:flex; flex-direction:column;">'
                 + '<div id="jira-link-drag" style="padding:13px 18px; background:#e7f3ff; border-bottom:1px solid #a5c8f0; color:#1971c2; border-radius:10px 10px 0 0;'
                 + ' cursor:grab; display:flex; align-items:center; gap:8px;">'
@@ -1804,8 +1808,9 @@
             document.body.appendChild(wrap);
         }
         wrap.innerHTML =
-            '<div id="jira-issue-box" style="pointer-events:all; position:fixed; left:50%; top:50%; transform:translate(-50%,-50%);'
-            + ' width:min(640px,94vw); max-height:88vh; background:#fff; box-shadow:0 8px 30px rgba(0,0,0,.3); border-radius:10px; overflow:hidden;'
+            // 🩹 [2026-11-26] 하단 고정 taskbar 와 안 겹치게 — jira-search-box 와 같은 처리(--mt-reserve)
+            '<div id="jira-issue-box" style="pointer-events:all; position:fixed; left:50%; top:calc(50% - var(--mt-reserve, 0px) / 2); transform:translate(-50%,-50%);'
+            + ' width:min(640px,94vw); max-height:calc(88vh - var(--mt-reserve, 0px)); background:#fff; box-shadow:0 8px 30px rgba(0,0,0,.3); border-radius:10px; overflow:hidden;'
             + ' display:flex; flex-direction:column;">'
             + '<div id="jira-issue-drag" style="padding:13px 18px; background:#e7f3ff; border-bottom:1px solid #a5c8f0; color:#1971c2; border-radius:10px 10px 0 0;'
             + ' cursor:grab; display:flex; align-items:center; gap:8px;">'
@@ -2204,8 +2209,9 @@
             wrap.id = 'jira-create-modal';
             wrap.style.cssText = 'display:none; position:fixed; inset:0; z-index:9350; pointer-events:none; background:none;';
             wrap.innerHTML =
-                '<div id="jira-create-box" style="pointer-events:all; position:fixed; left:50%; top:50%; transform:translate(-50%,-50%);'
-                + ' width:min(460px,94vw); max-height:88vh; background:#fff; box-shadow:0 8px 30px rgba(0,0,0,.3); border-radius:10px; overflow:hidden;'
+                // 🩹 [2026-11-26] 하단 고정 taskbar 와 안 겹치게 — jira-search-box 와 같은 처리(--mt-reserve)
+                '<div id="jira-create-box" style="pointer-events:all; position:fixed; left:50%; top:calc(50% - var(--mt-reserve, 0px) / 2); transform:translate(-50%,-50%);'
+                + ' width:min(460px,94vw); max-height:calc(88vh - var(--mt-reserve, 0px)); background:#fff; box-shadow:0 8px 30px rgba(0,0,0,.3); border-radius:10px; overflow:hidden;'
                 + ' display:flex; flex-direction:column;">'
                 + '<div id="jira-create-drag" style="padding:13px 18px; background:#e7f3ff; border-bottom:1px solid #a5c8f0; color:#1971c2; border-radius:10px 10px 0 0;'
                 + ' cursor:grab; display:flex; align-items:center; gap:8px;">'
