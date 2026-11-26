@@ -458,7 +458,14 @@
             //    🔑 [2026-11-26 사용자 결정 "자동 로그인 켜줘"] 배경도 같은 게이트를 지난다(P.bgAutoLogin) — 창이 꺼져 있으면 크롬을 띄우고
             //    저장된 계정으로 로그인한다. 잠금 방지는 게이트 그대로: 서버까지 간 실패는 이 페이지에서 **다시 시도하지 않는다**.
             if ((opts.manual || P.bgAutoLogin) && window._gwEnsureLogin) {
+                // 🔔 [2026-11-26 사용자 요청] 배경에서 실제로 로그인했으면 한 줄 알린다 — 창이 작업 중인 창 뒤에 떠서 떴는지 알 수 없었다
+                var wasReady = false;
+                if (!opts.manual) { try { var s0 = await fetch(BASE + '/gw/status').then(function (r) { return r.json(); }); wasReady = !!(s0 && s0.ok); } catch (e) { wasReady = false; } }
                 var g = await window._gwEnsureLogin(function (m) { if (opts.manual && window.showToast) window.showToast(m, 'info'); });
+                if (!opts.manual && !wasReady && g && g.ok && window.showToast && opts.toast !== false) {
+                    window.showToast(T('🔑 결재 확인을 위해 그룹웨어 전용 크롬을 띄워 저장된 계정으로 로그인했습니다 — 작업표시줄의 크롬 아이콘이 그 창입니다.',
+                                       '🔑 Opened the groupware Chrome window and signed in with the saved account to check approvals (see the Chrome icon in the taskbar).'), 'info', 8000);
+                }
                 if (!g || !g.ok) { res.skipped = 'gw_login'; res.message = (g && g.message) || ''; return finish(res, opts); }
             } else {
                 var st = null;
