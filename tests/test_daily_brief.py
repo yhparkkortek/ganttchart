@@ -154,12 +154,20 @@ ok('두 사람에게 발송(봇 없는 사람 제외)', sorted(r.get('sent') or 
 m = my_msg()[0] if my_msg() else ''
 ok('오늘 마감 — PM 오늘 마감', '오늘 마감' in m and 'PM 오늘 마감' in m, m)
 ok('이번 주 — FW 이번 주(별칭 Y.Park, 쉼표 다중으로 잡힘)', 'FW 이번 주' in m, m)
-ok('오늘 시작 — PM 오늘 시작', '오늘 시작' in m and 'PM 오늘 시작' in m, m)
+# [2026-11-26] '오늘 시작'·'진행 중' 칸은 기본으로 끈다(showStartAndProgress) — 메일 행 노이즈의 주범이었다.
+ok('오늘 시작 칸은 기본으로 없다', '오늘 시작' not in m, m)
 ok('남의 지연(회로 설계)은 내 브리핑에 없다', '회로 설계 지연' not in m, m)
 ok('완료·날짜 없음·7일 밖·부모 행은 없다', all(x not in m for x in ['PM 완료된 지연', '날짜 없음', 'PM 먼 미래', 'STELLAR32</i>']) and '• STELLAR32' not in m, m)
 ok('내 지연 섹션은 없다(지연이 없으니까)', '지연(미완료)' not in m, m)
 km = [x for c, x in SENT if c == '222'][0]
-ok('김팀원 — 지연(회로 설계)·오늘 시작(PM, HW)', '지연' in km and '회로 설계 지연' in km and 'PM 오늘 시작' in km and 'PM 오늘 마감' not in km, km)
+ok('김팀원 — 지연(회로 설계)만, 내 오늘 마감은 없다', '지연' in km and '회로 설계 지연' in km and 'PM 오늘 마감' not in km, km)
+B.DAILY_BRIEF['showStartAndProgress'] = True
+reset([('LNW_STELLAR32.json', P1, None)])
+B._daily_brief_tick(force=True)
+m1b = my_msg()[0] if my_msg() else ''
+km1b = [x for c, x in SENT if c == '222'][0]
+ok('스위치를 켜면 예전처럼 오늘 시작(나+김 둘 다)', 'PM 오늘 시작' in m1b and 'PM 오늘 시작' in km1b, m1b)
+B.DAILY_BRIEF['showStartAndProgress'] = False
 ok('프로젝트 이름이 붙는다', '[LNW_STELLAR32]' in m, m)
 
 print('\n[2] 어제 보고 여부 — 없으면 한 줄, 있으면 없다')
@@ -255,8 +263,9 @@ B._daily_brief_tick(force=True)
 m9 = my_msg()[0] if my_msg() else ''
 ok('메일 행은 지연에 안 든다', '밀린 메일 건' not in m9, m9[:260])
 ok('사람이 적은 업무는 그대로 지연에 든다', '밀린 내 업무' in m9, m9[:260])
-# ⚠️ 사건은 늦을 수 없어도 "오늘 들어온 것" 일 수는 있다 — 거기선 빼지 않는다.
-ok('메일 행도 오늘 마감에는 그대로 나온다', '오늘 들어온 메일' in m9, m9[:300])
+# [2026-11-26] 메일 행은 마감 칸에서도 뺀다 — 마감 날짜는 AI 가 정한 기간이지 메일이 온 날이 아니다.
+#    이 행의 메일 발송일([출처])은 08-24 라 '새 메일' 칸에도 안 든다 = 어디에도 안 나온다.
+ok('옛 메일 행은 오늘 마감에도 새 메일에도 없다', '오늘 들어온 메일' not in m9, m9[:300])
 
 # 스위치를 끄면 예전처럼 — 지운 게 아니라 끈 것이다.
 B.DAILY_BRIEF['skipMailRowsInLate'] = False
@@ -276,9 +285,11 @@ PLONG = project_doc([
     row(1, 'PM 긴 진행 업무', 'PM', D(-20), D(30)),     # 오늘이 기간 안 — 지연도 이번주도 아니다
     row(1, 'PM 오늘 마감', 'PM', D(-5), D(0)),           # 오늘 마감 — 진행 중엔 안 겹친다
 ], META)
+B.DAILY_BRIEF['showStartAndProgress'] = True     # [2026-11-26] 기본 OFF — 켰을 때 예전처럼 도는지만 본다
 reset([('LONG.json', PLONG, None)])
 B._daily_brief_tick(force=True, only_key='yhpark')
 m10b = my_msg()[0] if my_msg() else ''
+B.DAILY_BRIEF['showStartAndProgress'] = False
 ok('긴 기간 업무가 "진행 중" 에 뜬다', '진행 중' in m10b and 'PM 긴 진행 업무' in m10b, m10b)
 ok('오늘 마감인 업무는 "진행 중" 에 안 겹친다(이미 오늘 마감에 있다)',
    m10b.count('PM 오늘 마감') == 1, m10b)
@@ -344,6 +355,63 @@ try:
     ok('직접 지정이 상세내용보다 먼저', _by2.get('직접 지정이 이김') == {'홍길동'}, _by2)
 finally:
     B._load_address_book = _real_book
+
+# ══ ☀️ [2026-11-26] 새 구성 — 어제 보고·팀 막힌 일·새 메일(발송일 기준)·마감(메일 행 제외) ════════
+print('\n[13] 새 구성 — 📔 어제 보고 · 👥 팀 막힌 일 · 📨 새 메일 · 진짜 마감')
+SRC_NEW = '[요청/문의] [고객 \u2192 박용훈]\n[핵심내용]샘플 수량 확인 요청\n[To do]수량 회신\n[출처]x_%s_a@b.c' % YMD(D(-1))
+SRC_WKD = '[공유] [고객 \u2192 박용훈]\n[핵심내용]일정 공유\n[출처]x_%s 09:12_a@b.c' % D(-1).strftime('%d %b %Y')
+SRC_OLD = '[요청/문의] [고객 \u2192 박용훈]\n[핵심내용]옛 건\n[To do]옛 할 일\n[출처]x_%s_a@b.c' % YMD(D(-20))
+PNEW = project_doc([
+    row(1, '샘플 수량 메일', 'PM', D(-1), D(5), '진행', SRC_NEW),     # 어제 온 메일 · 마감은 이번 주
+    row(1, '영문 날짜 메일', 'PM', D(-1), D(0), '진행', SRC_WKD),     # 어제 온 메일([출처] 영문 날짜) · 마감 오늘
+    row(1, '옛 메일 진행중', 'PM', D(-20), D(3), '진행', SRC_OLD),     # 20일 전 메일 · 기간이 오늘에 걸침
+    row(1, '사람 업무 이번주', 'PM', D(-3), D(2)),                      # 진짜 업무 · 이번 주 마감
+], META)
+ROSTER2 = [dict(ROSTER[0], briefTeam=True), ROSTER[1], ROSTER[2],
+           {'key': 'other', 'name': '타팀원', 'team': '개발1팀', 'tgChatId': '333'}]
+reset([('NEW.json', PNEW, None)], roster=ROSTER2)
+NAS.files[B._daily_rel(yday, 'yhpark')] = json.dumps({'items': [
+    {'name': '승인원 정리', 'project': 'LNW_STELLAR32.json', 'note': '정리함', 'next': '고객 회신 확인', 'issue': ''},
+    {'name': '샘플 출하', 'project': 'LNW_OBSIDIAN', 'next': '', 'issue': '포장재 입고 지연'}]}, ensure_ascii=False)
+NAS.files[B._daily_rel(yday, 'kim')] = json.dumps({'items': [
+    {'name': '회로 검토', 'project': 'P', 'issue': '부품 단종 — 대체품 필요'},
+    {'name': '문제 없는 일', 'project': 'P', 'next': '계속'}]}, ensure_ascii=False)
+NAS.files[B._daily_rel(yday, 'other')] = json.dumps({'items': [{'name': '남의 팀 일', 'issue': '다른 팀 막힘'}]}, ensure_ascii=False)
+B._daily_brief_tick(force=True)
+m13 = my_msg()[0] if my_msg() else ''
+ok('📔 어제 적은 해야 할 일(업무·프로젝트·글)', '어제(' in m13 and '고객 회신 확인' in m13 and '[LNW_STELLAR32]' in m13 and '승인원 정리' in m13, m13)
+ok('⛔ 어제 적은 막힌 일', '막힌 일' in m13 and '포장재 입고 지연' in m13, m13)
+ok('👥 팀 막힌 일 — 같은 팀 김팀원 것만', '팀원이 어제 적은 막힌 일' in m13 and '김팀원' in m13 and '부품 단종' in m13, m13)
+ok('👥 다른 팀·막힘 없는 항목은 안 든다', '다른 팀 막힘' not in m13 and '문제 없는 일' not in m13, m13)
+ok('📨 어제 온 메일 업무 + To do', '들어온 메일 업무' in m13 and '샘플 수량 메일' in m13 and 'To do: 수량 회신' in m13, m13)
+ok('📨 [출처] 영문 날짜(25 Nov 2026)도 읽는다 · To do 없으면 핵심내용', '영문 날짜 메일' in m13 and '일정 공유' in m13, m13)
+ok('20일 전 메일 행은 어디에도 없다(기간이 오늘에 걸쳐도)', '옛 메일 진행중' not in m13, m13)
+ok('메일 행은 마감 칸에 중복으로 안 나온다', m13.count('샘플 수량 메일') == 1 and m13.count('영문 날짜 메일') == 1, m13)
+ok('진짜 업무는 이번 주 마감에', '이번 주 마감' in m13 and '사람 업무 이번주' in m13, m13)
+ok('어제 보고가 있으니 "없습니다" 줄은 없다', '어제 일일보고가 <b>없습니다</b>' not in m13, m13)
+km13 = [x for c, x in SENT if c == '222'][0]
+ok('👥 briefTeam 안 켠 김팀원에겐 팀 칸이 없다', '팀원이 어제 적은 막힌 일' not in km13, km13)
+ok('👥 김팀원 자기 막힌 일은 자기 칸에', '부품 단종' in km13 and '어제 적은 막힌 일' in km13, km13)
+om = [x for c, x in SENT if c == '333']
+ok('타팀원 — 자기 막힌 일만', om and '다른 팀 막힘' in om[0] and '부품 단종' not in om[0], om)
+
+# 팀원 보고 읽기가 실패하면(권한 등) 그 사람 몫만 빠지고 브리핑은 간다
+reset([('NEW.json', PNEW, None)], roster=ROSTER2)
+NAS.fail_read.add(B._daily_rel(yday, 'kim'))
+B._daily_brief_tick(force=True, only_key='yhpark')
+m13b = my_msg()[0] if my_msg() else ''
+ok('팀원 보고 읽기 실패 → 그 사람만 빠지고 발송', bool(m13b) and '부품 단종' not in m13b, m13b)
+
+# 볼 게 어제 보고뿐이어도 보낸다(할 일이 있으니까)
+reset([('X.json', EMPTY, None)])
+NAS.files[B._daily_rel(yday, 'yhpark')] = json.dumps({'items': [{'name': 'a', 'next': '이어서 할 것'}]}, ensure_ascii=False)
+B._daily_brief_tick(force=True, only_key='yhpark')
+ok('어제 적은 할 일만 있어도 발송', len(my_msg()) == 1 and '이어서 할 것' in my_msg()[0], my_msg())
+# 옛 보고-단위 next/issue 도 읽는다
+reset([('X.json', EMPTY, None)])
+NAS.files[B._daily_rel(yday, 'yhpark')] = json.dumps({'next': '옛 서식 할 일', 'issue': '옛 서식 막힘'}, ensure_ascii=False)
+B._daily_brief_tick(force=True, only_key='yhpark')
+ok('옛 서식(보고-단위 next/issue)도 읽는다', my_msg() and '옛 서식 할 일' in my_msg()[0] and '옛 서식 막힘' in my_msg()[0], my_msg())
 
 try:
     os.remove(STATE)

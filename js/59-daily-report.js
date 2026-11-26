@@ -2701,6 +2701,8 @@
               '<td style="padding:3px;">' + inp('tgChatId', T('텔레그램 ID', 'Telegram ID'), '100px') + '</td>' +
               '<td style="padding:3px; text-align:center;"><input type="checkbox" ' + (m.active !== false ? 'checked' : '') + ' onchange="window._dailyRosterSet(' + i + ',\'active\',this.checked)"></td>' +
               '<td style="padding:3px; text-align:center;"><input type="radio" name="dr-notifier" ' + (m.notifier ? 'checked' : '') + ' onchange="window._dailyRosterNotifier(' + i + ')"></td>' +
+              // ☀️👥 [2026-11-26] 아침 브리핑에 "팀원이 어제 적은 막힌 일" 을 받는 사람(팀장·파트장) — 백엔드 `briefTeam`
+              '<td style="padding:3px; text-align:center;"><input type="checkbox" ' + (m.briefTeam ? 'checked' : '') + ' title="' + esc(T('아침 브리핑에 같은 팀원이 어제 적은 막힌 일을 같이 받습니다', 'Also receive teammates\' blockers in the morning brief')) + '" onchange="window._dailyRosterSet(' + i + ',\'briefTeam\',this.checked)"></td>' +
               '<td style="padding:3px;"><button onclick="window._dailyRosterDrop(' + i + ')" style="width:22px; height:22px; border:1px solid #eeb0ac; background:#fbe4e2; color:#b1432f; border-radius:4px; cursor:pointer; font-size:11px;">✕</button></td>' +
             '</tr>';
         }).join('');
@@ -2721,7 +2723,7 @@
      esc(T('· 📣 = 알림·텔레그램 수신을 담당할 PC 한 대. 반드시 한 명만 — 여러 대가 동시에 받으면 보고가 흩어집니다.',
            '· 📣 = the one PC that polls Telegram and sends reminders. Exactly one.')) + '</div>' +
    '<table style="border-collapse:collapse; font-size:11.5px;"><thead><tr style="background:#f4f6f8;">' +
-     ['계정id|key', '실명|Name', '별칭|Aliases', '팀|Team', '텔레그램 ID|Telegram ID', '사용|On', '📣', ''].map(function (h) {
+     ['계정id|key', '실명|Name', '별칭|Aliases', '팀|Team', '텔레그램 ID|Telegram ID', '사용|On', '📣', '☀️팀|☀️Team', ''].map(function (h) {
         var p = h.split('|');
         return '<th style="padding:5px 6px; border:1px solid #e3e6ea; color:#2c5f8a;">' + esc(window._currentLang === 'en' ? (p[1] || p[0]) : p[0]) + '</th>';
      }).join('') + '</tr></thead><tbody>' + rows + '</tbody></table>' +
@@ -2735,8 +2737,8 @@
      '<label style="display:flex; align-items:center; gap:4px;">' + esc(T('시각', 'At')) + ' <input type="time" id="daily-brief-at" style="padding:2px 4px; border:1px solid #ccc; border-radius:4px; font-size:12px;"></label>' +
      '<button onclick="window._dailyBriefSave()" style="padding:4px 10px; border:1px solid #a3d9e0; background:#e0f5f7; color:#00707d; border-radius:5px; font-size:11.5px; font-weight:bold; cursor:pointer;">' + esc(T('저장', 'Save')) + '</button>' +
      '<button onclick="window.dailyBriefPreview()" title="' + esc(T('지금 내 텔레그램으로 한 통 보내 봅니다(나에게만)', 'Send one to my Telegram now (me only)')) + '" style="padding:4px 10px; border:1px solid #f0d58c; background:#fff8e1; color:#8a6d00; border-radius:5px; font-size:11.5px; font-weight:bold; cursor:pointer;">📱 ' + esc(T('내게 미리보기', 'Preview to me')) + '</button>' +
-     '<span id="daily-brief-note" style="flex-basis:100%; font-size:11px; color:#777;">' + esc(T('근무일 아침에 지연·오늘 마감·오늘 시작·이번 주 마감 업무와 어제 보고 여부를 텔레그램으로. AI 는 쓰지 않습니다. 📣 담당 PC 의 백엔드가 보냅니다.',
-                                                                                                 'On workdays: late / due today / starting today / due this week + yesterday\'s report status, via Telegram. No AI. Sent by the 📣 PC\'s backend.')) + '</span>' +
+     '<span id="daily-brief-note" style="flex-basis:100%; font-size:11px; color:#777;">' + esc(T('근무일 아침에 텔레그램으로 — 어제 내가 적은 해야 할 일·막힌 일 · 어제 이후 들어온 내 메일 업무(메일 발송일 기준) · 지연·오늘 마감·이번 주 마감(메일 행 제외). 표의 ☀️팀 을 켠 사람은 같은 팀원이 어제 적은 막힌 일도 받습니다. AI 는 쓰지 않습니다. 📣 담당 PC 의 백엔드가 보냅니다.',
+                                                                                                 'On workdays via Telegram — my to-dos/blockers from yesterday\'s report · mail tasks received since yesterday · late / due today / due this week (mail rows excluded). People with ☀️Team checked also get teammates\' blockers. No AI. Sent by the 📣 PC\'s backend.')) + '</span>' +
    '</div>' +
    // 📋 [2026-11-21] 알림 채널 상태판 — 사용자: "매일 텔레그램 알람이 제대로 안 온다 / 정리가 안 된다".
    //    채널 5개(예약발송·새메일·텔레그램수신·미작성알림·브리핑)의 마지막 실행·결과·발송·오류를 **한 자리**에.

@@ -1791,6 +1791,17 @@ DAILY_BRIEF = {
     #    실측: 날짜 지난 미완료 1,501건 중 1,225건(82%)이 메일 행이었다.
     #    ⚠️ 프런트 `GANTT_OVERDUE_POLICY.skipMailRows`(js/04a)와 **같이** 켜고 꺼야 한다.
     'skipMailRowsInLate': True,
+    # ☀️ [2026-11-26 사용자 요청] "브리핑은 일일보고·프로젝트 리뷰 자료로 — 지금은 오늘 받은 메일도 아닌 게 온다".
+    #    원인: 메일 행은 '지연' 에서만 빠지고 오늘 시작·진행 중·이번 주 칸엔 그대로 섞였다(메일 행 날짜 = AI 가 정한
+    #    업무 기간이지 메일이 온 날이 아니다). → 재료를 바꿨다:
+    #    ① 어제 내가 적은 일일보고의 할 일·막힌 일 ② 팀원이 어제 적은 막힌 일(명단 `briefTeam` 켠 사람만)
+    #    ③ **메일 발송일**이 마지막 근무일 이후인 내 메일 업무(js/62 `_psFactDate` 와 같은 날짜 규칙)
+    #    ④ 진짜 마감 — 지연·오늘 마감·이번 주 마감, 메일 행은 셋 다에서 뺀다.
+    'skipMailRowsInDue': True,      # 오늘 마감·이번 주 마감에서도 메일 행을 뺀다(메일 행은 ③ 에서 따로)
+    'showStartAndProgress': False,  # 옛 '오늘 시작'·'진행 중' 칸 — 노이즈의 주범이라 끔(켜면 예전처럼)
+    'maxTextChars': 70,             # 한 줄 뒤에 붙는 할 일·막힌 일·To do 글 길이
+    'maxNewMail': 10,               # 새 메일 업무 칸 상한
+    'maxTeamBlockers': 12,          # 팀 막힌 일 칸 상한
 }
 # js/15b `_MS_CATEGORY_FIELD_MAP` 과 같은 표 — 역할 → projectMeta 칸 이름
 BRIEF_ROLE_FIELD = {
@@ -1891,6 +1902,64 @@ def _brief_cell_date(v):
         return None
 
 
+_BRIEF_MON = {m: i + 1 for i, m in enumerate(['jan', 'feb', 'mar', 'apr', 'may', 'jun',
+                                                 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'])}
+
+
+def _brief_any_date(v):
+    """'2026-11-25…' · '25 Nov 2026 …' · 'Wed, 25 Nov 2026 …' → date. 모르면 None."""
+    t = str(v or '').strip()
+    if not t:
+        return None
+    d = _brief_cell_date(t)
+    if d:
+        return d
+    m = re.search(r'(\d{1,2})\s+([A-Za-z]{3})[a-z]*\s+(\d{4})', t)
+    if m and m.group(2).lower() in _BRIEF_MON:
+        try:
+            return datetime(int(m.group(3)), _BRIEF_MON[m.group(2).lower()], int(m.group(1))).date()
+        except Exception:
+            return None
+    return None
+
+
+def _brief_src_date(content):
+    """[출처] 꼬리의 메일 날짜 — js/62 `_psFactDate` 정규식의 **사본**."""
+    m = re.search(r'\[출처\][^\n]*?_((?:\d{1,2}\s+[A-Za-z]{3}\s+\d{4}|\d{4}[-./]\d{1,2}[-./]\d{1,2})[^_\n]*)_',
+                  str(content or ''))
+    return _brief_any_date(m.group(1)) if m else None
+
+
+def _brief_tag(content, tag):
+    """`[태그]` 뒤 글 — js/59 `_mailContentParse` pick 의 사본(다음 `\n[` 까지)."""
+    m = re.search(r'\[' + re.escape(tag) + r'\]([\s\S]*?)(?=\n\[|$)', str(content or ''))
+    return m.group(1).strip() if m else ''
+
+
+def _brief_cut(s, n=None):
+    s = re.sub(r'\s+', ' ', str(s or '')).strip()
+    n = n or DAILY_BRIEF['maxTextChars']
+    return s if len(s) <= n else s[:n - 1] + '…'
+
+
+def _brief_report_lines(doc):
+    """일일보고 파일 → [(업무, 프로젝트, 할 일, 막힌 일)]. 옛 보고-단위 next/issue 도 한 줄로."""
+    out = []
+    if not isinstance(doc, dict):
+        return out
+    for it in doc.get('items') or []:
+        if not isinstance(it, dict):
+            continue
+        nx, iss = str(it.get('next') or '').strip(), str(it.get('issue') or '').strip()
+        if nx or iss:
+            out.append((str(it.get('name') or '').strip() or '(제목 없음)',
+                        re.sub(r'\.json$', '', str(it.get('project') or '').strip()), nx, iss))
+    nx, iss = str(doc.get('next') or '').strip(), str(doc.get('issue') or '').strip()
+    if nx or iss:
+        out.append(('', '', nx, iss))
+    return out
+
+
 def _brief_scan_project(doc, project):
     """프로젝트 파일 하나 → 날짜 있는 **리프** 업무 목록(담당자 이름까지 풀어서).
 
@@ -1943,6 +2012,9 @@ def _brief_scan_project(doc, project):
         c_content = col('content')
         _ctext = str(row[c_content] or '') if (c_content is not None and c_content < len(row)) else ''
         is_mail = ('[출처]' in _ctext) or ('[핵심내용]' in _ctext)
+        # 📨 [2026-11-26] 메일이 **들어온 날** — js/62 `_psFactDate` 와 같은 순서([출처] 꼬리 → `_mailRaw.date` → 시작일).
+        mail_date = ((_brief_src_date(_ctext) or _brief_any_date((obj.get('_mailRaw') or {}).get('date')) or s)
+                     if is_mail else None)
         who = set()
         # 👤 [2026-11-23] 담당자 직접 지정(`_담당자`, 프런트 js/04k setRowAssignee)이 있으면 그 이름이 역할보다 먼저.
         #    프런트 js/59 isMine·js/62 와 **같은 규칙**(사본) — 한쪽만 고치면 화면과 텔레그램이 갈린다.
@@ -1963,7 +2035,9 @@ def _brief_scan_project(doc, project):
                 who.add(nm.lower())
         items.append({'name': name[:DAILY_BRIEF['maxNameChars']], 'project': project,
                       'start': s, 'end': e, 'status': status.strip(), 'who': who,
-                      'mail': is_mail})
+                      'mail': is_mail, 'mailDate': mail_date,
+                      'todo': _brief_tag(_ctext, 'To do') if is_mail else '',
+                      'core': _brief_tag(_ctext, '핵심내용') if is_mail else ''})
     return items
 
 
@@ -2029,8 +2103,13 @@ def _brief_load_items(teams):
     return items, errors
 
 
-def _brief_text_for(member, items, today, errors, yesterday_written):
-    """한 사람 몫 본문(HTML). 볼 게 없으면 None."""
+def _brief_text_for(member, items, today, errors, yesterday_written,
+                    yday=None, my_report=None, team_blockers=None):
+    """한 사람 몫 본문(HTML). 볼 게 없으면 None.
+
+    순서(2026-11-26): 📔 어제 내가 적은 할 일·막힌 일 → 👥 팀 막힌 일(briefTeam) → 📨 새로 들어온 메일 업무
+    → 🔴 지연·📅 오늘 마감·📆 이번 주 마감(메일 행 제외). `my_report`/`team_blockers` 는 tick 이 읽어 넘긴다.
+    """
     names = set()
     for n in [member.get('key'), member.get('name')] + list(member.get('aliases') or []):
         n = str(n or '').strip().lower()
@@ -2038,31 +2117,31 @@ def _brief_text_for(member, items, today, errors, yesterday_written):
             names.add(n)
     mine = [it for it in items if it['who'] & names]
     week_end = today + timedelta(days=DAILY_BRIEF['weekAhead'])
-    # 🔴 메일에서 들어온 행은 **지연으로 세지 않는다** — 사건이지 업무가 아니다.
-    #    실측(2026-11-09): 날짜 지난 미완료 1,501건 중 **1,225건(82%)이 메일 행**이었다.
-    #    ⚠️ "오늘 마감·오늘 시작·이번 주" 에서는 빼지 않는다 — 사건은 늦을 수 없어도
-    #       "오늘 들어온 것" 일 수는 있다. 빼는 건 '지연' 하나다.
-    #    ⚠️ 프런트 `GANTT_OVERDUE_POLICY`(js/04a)의 **사본**이다 — 한쪽만 고치면 화면과
-    #       텔레그램이 갈린다(`BRIEF_ROLE_FIELD` 와 같은 처지).
+    yday = yday or (today - timedelta(days=1))
+    skip_late = DAILY_BRIEF.get('skipMailRowsInLate', True)
+    skip_due = DAILY_BRIEF.get('skipMailRowsInDue', True)
+    # 🔴 메일에서 들어온 행은 **지연으로 세지 않는다** — 사건이지 업무가 아니다(2026-11-09 실측 82%).
+    #    [2026-11-26] 오늘 마감·이번 주 마감에서도 뺀다 — 메일 행 날짜는 AI 가 정한 기간이라 "오늘 받은 메일" 이
+    #    아닌 게 섞였다. 메일 행은 아래 📨 칸(메일 **발송일** 기준)에서만 보여 준다.
+    #    ⚠️ 프런트 `GANTT_OVERDUE_POLICY`(js/04a)의 사본 — 한쪽만 고치면 화면과 텔레그램이 갈린다.
     late = [it for it in mine
             if it['end'] and it['end'] < today and it['status'] != '완료'
-            and not (DAILY_BRIEF.get('skipMailRowsInLate', True) and it.get('mail'))]
-    due_today = [it for it in mine if it['end'] == today and it['status'] != '완료']
-    start_today = [it for it in mine if it['start'] == today]
-    week = [it for it in mine if it['end'] and today < it['end'] <= week_end and it['status'] != '완료']
-    # 🔧 [2026-11-17 요청] "브리핑은 오는데 업무 정리는 안 온다" — 실측해 보니 일일보고
-    #    후보(js/59 scanOne)는 **기간이 겹치기만 해도** 보여 주는데(몇 주짜리 회의·출하
-    #    일정이 매일 뜨는 이유), 브리핑은 지연·오늘 마감·오늘 시작·이번 주 마감처럼
-    #    **날짜가 꼭 맞을 때만** 집었다. 그래서 긴 기간으로 적힌(=끝나는 날이 멀어
-    #    "이번 주" 에도 안 걸리는) 진행 중 업무는 어디에도 안 잡혀 "업무 정리" 가 통째로
-    #    비어 보였다. → 위 네 칸에 이미 든 건 빼고, **오늘이 그 기간 안에 든** 업무만
-    #    따로 한 칸 더(지연·오늘 마감·오늘 시작과 겹칠 일은 없다 — 끝난 날이 지나지도
-    #    오늘도 아니어야 하니까).
-    _already = set((it['name'], it['project']) for it in late + due_today + start_today)
-    in_progress = [it for it in mine
-                   if it['start'] and it['end'] and it['start'] < today < it['end']
-                   and it['status'] != '완료' and (it['name'], it['project']) not in _already]
+            and not (skip_late and it.get('mail'))]
+    due_today = [it for it in mine if it['end'] == today and it['status'] != '완료'
+                 and not (skip_due and it.get('mail'))]
+    week = [it for it in mine if it['end'] and today < it['end'] <= week_end and it['status'] != '완료'
+            and not (skip_due and it.get('mail'))]
+    # 📨 마지막 근무일(어제) 이후 들어온 내 메일 업무 — 주말·휴일에 온 것도 월요일 아침에 같이 보인다.
+    new_mail = [it for it in mine if it.get('mail') and it.get('mailDate') and yday <= it['mailDate'] <= today]
+    start_today, in_progress = [], []
+    if DAILY_BRIEF.get('showStartAndProgress'):
+        start_today = [it for it in mine if it['start'] == today]
+        _already = set((it['name'], it['project']) for it in late + due_today + start_today)
+        in_progress = [it for it in mine
+                       if it['start'] and it['end'] and it['start'] < today < it['end']
+                       and it['status'] != '완료' and (it['name'], it['project']) not in _already]
     cap = DAILY_BRIEF['maxPerSection']
+    esc = html.escape
 
     def sec(title, rows, with_date):
         if not rows:
@@ -2072,18 +2151,70 @@ def _brief_text_for(member, items, today, errors, yesterday_written):
             d = ''
             if with_date and it['end']:
                 d = ' · ~%s' % it['end'].strftime('%m/%d')
-            out.append('\u2022 %s <i>[%s]</i>%s' % (html.escape(it['name']), html.escape(it['project']), d))
+            out.append('• %s <i>[%s]</i>%s' % (esc(it['name']), esc(it['project']), d))
         if len(rows) > cap:
             out.append('  … 외 %d건' % (len(rows) - cap))
         return out
 
-    lines = ['\u2600\ufe0f <b>%s 아침 브리핑</b> — %s' % (today.strftime('%m/%d(%a)'), html.escape(str(member.get('name') or member.get('key') or '')))]
+    def task_head(name, project):
+        h = esc(name) if name else ''
+        if project:
+            h += (' ' if h else '') + '<i>[%s]</i>' % esc(project)
+        return h
+
+    lines = ['☀️ <b>%s 아침 브리핑</b> — %s' % (today.strftime('%m/%d(%a)'), esc(str(member.get('name') or member.get('key') or '')))]
+    ylabel = yday.strftime('%m/%d')
+
+    # ① 어제 내가 적은 것 — 사람이 쓴 글이라 가장 믿을 만하다
+    rep = my_report or []
+    todo_rows = [r for r in rep if r[2]]
+    block_rows = [r for r in rep if r[3]]
+    if todo_rows:
+        lines.append('\n<b>\U0001F4D4 어제(%s) 적은 해야 할 일</b> %d건' % (ylabel, len(todo_rows)))
+        for nm, pj, nx, _ in todo_rows[:cap]:
+            h = task_head(nm, pj)
+            lines.append('• %s%s' % (h + ' — ' if h else '', esc(_brief_cut(nx))))
+        if len(todo_rows) > cap:
+            lines.append('  … 외 %d건' % (len(todo_rows) - cap))
+    if block_rows:
+        lines.append('\n<b>⛔ 어제 적은 막힌 일</b> %d건' % len(block_rows))
+        for nm, pj, _, iss in block_rows[:cap]:
+            h = task_head(nm, pj)
+            lines.append('• %s%s' % (h + ' — ' if h else '', esc(_brief_cut(iss))))
+
+    # ② 팀 막힌 일 — 명단에서 ☀️팀 을 켠 사람(팀장·파트장)에게만
+    tb = team_blockers or []
+    if tb:
+        tcap = DAILY_BRIEF['maxTeamBlockers']
+        lines.append('\n<b>\U0001F465 팀원이 어제 적은 막힌 일</b> %d건' % len(tb))
+        for who, nm, pj, iss in tb[:tcap]:
+            h = task_head(nm, pj)
+            lines.append('• <b>%s</b> · %s%s' % (esc(who), h + ' — ' if h else '', esc(_brief_cut(iss))))
+        if len(tb) > tcap:
+            lines.append('  … 외 %d건' % (len(tb) - tcap))
+
+    # ③ 새로 들어온 메일 업무 — 메일 발송일 기준, 이미 분석해 둔 [To do]/[핵심내용] 을 그대로
+    if new_mail:
+        mcap = DAILY_BRIEF['maxNewMail']
+        lines.append('\n<b>\U0001F4E8 %s 이후 들어온 메일 업무</b> %d건' % (ylabel, len(new_mail)))
+        for it in sorted(new_mail, key=lambda x: (x['project'], x['mailDate']), reverse=False)[:mcap]:
+            tail = ''
+            if it.get('todo'):
+                tail = ' — To do: ' + esc(_brief_cut(it['todo']))
+            elif it.get('core'):
+                tail = ' — ' + esc(_brief_cut(it['core']))
+            lines.append('• %s <i>[%s]</i>%s' % (esc(it['name']), esc(it['project']), tail))
+        if len(new_mail) > mcap:
+            lines.append('  … 외 %d건' % (len(new_mail) - mcap))
+
+    # ④ 진짜 마감
     lines += sec('\U0001F534 지연(미완료)', late, True)
     lines += sec('\U0001F4C5 오늘 마감', due_today, False)
-    lines += sec('\u25B6\ufe0f 오늘 시작', start_today, False)
+    lines += sec('▶️ 오늘 시작', start_today, False)
     lines += sec('\U0001F527 진행 중', in_progress, True)
     lines += sec('\U0001F4C6 이번 주 마감', week, True)
-    has_tasks = bool(late or due_today or start_today or in_progress or week)
+    has_tasks = bool(late or due_today or start_today or in_progress or week or new_mail
+                     or todo_rows or block_rows or tb)
     if yesterday_written is False:
         lines.append('\n\U0001F4D4 어제 일일보고가 <b>없습니다</b> — 이 대화에 적어 보내면 저장됩니다.')
     if not has_tasks and yesterday_written is not False and not DAILY_BRIEF['sendIfEmpty']:
@@ -2091,7 +2222,7 @@ def _brief_text_for(member, items, today, errors, yesterday_written):
     if not has_tasks:
         lines.append('\n오늘 마감·지연 업무는 없습니다.')
     if errors:
-        lines.append('\n\u26a0\ufe0f 프로젝트 %d개를 읽지 못해 그 업무는 빠졌습니다.' % len(errors))
+        lines.append('\n⚠️ 프로젝트 %d개를 읽지 못해 그 업무는 빠졌습니다.' % len(errors))
     pend = _tg_pending_counts(member.get('key'))     # 📥 앱이 올린 보관함 대기 건수(하루 안 것만)
     if pend and (pend.get('withCands') or pend.get('waiting')):
         lines.append('\n\U0001F4E5 보관함 대기 %d건 — 후보 있는 %d건은 <b>/배분</b> 으로 폰에서 보낼 수 있습니다.'
@@ -2152,15 +2283,44 @@ def _daily_brief_tick(force=False, only_key=None):
             break
         yday -= timedelta(days=1)
     yday_str = yday.strftime('%Y-%m-%d')
+    # 📔 어제 보고 — 사람마다 한 번만 읽는다(팀 막힌 일에서 다시 쓴다). 실패는 '모름'(_FAIL).
+    _FAIL = object()
+    reports = {}
+
+    def yreport(key):
+        k = str(key or '').lower()
+        if k not in reports:
+            try:
+                reports[k] = _daily_nas_json(_daily_rel(yday_str, key))
+            except Exception:
+                reports[k] = _FAIL
+        return reports[k]
+
     sent, empty = [], []
     for m in targets:
-        try:
-            doc = _daily_nas_json(_daily_rel(yday_str, m['key']))
+        doc = yreport(m['key'])
+        if doc is _FAIL:
+            written, my_rep = None, []
+        else:
             written = bool(doc and (doc.get('dayType') in ('leave', 'trip', 'training', 'half')
                                      or doc.get('items') or doc.get('next') or doc.get('issue')))
-        except Exception:
-            written = None
-        text = _brief_text_for(m, items, today, errors, written)
+            my_rep = _brief_report_lines(doc)
+        # 👥 팀 막힌 일 — 명단의 `briefTeam` 을 켠 사람만. 같은 팀·사용 중인 팀원(나 빼고)의 어제 보고에서.
+        team_bl = []
+        mteam = str(m.get('team') or '').strip()
+        if m.get('briefTeam') and mteam:
+            for o in roster:
+                if (o.get('active') is False or str(o.get('key', '')).lower() == str(m['key']).lower()
+                        or str(o.get('team') or '').strip() != mteam):
+                    continue
+                od = yreport(o['key'])
+                if od is _FAIL or not od:
+                    continue
+                for nm, pj, _nx, iss in _brief_report_lines(od):
+                    if iss:
+                        team_bl.append((str(o.get('name') or o['key']), nm, pj, iss))
+        text = _brief_text_for(m, items, today, errors, written, yday=yday,
+                               my_report=my_rep, team_blockers=team_bl)
         if not text:
             empty.append(m['key'])
             if not force:
