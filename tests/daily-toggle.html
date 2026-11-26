@@ -28,6 +28,17 @@ f.onload = async function () {
     chk(!shown(), '처음엔 모달이 없다');
     btn.click(); await sleep(1500);
     chk(shown(), '버튼을 누르면 모달이 열린다');
+    // 📏 [2026-11-26] 업무가 없을 때 안내 상자는 아래 `직접 추가` 줄과 같은 높이 · `간트에서 불러오기` 옆 안내문은 없다
+    var man = D.getElementById('daily-manual'), listBox = D.getElementById('daily-jira-ref').previousElementSibling;
+    var hMan = Math.round(man.getBoundingClientRect().height), hBox = Math.round(listBox.getBoundingClientRect().height), hBtn = Math.round(man.nextElementSibling.getBoundingClientRect().height);
+    chk(/아래에서 골라 담거나/.test(listBox.textContent), '(준비) 업무가 없어 빈 안내 상자가 보인다');
+    chk(hBox === hMan && hBtn === hMan && hMan === 28, '빈 안내 상자 높이 = 직접 추가 입력칸 = 추가 버튼 — ' + hBox + ' / ' + hMan + ' / ' + hBtn);
+    var modalTxt = D.getElementById('daily-modal').textContent;
+    chk(/간트에서 불러오기/.test(modalTxt) && !/AI 호출 없음|메일 분석 결과를 그대로/.test(modalTxt), '"간트에서 불러오기" 제목은 있고 옆 안내문(AI 호출 없음…)은 없다');
+    // 업무가 하나 생기면 상자가 내용만큼 커진다(28px 고정이 카드를 자르지 않는다)
+    man.value = '시험 업무'; W._dailyAddManual(); await sleep(600);
+    var box2 = D.getElementById('daily-jira-ref').previousElementSibling;
+    chk(/시험 업무/.test(box2.textContent) && Math.round(box2.getBoundingClientRect().height) > 60, '업무를 하나 추가하면 상자가 카드만큼 커진다 — ' + Math.round(box2.getBoundingClientRect().height));
     btn.click(); await sleep(500);
     chk(!shown(), '다시 누르면 모달이 닫힌다');
     btn.click(); await sleep(1500);

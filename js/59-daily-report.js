@@ -1569,7 +1569,7 @@
                      fields +
                      filesHtml(it.name, true) +
                    '</div></div>';
-        }).join('') || '<div style="color:#aaa; font-size:12px; padding:6px 0;">' + esc(T('아래에서 골라 담거나 직접 추가하세요.', 'Pick below or add manually.')) + '</div>';
+        }).join('') || '<div style="color:#aaa; font-size:12px;">' + esc(T('아래에서 골라 담거나 직접 추가하세요.', 'Pick below or add manually.')) + '</div>';
 
 
         wrap.innerHTML =
@@ -1612,7 +1612,11 @@
     //    무관 — input 은 줄바꿈 안 함) × 3 + 안쪽 패딩 14px, 440px 로 확정.
     // 🔧 [2026-11-11 3차 요청] "저장" 버튼은 위 "일 종류" 줄로 옮겼다 — 이 박스는 다시
     //    목록 전용 스크롤 영역 하나로.
-    '<div style="border:1px solid #e8e8e8; border-radius:7px; padding:7px 10px; margin-bottom:6px; max-height:420px; overflow-y:auto;">' + chk + '</div>' +
+    // 📏 [2026-11-26 사용자 요청 "빈 안내 상자를 아래 박스 높이와 통일(줄여줘)"] 업무가 하나도 없을 땐 안내 한 줄뿐이라 아래 `직접 추가` 줄(28px)과 같은 높이로 줄인다.
+    //    높이는 한 값(`DAILY_ROW_H`, 위 `직접 추가` 입력칸·추가 버튼도 같은 값)에서 나온다 — 따로 적으면 한쪽만 고쳐 다시 어긋난다.
+    '<div style="border:1px solid #e8e8e8; border-radius:7px; margin-bottom:6px; ' + (_doc.items.length
+        ? 'padding:7px 10px; max-height:420px; overflow-y:auto;'
+        : 'height:' + DAILY_ROW_H + 'px; box-sizing:border-box; padding:0 10px; display:flex; align-items:center;') + '">' + chk + '</div>' +
     // 🪐 [2026-11-17 사용자 요청] "JIRA 연동"의 일일보고 쪼각 — 연결된 JIRA 프로젝트가
     //    있으면 **참고용으로만** 보여준다(items[]에는 안 쓴다). 과거 "자동 적립이 No./851/
     //    고객을 담았다" 사고(2026-11-05)가 "행 인덱스/엉뚱한 값을 업무명으로 자동 저장"
@@ -1622,10 +1626,10 @@
     //    빈 칸을 늘 보여주면 "이게 뭐지"가 되므로 처음엔 비워 두고 뒤에서 채운다.
     '<div id="daily-jira-ref"></div>' +
     '<div style="display:flex; gap:6px; margin-bottom:12px;">' +
-      '<input id="daily-manual" placeholder="' + esc(T('직접 추가 — 업무명', 'Add manually — task name')) + '" style="flex:1; padding:5px 8px; border:1px solid #ddd; border-radius:5px; font-size:12px;" onkeydown="if(event.key===\'Enter\'){window._dailyAddManual();}">' +
-      '<button onclick="window._dailyAddManual()" style="padding:5px 12px; border:1px solid #a3d9e0; background:#e0f5f7; color:#00707d; border-radius:5px; font-size:12px; font-weight:bold; cursor:pointer;">+ ' + esc(T('추가', 'Add')) + '</button>' +
+      '<input id="daily-manual" placeholder="' + esc(T('직접 추가 — 업무명', 'Add manually — task name')) + '" style="flex:1; height:' + DAILY_ROW_H + 'px; box-sizing:border-box; padding:0 8px; border:1px solid #ddd; border-radius:5px; font-size:12px;" onkeydown="if(event.key===\'Enter\'){window._dailyAddManual();}">' +
+      '<button onclick="window._dailyAddManual()" style="height:' + DAILY_ROW_H + 'px; box-sizing:border-box; padding:0 12px; border:1px solid #a3d9e0; background:#e0f5f7; color:#00707d; border-radius:5px; font-size:12px; font-weight:bold; cursor:pointer;">+ ' + esc(T('추가', 'Add')) + '</button>' +
     '</div>' +
-    '<div style="font-size:11.5px; color:#888; margin-bottom:4px;">' + esc(T('간트에서 불러오기', 'From Gantt')) + ' <span style="color:#bbb;">' + esc(T('(AI 호출 없음 — 메일 분석 결과를 그대로 씁니다)', '(no AI call — reuses mail analysis)')) + '</span></div>' +
+    '<div style="font-size:11.5px; color:#888; margin-bottom:4px;">' + esc(T('간트에서 불러오기', 'From Gantt')) + '</div>' +
     // 📅 [2026-11-12 요청] 기본은 오늘, 필요하면 기간으로 넓힌다 — 정적 영역(배경 스캔이
     //    `#daily-cand` 만 다시 그리므로 여기 둬야 검색칸 타이핑이 안 날아간다).
     '<div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-bottom:6px;">' +
@@ -1675,6 +1679,7 @@
         if (window.bringModalToFront) window.bringModalToFront('daily-modal');
     }
 
+    var DAILY_ROW_H = 28;   // 📏 보고 창의 입력 한 줄 높이(px) — 빈 목록 안내 상자·직접 추가 입력칸·추가 버튼이 같이 쓴다
     window.dailyCloseModal = function () {
         saveDraftLocal();
         // 📎 여기서 돌려주지 않으면 사진 blob 이 탭을 여닫는 동안 계속 샘는다.
