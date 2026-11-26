@@ -9,7 +9,7 @@
 <pre id="out">running…</pre>
 <script>
 var out = [], pass = 0, fail = 0;
-function chk(c, l) { c ? pass++ : fail++; out.push((c ? 'ok   ' : 'FAIL ') + l); }
+function chk(c, l) { c ? pass++ : fail++; out.push((c ? 'ok   ' : 'FAIL ') + l); document.getElementById('out').textContent = out.join('\n') + '\n…'; }
 function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
 f.onload = async function () {
   await sleep(2500);
@@ -76,6 +76,7 @@ f.onload = async function () {
       ['calendar', 'cal-day-popup-modal', function () { D.getElementById('cal-day-popup-overlay').style.display = 'flex'; }, function () { hide('cal-day-popup-overlay'); }],
       ['alarm', 'alarm-modal', function () { D.getElementById('alarm-modal-body').innerHTML = new Array(80).join('<p>긴 업무 내용 줄</p>'); D.getElementById('alarm-modal-overlay').style.display = 'flex'; D.getElementById('alarm-modal').style.display = 'flex'; }, function () { W.closeAlarmModal(); }],
       ['alarm', 'alarm-schedule-modal', function () { D.getElementById('alarm-schedule-overlay').style.display = 'flex'; D.getElementById('alarm-schedule-modal').style.display = 'flex'; }, function () { hide('alarm-schedule-overlay'); hide('alarm-schedule-modal'); }],
+      ['alarm', 'inbox-mailraw-box', function () { W.showMailRawModal({ subject: '시험 메일', sender: 'a@b', date: '2026-11-26', body: new Array(200).join('본문 줄\n') }); }, function () { hide('inbox-mailraw-modal'); }],
       ['alarm', 'notice-modal', function () { W.openNoticeModal(); }, function () { hide('notice-modal'); hide('notice-modal-bg'); }]
     ];
     for (const c of cases) {
