@@ -715,18 +715,9 @@ div:has(> [onclick*="_toggleAlarmSection"]) { border-color: var(--ui-cell-line, 
     .no-td > div > * { position: relative; z-index: 2; }
     .no-td .row-pin-bar:hover { background-color: #4285f4; opacity: 0.5; }
     #myTable tbody tr.alarm-on .row-pin-bar { background-color: #4285f4; }
-    /* 헤더(No.)의 전체 토글 — 행과 같은 모양이되 th엔 기준 높이가 없어 고정 크기 인라인 막대로 */
-    .row-pin-bar.pin-bar-head {
-        position: relative; width: 5px; height: 13px; border-radius: 2px;
-        flex-shrink: 0; cursor: pointer;
-        background-color: #c3ccd4; transition: background-color .15s, opacity .15s;
-    }
-    /* 헤더 막대도 5×13px이라 잡기 어렵다 — 겹치는 요소가 없는 **왼쪽·위아래**로만 보이지 않는
-       클릭 여유를 덧댄다(::after 오버레이라 th 높이는 안 늘어난다, 오른쪽 "No." 글자도 안 먹음) */
-    .row-pin-bar.pin-bar-head::after {
-        content: ''; position: absolute; top: -6px; bottom: -6px; left: -7px; right: -2px;
-    }
-    .row-pin-bar.pin-bar-head:hover { background-color: #4285f4; opacity: 0.5; }
+    /* 🚩 (2026-11-26 사용자 요청 "행과 같은 자리로") 헤더(No.)의 전체 토글 — <th>에도 `no-td` 클래스를
+       줘서(js/04j) 행과 완전히 같은 자리·모양(위 .no-td .row-pin-bar)을 그대로 물려받는다. 예전엔
+       th엔 기준 높이가 없다며 5×13px 작은 점으로 따로 그려 "업무" 글자 옆에 떠 있는 것처럼 보였다. */
     /* 인쇄물에서는 "꺼진" 회색 막대가 모든 행에 줄줄이 찍히면 잡음이라 켜진 것만 남긴다 */
     @media print {
         .no-td .row-pin-bar:not(.on) { display: none !important; }

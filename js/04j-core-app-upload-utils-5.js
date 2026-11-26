@@ -2018,7 +2018,10 @@
                 //    짚는다 — 몇 번째 자식인지로 집지 말 것(렌더러가 만든 DOM 규칙, 2026-11-05 교훈).
                 const _selAllTitle = window._currentLang === 'en'
                     ? 'Select/deselect all search results' : '검색 결과 전체 선택/해제';
-                headHtml += `<th class="${thClass}" style="${thStyle} ${widthClass}"><div style="display:flex; align-items:center; justify-content:center; gap:3px;"><span class="row-pin-bar pin-bar-head" onclick="window.wrToggleAllPins(event)" title="${escapeHtml(_allPinTitle)}"></span><input type="checkbox" id="gantt-search-selall-head" title="${escapeHtml(_selAllTitle)}" style="display:none; width:14px; height:14px; cursor:pointer; accent-color:#d63384; flex-shrink:0;" onchange="window._ganttSearchToggleSelectAll(this.checked)"><span>${displayCell}</span></div></th>`;
+                // 🚩 [2026-11-26 사용자 요청 "행과 같은 자리로"] `no-td` 클래스를 th에도 주면 행의
+                //    `.no-td .row-pin-bar`(칸 왼쪽 끝에 붙는 절대위치 막대)를 그대로 물려받는다 —
+                //    바 span을 `.no-td-inner`(행과 같은 클래스) 바깥에 둬서 DOM 구조까지 행과 같다.
+                headHtml += `<th class="no-td" style="${thStyle} ${widthClass}"><span class="row-pin-bar pin-bar-head" onclick="window.wrToggleAllPins(event)" title="${escapeHtml(_allPinTitle)}"></span><div class="no-td-inner"><input type="checkbox" id="gantt-search-selall-head" title="${escapeHtml(_selAllTitle)}" style="display:none; width:14px; height:14px; cursor:pointer; accent-color:#d63384; flex-shrink:0;" onchange="window._ganttSearchToggleSelectAll(this.checked)"><span>${displayCell}</span></div></th>`;
             } else if (thClass === 'detail-th') {
                 headHtml += `<th class="${thClass}" style="${thStyle} ${widthClass} cursor:pointer;" title="클릭: 상세내용 전체 펼치기/접기" onclick="window.toggleAllDetailExpand(this, event)"><div style="display:inline-block; padding-right:2px; vertical-align: middle;">${displayCell} <span style="font-size:9px; color:#aaa;" id="detail-th-arrow">▼</span></div></th>`;
             } else {
