@@ -1503,7 +1503,7 @@ window.mailDistributeToProject = async function() {
                 상세내용: task['상세내용'] || '',
                 시작일: task['시작일'] || '',
                 완료일: task['완료일'] || '',
-                상태: task['상태'] || '진행',
+                상태: window._mailAiStatus ? window._mailAiStatus(task['상태']) : '진행', // 🚫 AI 상태 무시(js/04a)
                 개발단계: task['개발단계'] || '',
                 담당구분: task['담당구분'] || '',
                 wbs레벨: task['wbs레벨'] != null ? String(task['wbs레벨']) : '3',

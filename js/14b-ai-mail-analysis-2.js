@@ -605,7 +605,7 @@ window.buildMailTaskRow = function(r, gd, ci, mailRaw, targetMeta) {
     };
     if (ci.start !== -1 && r['시작일']) { newRow[ci.start] = _fixYear(r['시작일']); newRow._startForced = true; }
     if (ci.plan !== -1 && r['완료일']) { newRow[ci.plan] = _fixYear(r['완료일']); newRow._planForced = true; }
-    if (ci.status !== -1) newRow[ci.status] = (r['상태'] || "진행").toString().trim();
+    if (ci.status !== -1) newRow[ci.status] = window._mailAiStatus ? window._mailAiStatus(r['상태']) : "진행"; // 🚫 AI 상태 무시(js/04a MAIL_AI_STATUS_POLICY)
     if (ci.devStage !== -1) newRow[ci.devStage] = (r['개발단계'] || "").toString().trim();
     if (ci.content !== -1) newRow[ci.content] = (r['상세내용'] || "").toString().trim().replace(/\\n/g, '\n');
 

@@ -261,6 +261,7 @@ Telegram 알람 + 주간 업무 보고 + 캘린더 뷰를 하나의 페이지에
 ### `docs/mail-pipeline.md` — 메일 분석/원문/번역/토픽 프로파일 재생성
 - **읽을 때**: 메일→업무 등록 경로, 다중 배분, 미분류 재분석, 번역, 보관함 삭제
 - 업무 복사/이동 코드에서 `buildMailTaskRow` 4번째 인자 `mailRaw` 빠뜨리지 말 것 — "원문 보기" 조용히 사라짐
+- 🚫 **(2026-11-26 사용자 지시) 메일 AI 는 간트 `상태` 를 정하지 않는다** — AI 응답의 "상태" 키는 파서 계약이라 받되 행엔 `MAIL_AI_STATUS_POLICY.fallback`('진행') 을 넣는다. 판정은 `_mailAiStatus`(js/04a) 한 곳 — `buildMailTaskRow`(14b)·첨부 탭(15a)·다중 배분 큐(14a)·보관함 카드 표시(14c). 되돌리기 `useAi:true`. AI 문답의 "완료로 바꿔줘"(사람 명령)·JIRA 연동 상태는 그대로
 - 헤드리스 Drive PATCH 직전에 `_tpMaybeAutoRegen(fileId,rows,colIdx,projectMeta)` 호출 — `rows/colIdx/projectMeta` 생략 시 열려있는 엉뚱한 프로젝트를 읽음
 - 백그라운드 루프에서 `recalculateSchedules()`·`saveToGoogleDrive()` 반복 호출 금지 — 끝에 1회만
 - 보관함 삭제: `markDeleted()` 호출 필수 + 묘비(tombstone) 없으면 Drive 재로드 시 되살아남

@@ -689,6 +689,19 @@ document.addEventListener('focusin', function(e) {
 // 🔗 같은 규칙이 백엔드 아침 브리핑(`kortek_backend.py` `_brief_text_for`)에도 있다 —
 //    거기선 js 를 못 부르므로 **사본**이다. 한쪽만 고치면 화면과 텔레그램이 갈린다.
 // ══════════════════════════════════════════════════════════════════════════
+// 🚫 [2026-11-26 사용자 지시] 메일 AI 분석은 간트 '상태' 를 정하지 않는다 — 써 보니 AI 가 상태를 잘 못
+//    맞혔다(메일 한 통으로는 일이 끝났는지 알 수 없다). AI 응답의 "상태" 키는 파서 계약 때문에 그대로
+//    받지만(키를 빼면 기존 저장 프롬프트가 깨진다) 행에 넣을 땐 무시하고 `fallback` 을 쓴다.
+//    판정은 `_mailAiStatus` 한 곳 — 메일 업무가 간트 행이 되는 입구(js/14b buildMailTaskRow · js/15a
+//    첨부 탭 · js/14a 다중 배분 큐)가 전부 이걸 지난다. 되돌리기는 useAi:true 한 줄.
+window.MAIL_AI_STATUS_POLICY = window.MAIL_AI_STATUS_POLICY || { useAi: false, fallback: '진행' };
+window._mailAiStatus = function (aiValue) {
+    var p = window.MAIL_AI_STATUS_POLICY || {};
+    var fb = p.fallback || '진행';
+    if (!p.useAi) return fb;
+    var v = (aiValue == null ? '' : String(aiValue)).trim();
+    return v || fb;
+};
 window.GANTT_OVERDUE_POLICY = window.GANTT_OVERDUE_POLICY || {
     skipMailRows: true,                  // 메일에서 들어온 행은 '지연' 으로 세지 않는다
     doneWords: ['완료', 'Done']          // 이 상태면 끝난 것

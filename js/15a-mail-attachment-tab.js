@@ -1560,7 +1560,7 @@ function mfDirectInsert(task, mailRaw, setAlarm) {
     newRow._aiOrigStart = task['시작일'] || null;
     newRow._aiOrigPlan  = task['완료일'] || null;
     if (colIdx.status >= 0 && colIdx.status < newRow.length) 
-        newRow[colIdx.status] = (task['상태'] || "진행");
+        newRow[colIdx.status] = window._mailAiStatus ? window._mailAiStatus(task['상태']) : "진행"; // 🚫 AI 상태 무시(js/04a)
     if (colIdx.devStage >= 0 && colIdx.devStage < newRow.length) 
         newRow[colIdx.devStage] = (task['개발단계'] || "");
     if (colIdx.content >= 0 && colIdx.content < newRow.length) 
