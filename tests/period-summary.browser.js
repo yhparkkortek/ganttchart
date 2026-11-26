@@ -95,6 +95,8 @@
         ok('일정 현황 모드에서도 숫자 네 칸은 숨긴다(showCounts=false)', !!mbody && !/repeat\(4,\s*1fr\)/.test(mbody.innerHTML) && !!mbody.querySelector('#ps-period-toolbar'));
         P.showLegacy = false;
         var mm0 = document.getElementById('ai-summary-modal'); if (mm0) mm0.style.display = 'none';
+        // 📋 [2026-11-26] 기본 보기는 '회의 브리핑' — 이 하네스는 행 목록(표) 보기를 시험한다. 브리핑은 period-summary-brief.browser.js
+        window._psTblSet({ view: 'rows' });
         window.switchTab('psummary');
         window._psSetMode('day');
         body = document.getElementById('psummary-page');

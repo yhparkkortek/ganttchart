@@ -281,6 +281,7 @@
                 var kd = window._psMode(); window.projectMeta = window.projectMeta || {}; window.projectMeta.aiPeriodSummary = {};
                 window.projectMeta.aiPeriodSummary[kd] = { rangeKey: 'TESTSIG', at: Date.now(), by: 't', factCount: dates.length,
                     rows: dates.map(function (dt, i) { return { cat: 'done', projects: ['PRJ'], people: ['홍'], roles: [], date: dt, text: '행' + i, refs: [], common: false }; }) };
+                window._psTblSet({ view: 'rows' });   // 📋 기본은 회의 브리핑 — 날짜 열은 행 목록 표에 있다
                 goTab('psummary'); await sleep(1500);
                 var det = document.getElementById('ps-facts-det'); if (det) det.open = true;
                 var pt = newTally(), pf = newTally();

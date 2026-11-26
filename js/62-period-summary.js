@@ -613,6 +613,10 @@
             //    AI 는 분류·내용·근거만 낸다 — 프로젝트·담당자·날짜는 **코드가 근거 사실에서** 채운다(지어낼 수 없게).
             '- 분류는 넷 중 하나: "한 일"(이 기간에 처리·회신·완료된 것) · "할 일"(To do·앞으로 해야 할 것) · "막힌 일"(문제점·답을 기다리는 것·미해결) · "결정·요청"(고객/상대의 요청, 정해진 사항).\n' +
             '- 여러 프로젝트에 걸친 **같은 이슈**는 한 행으로 합치고 근거 번호를 모두 넣으세요(공통 이슈로 표시됩니다).\n' +
+            // 📋 [2026-11-26 사용자 요청 "팀장·파트장이 팀원과 회의할 때 쓰는 자료 — 어떤 업무를 어떻게 진행하는지·이슈·해결할 일"]
+            //    화면(회의 브리핑)은 이 행들을 **업무 단위**로 묶어 보여 준다 → 한 업무의 문장끼리 같은 업무의 근거만 달아야 묶인다.
+            '- 이 요약은 팀장·파트장이 팀원과 회의할 때 쓰는 자료입니다. 분류별 문장의 뜻: "한 일" = 그 업무가 **지금 어디까지 진행됐는지**(상태 한 문장) · "막힌 일" = **무엇이 왜 막혔는지**(누구의 회신·결정을 기다리는지) · "할 일" = **다음 조치**(사실에 담당자·기한이 있으면 문장에 포함) · "결정·요청" = 회의에서 **정해야 할 것** 또는 상대의 요청.\n' +
+            '- 한 업무는 분류마다 **한 행씩**만 쓰세요(같은 업무의 메일 여러 통은 합쳐서). 한 행의 근거는 **같은 업무의 사실 번호끼리만** 묶고, 서로 다른 업무를 한 행에 섞지 마세요(여러 프로젝트에 걸친 같은 이슈만 예외). 근거 번호는 그 업무의 대표 사실을 맨 앞에.\n' +
             '- "내용"은 회의 자료에 그대로 쓸 한 문장(60자 안팎). 최대 ' + (P.maxItems || 30) + '행.\n' +
             '\n다음 JSON 으로만 답하세요:\n{\n  "items": [\n    {"분류": "한 일", "내용": "…", "근거": ["#G12", "#G15"]}\n  ]\n}';
     };
@@ -629,6 +633,7 @@
     P.archiveLocalKey = P.archiveLocalKey || 'gantt_ps_archive_v1';
     P.archiveLocalMax = P.archiveLocalMax || 30;
     P.maxItems = P.maxItems || 30;
+    P.promptVer = P.promptVer || 3;   // 3 = 회의용 문장(2026-11-26). 그보다 옛 보관본은 보여 주되 **재사용으로 AI 를 건너뛰지는 않는다**
     function catOf(id) { return P.summaryCats.filter(function (c) { return c.id === id; })[0] || P.summaryCats[0]; }
     function catName(id) { var c = catOf(id); return window._currentLang === 'en' ? c.en : c.ko; }
     function catFromText(s) {
@@ -765,7 +770,7 @@
         var c = compatArrays(rec.rows || []);
         window.projectMeta.aiPeriodSummary[kind] = {
             rangeKey: rec.sig, at: rec.at, factCount: rec.factCount, rows: rec.rows, dropped: rec.dropped || 0,
-            by: rec.by || '', archived: rec.name || '', reused: !!rec._reused,
+            by: rec.by || '', archived: rec.name || '', reused: !!rec._reused, pv: rec.pv || 0,
             요약: c.요약, 요청결정: c.요청결정, 미해결: c.미해결
         };
         return window.projectMeta.aiPeriodSummary[kind];
@@ -791,7 +796,7 @@
         if (!opts.force) {
             var old = null;
             try { old = await window._psArchiveFind(col.sig); } catch (e) { old = null; }
-            if (old) {
+            if (old && (old.pv || 0) >= P.promptVer) {
                 old._reused = true;
                 var c0 = adoptRec(kind, old);
                 if (window._renderAiProjectSummaryBody) window._renderAiProjectSummaryBody();
@@ -813,7 +818,7 @@
             var conv = window._psRowsFromAi(j, col.facts);
             var F0 = filt();
             var rec = {
-                v: 2, sig: col.sig, kind: kind, label: col.range.label,
+                v: 2, pv: P.promptVer, sig: col.sig, kind: kind, label: col.range.label,
                 range: { from: ymd(col.range.from), to: ymd(col.range.to) },
                 filter: { pm: F0.pm || '', proj: F0.proj || '', who: F0.who || '' },
                 at: new Date().toISOString(), by: window._appUserKey || window.currentUserName || '',
@@ -978,11 +983,11 @@
         var openName = openProjectName();
         var shown = null;   // 지금 표로 그릴 것: { rows, at, by, factCount, dropped, reused, archiveView }
         if (_psView) {
-            shown = { rows: _psView.rows || [], at: _psView.at, by: _psView.by, factCount: _psView.factCount, dropped: _psView.dropped, archiveView: _psView };
+            shown = { rows: _psView.rows || [], at: _psView.at, by: _psView.by, factCount: _psView.factCount, dropped: _psView.dropped, archiveView: _psView, pv: _psView.pv || 0 };
         } else if (fresh || near) {
             var rows0 = Array.isArray(cache.rows) ? cache.rows
                 : window._psRowsFromAi({ '요약': cache.요약, '요청·결정': cache.요청결정, '미해결': cache.미해결 }, col.facts).rows;   // 옛 캐시
-            shown = { rows: rows0, at: cache.at, by: cache.by, factCount: cache.factCount, dropped: cache.dropped, reused: cache.reused,
+            shown = { rows: rows0, at: cache.at, by: cache.by, factCount: cache.factCount, dropped: cache.dropped, reused: cache.reused, pv: cache.pv || 0,
                       stale: near ? { from: cache.factCount, to: col.facts.length } : null };
         } else if (col.facts.length && !_psLooked[col.sig]) {
             // ♻️ 같은 조건의 보관본이 있으면 버튼을 안 눌러도 바로 보여 준다(AI 0회).
@@ -1040,16 +1045,16 @@
     }
 
     // ── 📊 AI 요약 표 ───────────────────────────────────────────────────────────
-    var _psTbl = { sort: 'cat', dir: 1, cats: {}, proj: '', who: '', q: '', common: false, pinned: false };
+    var _psTbl = { sort: 'cat', dir: 1, cats: {}, proj: '', who: '', q: '', common: false, pinned: false, view: 'brief', by: 'proj', big: false };
     var _psView = null;      // 📚 보관본을 열어 보는 중이면 그 기록
     var _psLooked = {};      // 같은 조건으로 보관함을 이미 찾아봤는가(렌더마다 NAS 를 두드리지 않게)
     var _psLast = null;
     window._psTblState = function () { return _psTbl; };
 
     function rowProj(r) { return r.common ? T('공통', 'Common') + ' (' + r.projects.length + ')' : (r.projects[0] || ''); }
-    function viewRows() {
+    function viewRows(ignoreCats) {
         var rows = (_psLast && _psLast.shown && _psLast.shown.rows) || [];
-        var anyCat = Object.keys(_psTbl.cats).some(function (k) { return _psTbl.cats[k]; });
+        var anyCat = !ignoreCats && Object.keys(_psTbl.cats).some(function (k) { return _psTbl.cats[k]; });   // 브리핑은 분류 칩이 없다
         // 🔍 [2026-11-25] 표 찾기는 다른 페이지와 **같은 공용 규칙**(js/04a: 낱말 AND/OR·쉼표·날짜 기간) — 예전엔 글자 그대로 부분일치 하나뿐이었다.
         var toks = (window._searchTokens && String(_psTbl.q || '').trim()) ? window._searchTokens(_psTbl.q) : [];
         var out = rows.filter(function (r) {
@@ -1282,9 +1287,10 @@
                   tdCls: function (f) { return dateCls(f.date); }, html: function (f) { return esc(f.date || ''); } },
                 { id: 'cat', label: T('구분', 'Role'), w: '58px', nowrap: true, sort: function (f) { return f.cat || '~'; }, opt: function (f) { return f.cat || ''; },
                   html: function (f) { return f.cat ? '<span style="' + window._uiBadgeStyle() + ' background:#eef3f7; color:#2c5f8a;">' + esc(f.cat) + '</span>' : ''; } },
-                { id: 'who', label: T('담당자', 'Assignee'), sort: function (f) { return f.assignee || '~'; },
+                { id: 'who', label: T('담당자', 'Assignee'), w: '92px', nowrap: true, sort: function (f) { return f.assignee || '~'; },
                   opt: function (f) { return String(f.assignee || '').split(',').map(function (x) { return x.trim(); }); },
-                  html: function (f) { return esc(f.assignee || ''); } },
+                  // 👤 이름이 많으면 면적을 다 먹었다(2026-11-26 신고) — 첫 이름 + "외 N", 전체는 말풍선
+                  html: function (f) { return whoTip(String(f.assignee || '').split(',').map(function (x) { return x.trim(); }), []); } },
                 { id: 'proj', label: T('프로젝트', 'Project'), sort: function (f) { return f.project || ''; }, opt: function (f) { return f.project || ''; },
                   html: function (f) { return '<span style="font-size:11.5px;">' + esc(f.project || '') + (f.project && f.project === thisProj ? ' <span title="' + esc(T('지금 열린 프로젝트', 'Open project')) + '">📂</span>' : '') + '</span>'; } },
                 { id: 'task', label: T('업무', 'Task'), w: '24%', sort: function (f) { return f.task || ''; }, html: function (f) {
@@ -1310,7 +1316,144 @@
         var el = document.getElementById('ps-facts-body');
         if (el && _psLast && _psLast.factsShown) el.innerHTML = factsTableHtml(_psLast.factsShown);
     }
-    function tableHtml() {
+    // 📋 [2026-11-26 사용자 요청 "회의용 — 팀장·파트장이 어떤 업무를 어떻게 진행 중인지·이슈·해결할 일"] **회의 브리핑** 보기.
+    //    ⚠️ AI 가 새로 내는 것은 **문장**뿐이다(분류·내용·근거 — 지금과 같은 행 목록). 브리핑은 그 행을 **업무 단위로 다시 묶어 보는 화면**이라
+    //       접지 검사·보관함·엑셀·핀셋·담당자 편집 같은 기존 장치가 전부 그대로 돈다(행 목록 보기에서).
+    //    · 업무 = 행의 첫 근거 사실의 업무명(프로젝트 + 업무명). 한 업무의 한 일/막힌 일/할 일/결정·요청 문장이 한 줄에 모인다.
+    //    · 열: 한 일 → 지금 상태 · 막힌 일 → 이슈 · 할 일 + 결정·요청 → 필요한 조치(결정은 배지).
+    //    · "N일 경과" 는 코드가 근거 사실 중 가장 이른 날짜로 센다(AI 가 지어내지 않는다).
+    //    · 맨 위 "오늘 회의에서 정할 것" = 막힌 일·결정·요청 중 오래된 순 상위 P.meetingTop 건.
+    P.meetingTop = P.meetingTop || 6;
+    var _psBriefTasks = [];   // 핀셋 단추가 순번으로 집는다(이름에 따옴표가 들어 있다)
+    function daysSince(d) {
+        if (!d) return 0;
+        var n = new Date(), t = new Date(n.getFullYear(), n.getMonth(), n.getDate()), x = new Date(d + 'T00:00:00');
+        return isNaN(x.getTime()) ? 0 : Math.max(0, Math.round((t - x) / 86400000));
+    }
+    function rowAge(r) {
+        var ds = liveFacts(r).map(function (f) { return f.date; }).filter(Boolean).sort();
+        var d = ds[0] || r.date || '';
+        return d ? daysSince(d) : 0;
+    }
+    function ganttRowsOfTask(t) {
+        var all = (_psLast && _psLast.shown && _psLast.shown.rows) || [], rows = [], lost = 0;
+        t.ai.forEach(function (ai) {
+            var res = resolveGanttRows(all[ai] || { refs: [] });
+            lost += res.lost;
+            res.rows.forEach(function (ri) { if (rows.indexOf(ri) < 0) rows.push(ri); });
+        });
+        return { rows: rows, lost: lost };
+    }
+    window._psPinBrief = function (n) {
+        var t = _psBriefTasks[n]; if (!t) return;
+        var res = ganttRowsOfTask(t);
+        applyPins(res.rows, res.lost);
+    };
+    function briefModel(rows, all) {
+        var by = _psTbl.by === 'who' ? 'who' : 'proj', groups = {}, order = [];
+        rows.forEach(function (r) {
+            var ai = all.indexOf(r), rr = uniqRefs(r.refs), t0 = rr[0] || {}, ppl = peopleOf(r), roles = rolesOf(r);
+            var gkeys = by === 'who'
+                ? (ppl.length ? ppl : [roles.length ? '(' + roles.join(', ') + ')' : T('(담당 미지정)', '(Unassigned)')])
+                : [r.common ? '\u0000' + T('공통 이슈', 'Common issues') : (r.projects[0] || T('(프로젝트 미상)', '(Unknown project)'))];
+            gkeys.forEach(function (gk) {
+                var g = groups[gk];
+                if (!g) { g = groups[gk] = { name: gk.replace(/^\u0000/, ''), common: gk.charAt(0) === '\u0000', tasks: {}, torder: [], score: 0, nb: 0, nd: 0 }; order.push(gk); }
+                var tk = r.common ? 'c' + ai : (t0.task ? (r.projects[0] || '') + '\u0001' + t0.task : 'n' + ai);
+                var t = g.tasks[tk];
+                if (!t) {
+                    t = g.tasks[tk] = { task: r.common ? T('🔗 공통 이슈', '🔗 Common issue') : (t0.task || T('(업무명 없음)', '(untitled)')),
+                        proj: r.projects[0] || '', sub: r.common ? r.projects.join(', ') : '', ai: [], rows: { done: [], blocked: [], todo: [], decision: [] },
+                        people: [], roles: [], refs: [], date: '', score: 0, age: 0 };
+                    g.torder.push(tk);
+                }
+                t.ai.push(ai);
+                (t.rows[r.cat] || t.rows.done).push(r);
+                t.people = uniq(t.people.concat(ppl)); t.roles = uniq(t.roles.concat(roles));
+                t.refs = uniqRefs(t.refs.concat(rr));
+                if ((r.date || '') > t.date) t.date = r.date || '';
+                var w = r.cat === 'blocked' ? 3 : r.cat === 'decision' ? 2 : r.cat === 'todo' ? 1 : 0;
+                t.score += w; g.score += w;
+                if (r.cat === 'blocked') { t.age = Math.max(t.age, rowAge(r)); g.nb++; }
+                if (r.cat === 'decision') g.nd++;
+            });
+        });
+        var gl = order.map(function (k) {
+            var g = groups[k];
+            g.list = g.torder.map(function (tk) { return g.tasks[tk]; }).sort(function (a, b) { return (b.score - a.score) || ((a.date < b.date) ? 1 : -1); });
+            return g;
+        }).sort(function (a, b) { return (b.score - a.score) || (a.name < b.name ? -1 : 1); });
+        return gl;
+    }
+    function briefLines(rs, decBadge) {
+        if (!rs.length) return '<span style="color:#ccc;">—</span>';
+        return rs.map(function (r) {
+            return '<div style="margin-bottom:3px;">' + (decBadge && r.cat === 'decision' ? '<span style="' + window._uiBadgeStyle() + ' background:#fff3bf; color:#8f5a00;">' + esc(T('결정 필요', 'Decide')) + '</span> ' : '') + esc(r.text) + '</div>';
+        }).join('');
+    }
+    function briefHtml() {
+        var all = (_psLast && _psLast.shown && _psLast.shown.rows) || [];
+        var rows = viewRows(true);
+        findSync(rows.length, all.length);
+        var fs = _psTbl.big ? 14.5 : 12.5, by = _psTbl.by === 'who' ? 'who' : 'proj';
+        if (!rows.length) return '<div style="padding:18px 10px; text-align:center; color:#999; font-size:12.5px;">' + esc(all.length ? T('조건에 맞는 행이 없습니다', 'No rows match') : T('근거 있는 항목이 없었습니다 — 아래 사실 목록을 보세요', 'No grounded items')) + '</div>';
+        var groups = briefModel(rows, all);
+        _psBriefTasks = [];
+        // ── 오늘 회의에서 정할 것 ──
+        var items = rows.filter(function (r) { return r.cat === 'blocked' || r.cat === 'decision'; }).map(function (r) {
+            return { r: r, age: rowAge(r), ai: all.indexOf(r) };
+        }).sort(function (a, b) {
+            var ka = (a.r.cat === 'blocked' ? 1000 : 500) + a.age, kb = (b.r.cat === 'blocked' ? 1000 : 500) + b.age;
+            return kb - ka;
+        }).slice(0, P.meetingTop);
+        var box = '';
+        if (items.length) {
+            box = '<div style="border:1px solid #f1b8b8; background:#fff5f5; border-radius:8px; padding:8px 12px; margin-bottom:10px; font-size:' + fs + 'px;">' +
+                '<div style="font-weight:bold; color:#c92a2a; margin-bottom:4px;">🚩 ' + esc(T('오늘 회의에서 정할 것 ' + items.length + '건', 'To settle in the meeting: ' + items.length)) + '</div>' +
+                items.map(function (it, i) {
+                    var r = it.r, ppl = peopleOf(r), roles = rolesOf(r);
+                    return '<div style="line-height:1.65;">' + (i + 1) + '. <b style="color:#555;">[' + esc(r.common ? T('공통', 'Common') : (r.projects[0] || '')) + ']</b> ' + esc(r.text) + ' ' +
+                        '<span style="' + window._uiBadgeStyle() + ' background:' + (r.cat === 'blocked' ? '#ffe3e3; color:#c92a2a' : '#fff3bf; color:#8f5a00') + ';">' + esc(r.cat === 'blocked' ? T('막힘', 'Blocked') : T('결정 필요', 'Decide')) + '</span>' +
+                        (it.age >= 1 ? ' <span style="color:#c92a2a; font-size:11px;" title="' + esc(T('근거 메일 중 가장 이른 날짜 기준', 'Since the earliest source mail')) + '">' + esc(T(it.age + '일 경과', it.age + 'd')) + '</span>' : '') +
+                        (ppl.length || roles.length ? ' <span style="color:#555; font-size:11.5px;">· ' + whoTip(ppl, roles) + '</span>' : '') + '</div>';
+                }).join('') + '</div>';
+        }
+        // ── 표 ──
+        var td = 'padding:6px 8px; border-right:1px solid var(--ui-cell-line, #cfe3e5); border-bottom:1px solid var(--ui-cell-line, #cfe3e5); vertical-align:top; font-size:' + fs + 'px; line-height:1.5;';
+        var th = function (label, w) { return '<th style="position:sticky; top:0; z-index:20; width:' + w + '; padding:10px 8px; background:#eef6f7; color:#2c5f8a; border-right:1px solid var(--ui-cell-line, #cfe3e5); border-bottom:1px solid var(--ui-cell-line, #cfe3e5); font-size:12.5px; font-weight:600; text-align:center; white-space:nowrap;">' + esc(label) + '</th>'; };
+        var body = '';
+        groups.forEach(function (g) {
+            body += '<tr><td colspan="5" style="padding:6px 8px; background:#e3eef6; border-bottom:1px solid var(--ui-cell-line, #cfe3e5); font-weight:bold; color:#2c5f8a; font-size:' + fs + 'px;">' +
+                (g.common ? '🔗 ' : (by === 'who' ? '👤 ' : '📁 ')) + esc(g.name) +
+                ' <span style="font-weight:normal; color:#667; font-size:11.5px;">· ' + esc(T('업무 ' + g.list.length + (g.nb ? ' · 막힘 ' + g.nb : '') + (g.nd ? ' · 결정 ' + g.nd : ''), g.list.length + ' tasks' + (g.nb ? ' · ' + g.nb + ' blocked' : '') + (g.nd ? ' · ' + g.nd + ' to decide' : ''))) + '</span></td></tr>';
+            g.list.forEach(function (t, ti) {
+                var n = _psBriefTasks.push(t) - 1;
+                var rg = ganttRowsOfTask(t).rows;
+                var sub = by === 'who' ? (t.proj ? '<div style="color:#888; font-size:11px;">' + esc(t.proj) + '</div>' : '') :
+                    (t.sub ? '<div style="color:#888; font-size:11px;">' + esc(t.sub) + '</div>' : ((t.people.length || t.roles.length) ? '<div style="color:#666; font-size:11.5px;">' + whoTip(t.people, t.roles) + '</div>' : ''));
+                body += '<tr' + (ti % 2 ? ' class="ft-zebra-b"' : '') + '>' +
+                    '<td style="' + td + '">' + pinBtnHtml(rg, 'window._psPinBrief(' + n + ')') + ' <b>' + esc(t.task) + '</b>' + sub + '</td>' +
+                    '<td style="' + td + '">' + briefLines(t.rows.done) + '</td>' +
+                    '<td style="' + td + '">' + briefLines(t.rows.blocked) +
+                      (t.age >= 1 && t.rows.blocked.length ? '<span style="' + window._uiBadgeStyle() + ' background:#ffe3e3; color:#c92a2a;" title="' + esc(T('근거 메일 중 가장 이른 날짜 기준', 'Since the earliest source mail')) + '">' + esc(T(t.age + '일 경과', t.age + 'd')) + '</span>' : '') + '</td>' +
+                    '<td style="' + td + '">' + briefLines(t.rows.todo.concat(t.rows.decision), true) + '</td>' +
+                    '<td style="' + td + ' font-size:11px;">' + t.refs.map(function (x) { return refHtml(x, t.refs.some(function (y) { return y.p !== t.refs[0].p; }), t.ai[0]); }).join('<br>') + '</td></tr>';
+            });
+        });
+        return box + '<table class="ui-round-tbl" style="width:100%; border-collapse:separate; border-spacing:0; border-left:1px solid var(--ui-cell-line, #cfe3e5); border-top:1px solid var(--ui-cell-line, #cfe3e5); table-layout:fixed; background:#fff;"><thead><tr>' +
+            th(T('업무', 'Task'), '22%') + th(T('지금 상태', 'Status'), '25%') + th(T('이슈·막힌 점', 'Issues'), '21%') + th(T('필요한 조치', 'Next actions'), '23%') + th(T('근거', 'Source'), '9%') +
+            '</tr></thead><tbody>' + body + '</tbody></table>' +
+            '<div style="font-size:11px; color:#888; margin-top:4px;">' + esc(T(rows.length + ' / ' + all.length + '행 · 문장마다 근거(#번호)가 있고 근거 없는 문장은 제거됩니다 · 담당자·경과일은 코드가 계산 · 담당자 변경은 📊 행 목록에서', rows.length + ' / ' + all.length + ' rows')) + '</div>';
+    }
+    /** 담당자 칸 — 이름이 많아도 면적을 안 먹게 첫 이름 + "외 N", 전체는 말풍선. */
+    function whoTip(ppl, roles) {
+        ppl = (ppl || []).filter(Boolean);
+        if (!ppl.length) return (roles && roles.length) ? '<span style="color:#aaa;" title="' + esc(T('담당 구분은 있지만 Summary ▸ 프로젝트 멤버에 그 역할의 담당자가 없습니다', 'Role has no assignee in project members')) + '">' + esc(roles.join(', ')) + '</span>' : '';
+        return '<span title="' + esc(ppl.join(', ')) + '" style="white-space:nowrap; cursor:default;"><span style="display:inline-block; max-width:84px; overflow:hidden; text-overflow:ellipsis; vertical-align:bottom;">' + esc(ppl[0]) + '</span>' +
+               (ppl.length > 1 ? '<span style="color:#888;"> ' + esc(T('외 ' + (ppl.length - 1), '+' + (ppl.length - 1))) + '</span>' : '') + '</span>';
+    }
+    function tableHtml() { return _psTbl.view === 'rows' ? rowsTableHtml() : briefHtml(); }
+    function rowsTableHtml() {
         var rows = viewRows();
         var all = (_psLast && _psLast.shown && _psLast.shown.rows) || [];
         var th = function (id, label, w) {
@@ -1365,6 +1508,7 @@
         var meta = '🤖 ' + esc(T('사실 ' + (s.factCount || 0) + '건만으로', 'from ' + (s.factCount || 0) + ' facts')) + ' · ' + esc(String(s.at || '').replace('T', ' ').slice(0, 16)) +
             (s.by ? ' · ' + esc(s.by) : '') + (s.dropped ? ' · ' + esc(T('근거 없는 항목 ' + s.dropped + '개 제거', s.dropped + ' ungrounded removed')) : '') +
             (s.reused ? ' · <b style="color:#2f9e44;">♻️ ' + esc(T('보관본 재사용 (AI 0회)', 'reused (0 AI calls)')) + '</b>' : '') +
+            ((s.pv || 0) < P.promptVer ? ' · <b style="color:#c77700;">⚠️ ' + esc(T('옛 형식 요약 — 🔄 새로 생성하면 회의용 문장으로', 'Old-format summary — regenerate for meeting-style text')) + '</b>' : '') +
             (s.stale ? ' · <b style="color:#c77700;">⚠️ ' + esc(T('그 뒤 사실이 ' + s.stale.from + '→' + s.stale.to + '건으로 바뀜 — 🔄 새로 생성하면 반영', 'facts changed ' + s.stale.from + '→' + s.stale.to + ' — regenerate to include')) + '</b>' : '');
         // 📚 보관본 안내는 기간 제목 줄로 옮겼다(archivePillHtml).
         var banner = '';
@@ -1387,8 +1531,15 @@
                     }).join('') + '</div>';
             }
         }
+        var isBrief = _psTbl.view !== 'rows';
+        var tg = function (label, on, call) { return '<button onclick="window._psTblSet(' + call + ')" style="' + window._uiPillStyle(on) + '">' + esc(label) + '</button>'; };
+        var viewBar = tg(T('📋 회의 브리핑', '📋 Briefing'), isBrief, "{view:'brief'}") + tg(T('📊 행 목록', '📊 Rows'), !isBrief, "{view:'rows'}") +
+            (isBrief ? '<span style="display:inline-block; width:1px; height:16px; background:#cfd8e3; margin:0 4px;"></span>' +
+                tg(T('프로젝트별', 'By project'), _psTbl.by !== 'who', "{by:'proj'}") + tg(T('담당자별', 'By person'), _psTbl.by === 'who', "{by:'who'}") +
+                tg(T('🔎 크게', '🔎 Large'), !!_psTbl.big, '{big:' + (!_psTbl.big) + '}') : '') +
+            '<span style="display:inline-block; width:1px; height:16px; background:#cfd8e3; margin:0 4px;"></span>';
         return banner +
-            '<div style="display:flex; gap:4px; align-items:center; flex-wrap:wrap; margin-bottom:5px;">' + chips +
+            '<div style="display:flex; gap:4px; align-items:center; flex-wrap:wrap; margin-bottom:5px;">' + viewBar + (isBrief ? '' : chips) +
             (nCommon ? '<label style="font-size:11px; color:#8f5a00; display:inline-flex; align-items:center; gap:2px; cursor:pointer; margin-left:2px;"><input type="checkbox"' + (_psTbl.common ? ' checked' : '') + ' onchange="window._psTblSet({common:this.checked})">🔗 ' + esc(T('공통 이슈만', 'Common only')) + ' ' + nCommon + '</label>' : '') +
             pinFilterHtml(all.filter(rowPinned).length) +
             '<select onchange="window._psTblSet({proj:this.value})" title="' + esc(T('프로젝트', 'Project')) + '" style="' + selS + '">' + opt(projs, _psTbl.proj, T('프로젝트 전체', 'All projects')) + '</select>' +
@@ -1478,9 +1629,9 @@
     };
     window._psTblSet = function (patch) {
         patch = patch || {};
-        if (patch.reset) _psTbl = { sort: 'cat', dir: 1, cats: {}, proj: '', who: '', q: '', common: false, pinned: false };
+        if (patch.reset) _psTbl = { sort: 'cat', dir: 1, cats: {}, proj: '', who: '', q: '', common: false, pinned: false, view: _psTbl.view, by: _psTbl.by, big: _psTbl.big };   // 보기 방식은 필터가 아니라 유지
         if (patch.toggleCat) _psTbl.cats[patch.toggleCat] = !_psTbl.cats[patch.toggleCat];
-        ['proj', 'who', 'common', 'pinned'].forEach(function (k) { if (k in patch) _psTbl[k] = patch[k]; });
+        ['proj', 'who', 'common', 'pinned', 'view', 'by', 'big'].forEach(function (k) { if (k in patch) _psTbl[k] = patch[k]; });
         // 📌 핀셋만 / 초기화는 아래 사실 카드도 거르므로 전체를 다시 그린다.
         if (('pinned' in patch || patch.reset) && window._renderAiProjectSummaryBody) window._renderAiProjectSummaryBody();
         else rerenderAi();
