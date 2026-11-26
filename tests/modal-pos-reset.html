@@ -77,6 +77,7 @@ f.onload = async function () {
       ['alarm', 'alarm-modal', function () { D.getElementById('alarm-modal-body').innerHTML = new Array(80).join('<p>긴 업무 내용 줄</p>'); D.getElementById('alarm-modal-overlay').style.display = 'flex'; D.getElementById('alarm-modal').style.display = 'flex'; }, function () { W.closeAlarmModal(); }],
       ['alarm', 'alarm-schedule-modal', function () { D.getElementById('alarm-schedule-overlay').style.display = 'flex'; D.getElementById('alarm-schedule-modal').style.display = 'flex'; }, function () { hide('alarm-schedule-overlay'); hide('alarm-schedule-modal'); }],
       ['alarm', 'inbox-mailraw-box', function () { W.showMailRawModal({ subject: '시험 메일', sender: 'a@b', date: '2026-11-26', body: new Array(200).join('본문 줄\n') }); }, function () { hide('inbox-mailraw-modal'); }],
+      ['document', 'respick-box', function () { W.resOpenPicker({}); }, function () { hide('respick-overlay'); }],
       ['alarm', 'notice-modal', function () { W.openNoticeModal(); }, function () { hide('notice-modal'); hide('notice-modal-bg'); }]
     ];
     for (const c of cases) {
