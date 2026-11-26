@@ -44,12 +44,13 @@
         maxAgeDays: 120,               // 그 뒤에도 이보다 오래된 문서가 새로 보이면(참조로 뒤늦게 추가 등) 가져오지 않는다
         maxPerRun: 100,                // 한 번에 처리할 새 문서 상한 (2026-11-24 사용자 요청 25→100 — 90일 소급을 한 번에)
         firstDelaySec: 90,             // 앱을 연 뒤 첫 배경 스캔까지
+        bgAutoLogin: true,             // 배경 확인도 그룹웨어 자동 로그인 게이트(_gwEnsureLogin, 실패 후 재시도 금지)를 쓴다 — 2026-11-26 사용자 결정
         intervalMin: 30,               // 배경 스캔 간격(그룹웨어가 로그인돼 있을 때만) — 2026-11-26 120→30: 목록 읽기 5번뿐이라 가볍고, 2시간이면 창이 켜진 틈을 놓쳤다
         // 🩺 [2026-11-26 사용자 "결재 건이 없는 건지 안 가져오는 건지 알 수가 없다"] 배경 확인이 건너뛴 이유를 사람 말로(데이터).
         //    건너뛰기도 장부에 남기고(lastTryAt/lastSkip) 보관함 [📋 결재 가져오기] 칩에 마지막 확인 시각·멈춘 이유를 보인다.
         skipLabels: {
             gw_not_ready:  ['그룹웨어 창이 꺼져 있거나 로그인 안 됨', 'groupware window closed or signed out'],
-            gw_login:      ['그룹웨어 로그인 실패', 'groupware sign-in failed'],
+            gw_login:      ['그룹웨어 자동 로그인 실패(잠금 방지로 다시 시도 안 함 — 🔑에서 직접 로그인)', 'groupware auto sign-in failed (no retry — sign in via 🔑)'],
             no_candidates: ['후보 프로젝트 목록을 못 읽음', 'could not load candidate projects'],
             no_router:     ['판정기 준비 안 됨', 'router not ready']
         },
@@ -454,8 +455,10 @@
         if (window.renderTaskInbox && document.getElementById('task-inbox-overlay') && document.getElementById('task-inbox-overlay').style.display === 'flex') window.renderTaskInbox();
         try {
             // ① 그룹웨어 — 배경은 이미 로그인된 경우만, 사람이 누르면 게이트(1회 시도)
-            if (opts.manual && window._gwEnsureLogin) {
-                var g = await window._gwEnsureLogin(function (m) { if (window.showToast) window.showToast(m, 'info'); });
+            //    🔑 [2026-11-26 사용자 결정 "자동 로그인 켜줘"] 배경도 같은 게이트를 지난다(P.bgAutoLogin) — 창이 꺼져 있으면 크롬을 띄우고
+            //    저장된 계정으로 로그인한다. 잠금 방지는 게이트 그대로: 서버까지 간 실패는 이 페이지에서 **다시 시도하지 않는다**.
+            if ((opts.manual || P.bgAutoLogin) && window._gwEnsureLogin) {
+                var g = await window._gwEnsureLogin(function (m) { if (opts.manual && window.showToast) window.showToast(m, 'info'); });
                 if (!g || !g.ok) { res.skipped = 'gw_login'; res.message = (g && g.message) || ''; return finish(res, opts); }
             } else {
                 var st = null;

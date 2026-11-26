@@ -711,7 +711,7 @@ window._tiBuildSummaryHtml = function(items) {
                         : (_en ? 'Never checked yet on this PC.' : '이 PC에서는 아직 한 번도 확인하지 못했습니다.'));
                     if (_st.stuck) _tip += '\n' +(_en ? '⚠️ Auto-check stopped since ' : '⚠️ 자동 확인 멈춤 — ') + _hm(_st.lastSkip.at) + ': ' + _st.stuckLabel[_en ? 1 : 0] +
                         (_en ? '. Press to sign in and fetch.' : '. 누르면 그룹웨어 로그인 후 가져옵니다.');
-                    _tip += '\n' + (_en ? `Auto-check every ${_st.intervalMin} min while the groupware window is signed in.` : `자동 확인: 그룹웨어 창이 로그인돼 있으면 ${_st.intervalMin}분마다.`);
+                    _tip += '\n' + (_en ? `Auto-check every ${_st.intervalMin} min (signs in with the saved account if needed — no retry on failure).` : `자동 확인: ${_st.intervalMin}분마다 (창이 꺼져 있으면 저장된 계정으로 자동 로그인 — 실패하면 다시 시도 안 함).`);
                     if (!_b) _tail = _st.stuck ? (_en ? ' · ⚠️ auto stopped' : ' · ⚠️ 자동 멈춤')
                                               : (_st.lastRunAt ? ' · ' + _hm(_st.lastRunAt) + (_r && _r.fresh ? (_en ? ` new ${_r.fresh}` : ` 새 ${_r.fresh}`) : '') : '');
                 }
