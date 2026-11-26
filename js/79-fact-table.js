@@ -93,14 +93,22 @@
                                  : esc(c.label || '') + (on && window._uiSortMark ? window._uiSortMark(s.dir > 0) : '')) + '</th>';
             }).join('');
             var shown = cfg.max ? view.slice(0, cfg.max) : view;
+            // 🔗 cfg.children(row) 가 있으면 그 행 **바로 아래** 자식 행을 그린다(정렬·필터·개수에는 안 센다 — 접었다 펴는 묶음용). html(row, i, isChild) 의 셋째 인자가 true.
+            var cells = function (r, i, isChild) {
+                return cols.map(function (c) {
+                    var tc = c.tdCls ? c.tdCls(r) : '';
+                    return '<td' + (tc ? ' class="' + tc + '"' : '') + (c.tdAttr ? ' ' + c.tdAttr : '') + ' style="' + tdBase +
+                           (c.nowrap ? ' white-space:nowrap;' : '') + (c.align ? ' text-align:' + c.align + ';' : '') + '">' + c.html(r, i, isChild) + '</td>';
+                }).join('');
+            };
             var body = shown.map(function (r, i) {
                 var cls = (i % 2 ? 'ft-zebra-b ' : '') + (cfg.rowClass ? (cfg.rowClass(r, i) || '') : '');
-                return '<tr' + (cls.trim() ? ' class="' + cls.trim() + '"' : '') + ' ' + (cfg.rowAttr ? (cfg.rowAttr(r, i) || '') : '') + '>' +
-                    cols.map(function (c) {
-                        var tc = c.tdCls ? c.tdCls(r) : '';
-                        return '<td' + (tc ? ' class="' + tc + '"' : '') + (c.tdAttr ? ' ' + c.tdAttr : '') + ' style="' + tdBase +
-                               (c.nowrap ? ' white-space:nowrap;' : '') + (c.align ? ' text-align:' + c.align + ';' : '') + '">' + c.html(r, i) + '</td>';
-                    }).join('') + '</tr>';
+                var kids = cfg.children ? (cfg.children(r) || []) : [];
+                return '<tr' + (cls.trim() ? ' class="' + cls.trim() + '"' : '') + ' ' + (cfg.rowAttr ? (cfg.rowAttr(r, i) || '') : '') + '>' + cells(r, i, false) + '</tr>' +
+                    kids.map(function (k) {
+                        var kc = 'ft-child ' + (cfg.rowClass ? (cfg.rowClass(k, -1) || '') : '');
+                        return '<tr class="' + kc.trim() + '" ' + (cfg.childAttr ? (cfg.childAttr(k, r) || '') : '') + '>' + cells(k, -1, true) + '</tr>';
+                    }).join('');
             }).join('');
             if (!shown.length) {
                 body = '<tr><td colspan="' + cols.length + '" style="' + tdBase + ' text-align:center; color:#999; padding:14px;">' +

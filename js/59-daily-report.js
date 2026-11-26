@@ -1175,6 +1175,7 @@
     // 📒 후보 목록을 좁혀 둔 프로젝트(빈 값 = 전체). 창을 열 때마다 푼다 —
     //    좁혀 둔 채로 다시 열면 "업무가 없다" 로 보여 사람이 까닭을 모른다.
     var _candProj = '';
+    var _candGroupOn = true, _candExpanded = {};   // 🔗 같은 메일 묶기(기본 켬) · 펼친 묶음 열쇠
     var _candShowDone = false;   // ✅ 간트 상태가 완료인 후보도 보이게(기본은 숨김 — 회의에서 정리된 것)
     // 📅 [2026-11-12 요청] 기본은 "오늘" — 최근 기간 업무도 골라야 할 때가 있어 기간으로 넓힌다.
     var _candPeriod = { mode: 'today', start: '', end: '' };
@@ -1200,7 +1201,7 @@
         _deleted = null;
         _candProj = '';              // 📒 프로젝트 좁히기도 풀고 연다(좁힌 채 열면 "없다" 로 보인다)
         try { window._ft.reset('daily-cand'); } catch (e) { /* 표 정렬·필터도 처음부터 */ }
-        _candShowDone = false;
+        _candShowDone = false; _candExpanded = {};
         _candPeriod = { mode: 'today', start: '', end: '' };
         _candQuery = '';
         // 🪪 계정을 모르면 쓸 파일이 정해지지 않는다 — 열기 전에 한 번 확보하고,
@@ -1326,7 +1327,8 @@
             //    `ELECTRICAL*` 이 목록에서 사라져 **영영 못 담는다**(실측으로 재현, 오류는 안 난다).
             //    담을 때는 이미 `project` 를 같이 싣고 있었다(`_dailyAdd`) — 거르는 쪽만 몰랐다.
             return !_doc.items.some(function (it) {
-                return it.name === c.name && String(it.project || '') === String(c.project || '');
+                // 🔗 같은 메일 묶음으로 담았으면 그때 같이 적어 둔 다른 프로젝트(alsoProjects)도 이미 담긴 것이다
+                return it.name === c.name && (String(it.project || '') === String(c.project || '') || (it.alsoProjects || []).indexOf(String(c.project || '').trim()) >= 0);
             });
         });
 
@@ -1377,9 +1379,39 @@
         var isDoneC = function (c) { return window._rr.isDone(candRows(c)[0], c.status); };
         var doneAll = cand.filter(isDoneC).length;
         if (!_candShowDone) cand = cand.filter(function (c) { return !isDoneC(c); });
-        var doneChip = doneAll ? '<div style="margin:0 0 5px;"><button onclick="window._dailyToggleDone()" title="' + esc(T('간트 상태가 완료인 업무 — 회의에서 정리된 것', 'Gantt status = Done')) + '" style="' + uiPill(_candShowDone) + '">✅ ' +
-            esc(_candShowDone ? T('완료 ' + doneAll + '건 포함 중 — 숨기기', 'Done ' + doneAll + ' shown — hide') : T('완료 ' + doneAll + '건 숨김 — 보기', 'Done ' + doneAll + ' hidden — show')) + '</button></div>' : '';
+        // 🔗 [2026-11-26 사용자 요청 "중복이 많다 — 1단계: 같은 메일 묶기"] 실측 후보 66건 중 53쌍이 **같은 메일이 여러 프로젝트로 배분된 것**(내용이 글자 그대로 같다).
+        //    열쇠 = 원본 메일 열쇠(`mailKeyOf`) + 업무명 — 한 메일에서 나온 **다른 업무**는 안 합친다. 메일 열쇠가 없으면 업무명 + 내용이 글자 그대로 같을 때만.
+        //    묶음 줄은 열린 프로젝트 행(없으면 첫 행)이 대표 — 담으면 한 건으로 담기고 다른 프로젝트는 `alsoProjects` 로 적어 둔다.
+        //    ⚠️ 2단계(같은 주제 비슷한 업무)는 자동으로 합치지 않는다(다른 일일 수 있다) — 여기서 하지 않았다.
+        var normG = function (s) { return String(s || '').toLowerCase().replace(/\s+/g, ' ').trim(); };
+        cand.forEach(function (c, ci) { c._cid = ci; delete c._g; });
+        window._dailyCandAll = cand;
+        var gIdx = {}, gList = [], gKeys = [];
+        cand.forEach(function (c) {
+            var mk = (c.mailRaw && typeof window.mailKeyOf === 'function') ? window.mailKeyOf(c.mailRaw) : '';
+            var k = mk ? 'm:' + mk + '|' + normG(c.name) : (c.core ? 't:' + normG(c.name) + '|' + normG(c.core) : '');
+            if (!k) { gList.push({ members: [c] }); return; }
+            var g = gIdx[k]; if (!g) { g = gIdx[k] = { key: k, members: [] }; gList.push(g); }
+            g.members.push(c);
+        });
+        var mergedRows = 0, mergedGroups = 0;
+        var reps = gList.map(function (g) {
+            if (g.members.length < 2) return g.members[0];
+            var rep = g.members.filter(function (m) { return candRows(m).length; })[0] || g.members[0];   // 열린 프로젝트 행이 대표(간트 조작이 거기서만 된다)
+            var projs = []; g.members.forEach(function (m) { var p = String(m.project || '').trim(); if (p && projs.indexOf(p) < 0) projs.push(p); });
+            rep._g = { key: g.key, n: gKeys.push(g.key) - 1, members: g.members, projects: projs };
+            mergedGroups++; mergedRows += g.members.length - 1;
+            return rep;
+        });
+        var engineRows = _candGroupOn ? reps : cand;
+        var grpChip = mergedGroups ? '<button onclick="window._dailyToggleGroupMode()" title="' + esc(T('같은 메일이 여러 프로젝트로 배분돼 내용이 똑같은 후보를 한 줄로 — 줄 안의 🔗 로 펼칩니다', 'Same mail distributed to several projects shown as one row')) + '" style="' + uiPill(_candGroupOn) + '">🔗 ' +
+            esc(_candGroupOn ? T('같은 메일 ' + mergedRows + '건을 묶었습니다 — 풀기', mergedRows + ' duplicates grouped — ungroup') : T('같은 메일 묶기 (묶을 중복 ' + mergedRows + '건)', 'Group same-mail duplicates (' + mergedRows + ')')) + '</button>' : '';
+        var doneChip = doneAll ? '<button onclick="window._dailyToggleDone()" title="' + esc(T('간트 상태가 완료인 업무 — 회의에서 정리된 것', 'Gantt status = Done')) + '" style="' + uiPill(_candShowDone) + '">✅ ' +
+            esc(_candShowDone ? T('완료 ' + doneAll + '건 포함 중 — 숨기기', 'Done ' + doneAll + ' shown — hide') : T('완료 ' + doneAll + '건 숨김 — 보기', 'Done ' + doneAll + ' hidden — show')) + '</button>' : '';
+        doneChip = (doneChip || grpChip) ? '<div style="margin:0 0 5px; display:flex; gap:5px; flex-wrap:wrap;">' + doneChip + grpChip + '</div>' : '';
         var cfg = {
+            children: function (c) { return (_candGroupOn && c._g && _candExpanded[c._g.key]) ? c._g.members.filter(function (m) { return m !== c; }) : []; },
+            childAttr: function (m) { return 'onclick="window._dailyAddC(' + m._cid + ')" title="' + esc(T('눌러서 이 프로젝트 것만 오늘 보고에 담기', 'Click to add only this project\'s task')) + '" style="cursor:pointer; background:#f6f9fb;"'; },
             // 기본 정렬 없음 — 내 일을 먼저 모은 순서(위에서 그렇게 합쳤다)를 깨지 않는다. 열 머리글을 눌렀을 때만 정렬한다.
             max: max,
             rowClass: function (c) { return candRows(c).some(function (ri) { return gdNow[ri] && gdNow[ri]._알림; }) ? 'rp-on' : ''; },   // 핀셋 켠 행은 간트처럼 옅게 물든다
@@ -1391,18 +1423,20 @@
                 { id: 'add', label: '', w: '24px', align: 'center', tdCls: function () { return 'rp-cell rp-pad'; },
                   thHtml: function (view) { return window._rr.headHtml([].concat.apply([], view.map(candRows))); },   // 🚩 머리글 전체 바(간트 머리글 막대와 같음)
                   html: function (c) { return window._rr.barHtml(candRows(c)) + '<span style="color:#2c5f8a; font-weight:bold;">+</span>'; } },
-                { id: 'cat', label: T('구분', 'Role'), w: '58px', nowrap: true, sort: function (c) { return c.cat || '~'; }, opt: function (c) { return c.cat || ''; },
+                { id: 'cat', label: T('구분', 'Role'), w: '58px', nowrap: true, sort: function (c) { return c.cat || '~'; }, opt: function (c) { return c._g ? c._g.members.map(function (m) { return m.cat || ''; }) : (c.cat || ''); },
                   html: function (c) { return catBadge(c.cat); } },
-                { id: 'proj', label: T('프로젝트', 'Project'), sort: function (c) { return String(c.project || '').trim(); }, opt: function (c) { return String(c.project || '').trim(); },
-                  html: function (c) {
+                { id: 'proj', label: T('프로젝트', 'Project'), sort: function (c) { return String(c.project || '').trim(); }, opt: function (c) { return c._g ? c._g.projects : String(c.project || '').trim(); },
+                  html: function (c, i, isChild) {
                       var pj = String(c.project || '').trim();
                       // 📒 어느 프로젝트 것인지 **언제나** 적는다(2026-11-09 신고) — 열린 프로젝트는 📂 로 구분만 해 준다.
-                      return pj ? '<span style="font-size:11.5px;">' + (pj === openName ? '📂 ' : '') + esc(pj) + '</span>' : '';
+                      var more = (!isChild && c._g && c._g.projects.length > 1) ? ' <span style="color:#888;" title="' + esc(c._g.projects.join('\n')) + '">' + esc(T('외 ' + (c._g.projects.length - 1), '+' + (c._g.projects.length - 1))) + '</span>' : '';
+                      return pj ? '<span style="font-size:11.5px;">' + (pj === openName ? '📂 ' : '') + esc(pj) + more + '</span>' : '';
                   } },
-                { id: 'task', label: T('업무', 'Task'), w: '26%', sort: function (c) { return c.name || ''; }, html: function (c, i) {
-                    return '<b style="color:#2c5f8a;">' + esc(c.name) + '</b>' +
+                { id: 'task', label: T('업무', 'Task'), w: '26%', sort: function (c) { return c.name || ''; }, html: function (c, i, isChild) {
+                    return (isChild ? '<span style="color:#aaa;">└ </span>' : '') + '<b style="color:#2c5f8a;">' + esc(c.name) + '</b>' +
+                        (!isChild && c._g ? ' <button onclick="event.stopPropagation(); window._dailyToggleGrp(' + c._g.n + ')" title="' + esc(T('같은 메일이 ' + c._g.projects.length + '개 프로젝트에 — 눌러서 프로젝트별로 펼치기/접기', 'Same mail in ' + c._g.projects.length + ' projects — expand/collapse')) + '" style="' + (window._uiBtnStyle ? window._uiBtnStyle() : '') + ' height:18px; line-height:16px; padding:0 6px; font-size:10.5px;">🔗 ×' + c._g.members.length + (_candExpanded[c._g.key] ? ' ▴' : ' ▾') + '</button>' : '') +
                         (c.mailRaw
-                            ? ' <span onclick="event.stopPropagation(); window._dailyCandShowMailRaw(' + i + ')" title="' + esc(T('메일 원문 보기 · 아웃룩으로 열기', 'View mail source · Open in Outlook')) + '" style="cursor:pointer; text-decoration:underline dotted;">📧</span>'
+                            ? ' <span onclick="event.stopPropagation(); window._dailyCandShowMailRawC(' + c._cid + ')" title="' + esc(T('메일 원문 보기 · 아웃룩으로 열기', 'View mail source · Open in Outlook')) + '" style="cursor:pointer; text-decoration:underline dotted;">📧</span>'
                             : (c.isMail ? ' <span title="' + esc(T('메일 분석에서 온 업무', 'From mail analysis')) + '">📧</span>' : '')) +
                         (c.late ? ' <span style="color:#b1432f; font-size:10.5px;">' + esc(T('지연', 'late')) + '</span>' : '');
                 } },
@@ -1421,7 +1455,7 @@
                 { id: 'ops', label: T('현황·삭제', 'Status'), w: '112px', nowrap: true, align: 'center', html: function (c) { return window._rr.opsHtml(candRows(c), c.status); } }
             ]
         };
-        var built = window._ft.build('daily-cand', cfg, cand);
+        var built = window._ft.build('daily-cand', cfg, engineRows);
         // ⚠️ 정렬·필터가 끝난 순서 그대로 — `_dailyAdd(i)`·`_dailyCandShowMailRaw(i)` 가 이 배열의 자리로 집는다.
         window._dailyCand = built.view;
         return carryTxt + noteTxt + errTxt + doneChip + built.html;
@@ -1529,6 +1563,7 @@
                        catSelect(i, it.cat) +
                        '<span style="font-size:12.5px; font-weight:bold; color:#222;">' + esc(it.name) + '</span>' +
                        (it.project ? '<span style="color:#888; font-size:11px;">(' + esc(String(it.project).replace(/\.json$/i, '')) + ')</span>' : '') +
+                       (it.alsoProjects && it.alsoProjects.length ? '<span title="' + esc(it.alsoProjects.join('\n')) + '" style="color:#888; font-size:10.5px;">🔗 ' + esc(T('같은 메일 외 ' + it.alsoProjects.length + '개 프로젝트', '+' + it.alsoProjects.length + ' projects')) + '</span>' : '') +
                        (it.mailRaw
                          ? '<button onclick="window._dailyShowMailRaw(' + i + ')" title="' +
                              esc(T('메일 원문 보기 · 아웃룩으로 열기', 'View mail source · Open in Outlook')) +
@@ -1678,19 +1713,31 @@
         if (gone && gone.auto) dismissAuto(_date, gone);   // 자동으로 담긴 걸 뺐으면 다음 저장에 되살리지 않는다
         _doc.items.splice(i, 1); _emptiedByUser = true; saveDraftLocal(); render();
     };
-    window._dailyAdd = function (i) {
-        var c = (window._dailyCand || [])[i];
+    function addCand(c) {
         if (!c) return;
-        _doc.items.push({ name: c.name, project: c.project, cat: c.cat || '',
-                          note: c.todo || '', fromMail: !!c.isMail, rowIdx: c.idx,
-                          mailRaw: c.mailRaw || null });
+        var it = { name: c.name, project: c.project, cat: c.cat || '',
+                   note: c.todo || '', fromMail: !!c.isMail, rowIdx: c.idx,
+                   mailRaw: c.mailRaw || null };
+        // 🔗 같은 메일 묶음의 대표를 담으면 **한 건**으로 담고, 같이 묶여 있던 다른 프로젝트는 적어 둔다(그 프로젝트 후보도 이미 담긴 것으로 친다)
+        var also = c._g ? c._g.projects.filter(function (p) { return p !== String(c.project || '').trim(); }) : [];
+        if (also.length) it.alsoProjects = also;
+        _doc.items.push(it);
         saveDraftLocal(); render();
-    };
+    }
+    window._dailyAdd = function (i) { addCand((window._dailyCand || [])[i]); };
+    window._dailyAddC = function (cid) { addCand((window._dailyCandAll || [])[cid]); };   // 펼친 묶음의 한 프로젝트 줄 — 그것만
+    window._dailyToggleGrp = function (n) { var k = _candGroupKeyAt(n); if (k) { _candExpanded[k] = !_candExpanded[k]; paintCands(); } };
+    window._dailyToggleGroupMode = function () { _candGroupOn = !_candGroupOn; paintCands(); };
+    var _candGroupKeyAt = function (n) { var g = (window._dailyCandAll || []).filter(function (c) { return c._g && c._g.n === n; })[0]; return g ? g._g.key : ''; };
     // 📧 [2026-11-11] 간트 다른 곳과 똑같이 `showMailRawModal()` 하나만 부른다 — 이 모달 전용
     //    팝업을 새로 만들지 않는다(그래야 "아웃룩으로 열기"도 그대로 딸려 온다).
     window._dailyShowMailRaw = function (i) {
         var it = _doc.items[i];
         if (it && it.mailRaw && window.showMailRawModal) window.showMailRawModal(it.mailRaw);
+    };
+    window._dailyCandShowMailRawC = function (cid) {
+        var c = (window._dailyCandAll || [])[cid];
+        if (c && c.mailRaw && window.showMailRawModal) window.showMailRawModal(c.mailRaw);
     };
     window._dailyCandShowMailRaw = function (i) {
         var c = (window._dailyCand || [])[i];
