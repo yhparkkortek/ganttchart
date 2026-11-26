@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>👥 일일보고 명단 — 여백을 채워 맞춤으로 열리는가</title></head><body style="margin:0">
+<!-- 📔 [2026-11-26] 명단 모달(`daily-roster-box`)이 내 보고 쓰기(`daily-box`)와 같이 **페이지 오른쪽 여백을 채워 맞춤으로** 열린다(js/19 `MODAL_FIT_WIDE`).
+     진짜 kortek_pm.html 을 iframe 으로 띄워 진짜 👥 명단 버튼을 누른다. 가짜는 NAS 경계(`dailyEnsureIdentity`·`dailyLoadRoster`)뿐.
+     ⚠️ 빈 앱 전용. 실행: chrome --headless=new --disable-gpu --allow-file-access-from-files --window-size=1500,900
+        --virtual-time-budget=40000 --dump-dom file:///.../tests/daily-roster-fit.html → <pre id="out"> (마지막 줄 N/M) -->
+<iframe id="f" src="../kortek_pm.html?drfit=1" style="border:0;width:1500px;height:880px;"></iframe>
+<pre id="out">running…</pre>
+<script>
+var out = [], pass = 0, fail = 0;
+function chk(c, l) { c ? pass++ : fail++; out.push((c ? 'ok   ' : 'FAIL ') + l); }
+function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+var f = document.getElementById('f');
+f.onload = async function () {
+  await sleep(2500);
+  var W = f.contentWindow, D = f.contentDocument;
+  try {
+    if (W.currentDriveFileId) { out.push('SKIP 프로젝트가 열려 있다'); throw new Error('skip'); }
+    D.querySelectorAll('[id$="-overlay"],[id$="-modal"]').forEach(function (x) { if (x.style) x.style.display = 'none'; });
+    try { W.localStorage.removeItem(W.MODAL_POS_POLICY.key); } catch (e) { /* 저장된 위치가 이기니 비우고 시작 */ }
+    W.DAILY_SCAN.otherProjects = false;
+    W.dailyEnsureIdentity = async function () { return true; };
+    W.dailyLoadRoster = async function () { return []; };
+    W.dailyLoadMonth = async function () { return {}; };
+    W.dailyLoadDay = async function () { return []; };
+    W.switchTab('daily'); await sleep(700);
+    var rb = D.querySelector('[data-i18n="btn-daily-roster"]');
+    var num = function (s) { return parseFloat(s); };
+    chk(W.MODAL_FIT_WIDE.indexOf('daily-roster-box') !== -1, '명단 모달이 맞춤 목록(MODAL_FIT_WIDE)에 있다');
+    rb.click(); await sleep(1800);
+    var box = D.getElementById('daily-roster-box'), want = W._modalFitRect();
+    chk(!!box && box.dataset.fitDocked === '1', '명단 모달이 맞춤 자리에 붙어 열린다(fitDocked)');
+    var r = box.getBoundingClientRect();
+    chk(Math.abs(r.left - want.l) <= 2 && Math.abs(r.top - want.t) <= 2 && Math.abs(r.width - want.w) <= 2 && Math.abs(r.height - want.h) <= 2,
+        '위치·크기가 여백 맞춤 값과 같다 — ' + [r.left, r.top, r.width, r.height].map(Math.round).join(',') + ' vs ' + [want.l, want.t, want.w, want.h].join(','));
+    chk(box.style.transform === 'none' && box.style.maxWidth === 'none', '가운데 정렬 transform·max 제한이 풀렸다');
+    var page = D.querySelector('#tab-daily .concept-header-box').getBoundingClientRect();
+    chk(r.left >= page.right - 2 || r.left >= 600, '페이지(헤더 상자) 오른쪽 여백에 열린다 — 모달 left ' + Math.round(r.left) + ' · 페이지 right ' + Math.round(page.right));
+    chk(D.getElementById('app-main').style.paddingRight !== '', '붙어 있는 동안 페이지가 비킨다(오른쪽 여백 확보)');
+    // 내 보고 쓰기와 같은 자리
+    W.dailyOpenModal(); await sleep(1800);
+    var wr = D.getElementById('daily-box').getBoundingClientRect();
+    chk(Math.abs(wr.left - r.left) <= 2 && Math.abs(wr.width - r.width) <= 2, '내 보고 쓰기 모달과 같은 자리·폭 — ' + Math.round(wr.left) + '/' + Math.round(wr.width) + ' vs ' + Math.round(r.left) + '/' + Math.round(r.width));
+    W.dailyCloseModal();
+    // 닫으면 페이지가 원래 폭으로
+    D.getElementById('daily-roster-modal').style.display = 'none'; await sleep(400);
+    W._modalDockSync(); await sleep(200);
+    chk(D.getElementById('app-main').style.paddingRight === '', '닫으면 페이지가 원래 폭으로 돌아온다 — "' + D.getElementById('app-main').style.paddingRight + '"');
+    // 사람이 옮긴 위치·크기가 있으면 그게 이긴다(기본값은 그 전까지)
+    var all = {}; all['daily-roster-box'] = { l: 120, t: 90, w: 700, h: 500, at: Date.now() };
+    W.localStorage.setItem(W.MODAL_POS_POLICY.key, JSON.stringify(all));
+    rb.click(); await sleep(1800);
+    var b2 = D.getElementById('daily-roster-box'), r2 = b2.getBoundingClientRect();
+    chk(Math.abs(r2.left - 120) <= 2 && Math.abs(r2.width - 700) <= 2, '사람이 옮겨 둔 위치·크기가 기본 맞춤보다 우선한다 — ' + [r2.left, r2.top, r2.width, r2.height].map(Math.round).join(','));
+    D.getElementById('daily-roster-modal').style.display = 'none';
+    W.localStorage.removeItem(W.MODAL_POS_POLICY.key);
+  } catch (e) { if (e.message !== 'skip') out.push('SETUP ' + e.message); }
+  out.push(pass + '/' + (pass + fail));
+  document.getElementById('out').textContent = out.join('\n');
+};
+</script></body></html>

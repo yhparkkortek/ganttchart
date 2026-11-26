@@ -314,6 +314,8 @@ window._modalPosSave = function(boxId, withSize) {
 //    대상은 데이터 한 줄: 박스 id 를 아래 목록에 넣으면 된다.
 window.MODAL_FIT_WIDE = ['gantt-qa-box', 'mail-analyzer-modal', 'task-inbox-modal', 'jira-issue-box', 'jira-search-box',
                          'daily-box', 'matcart-box', 'ovc-box', 'ms-queue-box',
+                         // 📔 [2026-11-26 사용자 요청 "일일보고 명단도 여백을 채워 맞춤으로 열리게"] 내 보고 쓰기(daily-box)와 같은 자리 — 일일보고 명단
+                         'daily-roster-box',
                          // 📐 [2026-11-26 사용자 요청] 페이지에서 여는 내용 모달 — 캘린더 날짜 목록 · 알람 상세 · 알람 일정 ·
                          //    공지 등록 · 주간 보고 AI 미리보기. 설정 폼(알람 설정 등)은 좁은 게 맞아 넣지 않는다.
                          'cal-day-popup-modal', 'alarm-modal', 'alarm-schedule-modal', 'notice-modal', 'wr-pv-box',
