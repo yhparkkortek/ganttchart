@@ -1389,6 +1389,7 @@
             cols: [
                 // 🚩 붉은 바는 첫 칸(＋) 왼쪽 끝에 — 간트 No. 칸과 같은 구조(별도 칸·테두리 없이)
                 { id: 'add', label: '', w: '24px', align: 'center', tdCls: function () { return 'rp-cell rp-pad'; },
+                  thHtml: function (view) { return window._rr.headHtml([].concat.apply([], view.map(candRows))); },   // 🚩 머리글 전체 바(간트 머리글 막대와 같음)
                   html: function (c) { return window._rr.barHtml(candRows(c)) + '<span style="color:#2c5f8a; font-weight:bold;">+</span>'; } },
                 { id: 'cat', label: T('구분', 'Role'), w: '58px', nowrap: true, sort: function (c) { return c.cat || '~'; }, opt: function (c) { return c.cat || ''; },
                   html: function (c) { return catBadge(c.cat); } },

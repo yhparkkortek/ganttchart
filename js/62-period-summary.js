@@ -1286,7 +1286,9 @@
             rowClass: function (f) { return factPinned(f) ? 'rp-on' : ''; },   // 핀셋 켠 행은 간트처럼 행 전체가 옅게 물든다
             rowAttr: function (f) { return 'id="ps-fact-' + factKey(f) + '" onclick="window._psFactBack(event)" style="transition:box-shadow .3s, background .3s;"'; },
             cols: [
-                { id: 'date', label: T('날짜', 'Date'), w: '82px', nowrap: true, align: 'center', firstDir: -1, sort: function (f) { return f.date || ''; },
+                { id: 'date', label: T('날짜', 'Date'),
+                  // 🚩 머리글 전체 바 — 간트 No. 머리글의 막대와 같다(하나라도 켜져 있으면 전체 해제, 아니면 전체 켜기 — 이 목록의 행만)
+                  thHtml: function (view) { return window._rr.headHtml(view.map(factGanttRow).filter(function (ri) { return ri >= 0; })); }, w: '82px', nowrap: true, align: 'center', firstDir: -1, sort: function (f) { return f.date || ''; },
                   // 🚩 붉은 바는 **첫 칸 왼쪽 끝**에(간트 No. 칸과 같은 구조 — 별도 칸·테두리 없이)
                   tdCls: function (f) { return dateCls(f.date) + ' rp-cell rp-pad'; },
                   html: function (f) { var ri = factGanttRow(f); return pinBtnHtml(ri >= 0 ? [ri] : [], "window._psPinFact('" + factKey(f) + "')") + esc(f.date || ''); } },
@@ -1457,7 +1459,8 @@
         }
         // ── 표 ──
         var td = 'padding:6px 8px; border-right:1px solid var(--ui-cell-line, #cfe3e5); border-bottom:1px solid var(--ui-cell-line, #cfe3e5); vertical-align:top; font-size:' + fs + 'px; line-height:1.5;';
-        var th = function (label, w) { return '<th style="position:sticky; top:0; z-index:20; width:' + w + '; padding:10px 8px; background:#eef6f7; color:#2c5f8a; border-right:1px solid var(--ui-cell-line, #cfe3e5); border-bottom:1px solid var(--ui-cell-line, #cfe3e5); font-size:12.5px; font-weight:600; text-align:center; white-space:nowrap;">' + esc(label) + '</th>'; };
+        var allRg = [];
+        var th = function (label, w, pre) { return '<th style="position:sticky; top:0; z-index:20; width:' + w + '; padding:10px 8px; background:#eef6f7; color:#2c5f8a; border-right:1px solid var(--ui-cell-line, #cfe3e5); border-bottom:1px solid var(--ui-cell-line, #cfe3e5); font-size:12.5px; font-weight:600; text-align:center; white-space:nowrap;">' + (pre || '') + esc(label) + '</th>'; };
         var body = '';
         groups.forEach(function (g) {
             body += '<tr><td colspan="5" style="padding:6px 8px; background:#e3eef6; border-bottom:1px solid var(--ui-cell-line, #cfe3e5); font-weight:bold; color:#2c5f8a; font-size:' + fs + 'px;">' +
@@ -1466,6 +1469,7 @@
             g.list.forEach(function (t, ti) {
                 var n = _psBriefTasks.push(t) - 1;
                 var rg = ganttRowsOfTask(t).rows;
+                rg.forEach(function (ri) { if (allRg.indexOf(ri) < 0) allRg.push(ri); });
                 var sub = by === 'who' ? (t.proj ? '<div style="color:#888; font-size:11px;">' + esc(t.proj) + '</div>' : '') :
                     (t.sub ? '<div style="color:#888; font-size:11px;">' + esc(t.sub) + '</div>' : ((t.people.length || t.roles.length) ? '<div style="color:#666; font-size:11.5px;">' + whoTip(t.people, t.roles) + '</div>' : ''));
                 var allOn = rg.length && rg.every(function (ri) { var g0 = (typeof globalData !== 'undefined' && globalData) ? globalData : window.globalData; return g0[ri] && g0[ri]._알림; });
@@ -1481,7 +1485,7 @@
         });
         meetBox();
         return box + '<table class="ui-round-tbl" style="width:100%; border-collapse:separate; border-spacing:0; border-left:1px solid var(--ui-cell-line, #cfe3e5); border-top:1px solid var(--ui-cell-line, #cfe3e5); table-layout:fixed; background:#fff;"><thead><tr>' +
-            th(T('업무', 'Task'), '22%') + th(T('지금 상태', 'Status'), '25%') + th(T('이슈·막힌 점', 'Issues'), '21%') + th(T('필요한 조치', 'Next actions'), '23%') + th(T('근거', 'Source'), '9%') +
+            th(T('업무', 'Task'), '22%', window._rr.headHtml(allRg)) + th(T('지금 상태', 'Status'), '25%') + th(T('이슈·막힌 점', 'Issues'), '21%') + th(T('필요한 조치', 'Next actions'), '23%') + th(T('근거', 'Source'), '9%') +
             '</tr></thead><tbody>' + body + '</tbody></table>' +
             '<div style="font-size:11px; color:#888; margin-top:4px;">' + esc(T(rows.length + ' / ' + all.length + '행 · 문장마다 근거(#번호)가 있고 근거 없는 문장은 제거됩니다 · 담당자·경과일은 코드가 계산 · 담당자 변경은 📊 행 목록에서', rows.length + ' / ' + all.length + ' rows')) + '</div>';
     }
@@ -1496,10 +1500,10 @@
     function rowsTableHtml() {
         var rows = viewRows();
         var all = (_psLast && _psLast.shown && _psLast.shown.rows) || [];
-        var th = function (id, label, w) {
+        var th = function (id, label, w, pre) {
             var on = _psTbl.sort === id;
             return '<th onclick="window._psTblSort(\'' + id + '\')" style="position:sticky; top:0; z-index:20; cursor:pointer; user-select:none; white-space:nowrap; padding:10px 8px; background:#eef6f7; color:#2c5f8a; border-right:1px solid var(--ui-cell-line, #cfe3e5); border-bottom:1px solid var(--ui-cell-line, #cfe3e5); font-size:12.5px; font-weight:600; text-align:center;' + (w ? ' width:' + w + ';' : '') + '" title="' + esc(T('눌러서 정렬 (오름↔내림)', 'Click to sort (asc/desc)')) + '">' +
-                   esc(label) + (on ? window._uiSortMark(_psTbl.dir > 0) : '') + '</th>';
+                   (pre ? '<span style="display:inline-flex; align-items:center; gap:4px;">' + pre + esc(label) + (on ? window._uiSortMark(_psTbl.dir > 0) : '') + '</span>' : esc(label) + (on ? window._uiSortMark(_psTbl.dir > 0) : '')) + '</th>';
         };
         var td = 'padding:6px 8px; border-right:1px solid var(--ui-cell-line, #cfe3e5); border-bottom:1px solid var(--ui-cell-line, #cfe3e5); vertical-align:top; font-size:12.5px;';
         // 🦓 [2026-11-24] 다른 페이지와 같은 흰색 + 팔레트 제브라 — 색은 **tr** 에(td 에 칠하면
@@ -1519,7 +1523,7 @@
         if (!rows.length) body = '<tr><td colspan="6" style="' + td + ' text-align:center; color:#999; padding:14px;">' + esc(all.length ? T('조건에 맞는 행이 없습니다', 'No rows match') : T('근거 있는 항목이 없었습니다 — 아래 사실 목록을 보세요', 'No grounded items')) + '</td></tr>';
         // ⭕ [2026-11-24] 모서리 둥글게 — sticky 머리글이라 overflow:hidden 상자로 못 감싼다 → 표·모서리 칸에 R(.ui-round-tbl)
         return '<table class="ui-round-tbl" style="width:100%; border-collapse:separate; border-spacing:0; border-left:1px solid var(--ui-cell-line, #cfe3e5); border-top:1px solid var(--ui-cell-line, #cfe3e5); table-layout:auto; background:#fff;"><thead><tr>' +
-            th('cat', T('분류', 'Type'), '74px') + th('proj', T('프로젝트', 'Project'), '') + th('who', T('업무 담당자', 'Assignee'), '') + th('date', T('날짜', 'Date'), '82px') + th('text', T('내용', 'Content'), '46%') +
+            th('cat', T('분류', 'Type'), '74px', window._rr.headHtml([].concat.apply([], rows.map(function (r) { return resolveGanttRows(r).rows; })))) + th('proj', T('프로젝트', 'Project'), '') + th('who', T('업무 담당자', 'Assignee'), '') + th('date', T('날짜', 'Date'), '82px') + th('text', T('내용', 'Content'), '46%') +
             '<th style="position:sticky; top:0; z-index:20; padding:10px 8px; background:#eef6f7; color:#2c5f8a; border-right:1px solid var(--ui-cell-line, #cfe3e5); border-bottom:1px solid var(--ui-cell-line, #cfe3e5); font-size:12.5px; font-weight:600; text-align:center; white-space:nowrap;">' + esc(T('근거', 'Source')) + '</th>' +
             '</tr></thead><tbody>' + body + '</tbody></table>' +
             '<div style="font-size:11px; color:#888; margin-top:4px;">' + esc(T(rows.length + ' / ' + all.length + '행', rows.length + ' / ' + all.length + ' rows')) + '</div>';

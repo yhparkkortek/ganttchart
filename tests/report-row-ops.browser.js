@@ -26,6 +26,24 @@
         ok('다시 그린 뒤 바 모양이 상태를 따른다(켜짐 클래스 on)', !!tr2 && tr2.querySelector('.rp-bar').classList.contains('on') === !was);
         tr2.querySelector('.rp-bar').click(); await w(500);
         ok('다시 누르면 원래대로', !!g()[ri]._알림 === was);
+        // 🚩 머리글 전체 바 — 간트 머리글 막대와 같은 규칙(하나라도 켜져 있으면 전체 해제, 아니면 전체 켜기) · 범위는 지금 목록
+        {
+            var hdr = function () { return document.querySelector('#ps-facts-body thead .rp-bar-head:not(.closed)'); };
+            var listedRows = function () { return [].slice.call(document.querySelectorAll('#ps-facts-body tbody .rp-bar:not(.closed)')).map(function (b) { return window._rr.resolve(idOf(b, '_rrPin')).rows[0]; }); };
+            ok('머리글에 전체 바가 있다', !!hdr());
+            var LR = listedRows(), orig = LR.map(function (r) { return !!g()[r]._알림; });
+            var outside = g().filter(function (r, i) { return r && r._알림 && LR.indexOf(i) < 0; }).length;
+            if (LR.some(function (r) { return g()[r]._알림; })) { hdr().click(); await w(700); }
+            ok('하나라도 켜져 있으면 눌러서 전체 해제', LR.every(function (r) { return !g()[r]._알림; }));
+            hdr().click(); await w(700);
+            ok('다 꺼져 있으면 눌러서 전체 켜기', LR.every(function (r) { return !!g()[r]._알림; }));
+            ok('전체 켜면 머리글 바가 켜짐 모양', !!hdr() && hdr().classList.contains('on'));
+            hdr().click(); await w(700);
+            ok('다시 누르면 전체 해제', LR.every(function (r) { return !g()[r]._알림; }));
+            ok('목록 밖 핀셋은 안 건드린다', g().filter(function (r, i) { return r && r._알림 && LR.indexOf(i) < 0; }).length === outside);
+            LR.forEach(function (r, i) { g()[r]._알림 = orig[i]; if (window._patchPinRowDom) window._patchPinRowDom(r); });   // 원상복구
+            window._rrRefresh(); await w(400);
+        }
         // ✅ 현황 — 완료로 보내면 목록에서 숨고, 간트 상태 칸이 바뀐다
         var ci = window.colIdx, prevStatus = window._rr.koStatus(g()[ri][ci.status]);
         var sel = document.getElementById(tr.id).querySelector('select'); var visBefore = body.querySelectorAll('tbody tr[id^="ps-fact-"]').length;

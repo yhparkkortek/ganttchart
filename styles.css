@@ -2701,6 +2701,13 @@ tr.rp-on > td { background-color: #e3f2fd !important; }   /* 핀셋 켠 행 — 
 .rp-bar.on { background-color: #4285f4; }
 .rp-bar.some { background-color: #4285f4; opacity: .45; }
 .rp-bar.closed, .rp-bar.closed:hover { cursor: not-allowed; opacity: .4; background-color: #dfe4e9; }
+/* 머리글 전체 바 — 간트 `.row-pin-bar.pin-bar-head`(5×13px 인라인 막대 + 보이지 않는 클릭 여유)와 같은 모양. 하나라도 켜져 있으면 붉게 */
+.rp-bar-head { position: relative; display: inline-block; width: 5px; height: 13px; border-radius: 2px; flex-shrink: 0; cursor: pointer; background-color: #c3ccd4; transition: background-color .15s, opacity .15s; }
+.rp-bar-head::after { content: ''; position: absolute; top: -6px; bottom: -6px; left: -7px; right: -4px; }
+.rp-bar-head:hover { background-color: #4285f4; opacity: .5; }
+.rp-bar-head.on { background-color: #4285f4; }
+.rp-bar-head.closed, .rp-bar-head.closed:hover { cursor: not-allowed; opacity: .4; background-color: #c3ccd4; }
+@media print { .rp-bar-head { display: none !important; } }
 @media print { .rp-bar:not(.on) { display: none !important; } }
 #psummary-page .ps-date-wk { color: #555 !important; }
 #psummary-page .ps-date-hol { color: #d32f2f !important; font-weight: bold; }

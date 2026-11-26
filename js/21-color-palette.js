@@ -390,7 +390,8 @@ window._cpApplyLive = function(hex, skipSave) {
         // 🚩 보고 화면의 붉은 바(js/80)도 같은 색 — 간트와 통일(켜짐=팔레트 보색)
         + 'tr.rp-on > td { background-color: ' + alarmBg + ' !important; }\n'
         + '.rp-bar.on, .rp-bar.some { background-color: ' + alarmAccent + ' !important; }\n'
-        + '.rp-bar:not(.closed):hover { background-color: ' + alarmAccent + ' !important; opacity: 0.5; }\n';
+        + '.rp-bar-head.on { background-color: ' + alarmAccent + ' !important; }\n'
+        + '.rp-bar:not(.closed):hover, .rp-bar-head:not(.closed):hover { background-color: ' + alarmAccent + ' !important; opacity: 0.5; }\n';
 
     // 💡 [2026-08-30 추가] 셀 안 번역(🌐) 버튼/번역 결과 글자색이 옛 고정 파랑(#0056b3)이었음 —
     // "완료" 행에서만 회색으로 바뀌는 예외는 더 구체적인 선택자라 그대로 유지됨.

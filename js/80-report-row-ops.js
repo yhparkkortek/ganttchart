@@ -82,15 +82,36 @@
             if (window.showToast) window.showToast(T('⚠️ 간트에서 이 업무를 찾지 못해 핀셋을 바꾸지 않았습니다', '⚠️ Task not found in the Gantt — nothing pinned'), 'warning');
             return false;
         }
-        var newState = !rows.every(function (ri) { return g[ri] && g[ri]._알림; });
+        return window._rrPinSet(rows, !rows.every(function (ri) { return g[ri] && g[ri]._알림; }), lost);
+    };
+    /** 핀셋을 **지정한 상태로** 맞춘다(켜기/끄기). 행 하나든 목록 전체든 같은 길. */
+    window._rrPinSet = function (rows, newState, lost, whole) {
+        var g = gd();
         rows.forEach(function (ri) { if (g[ri]) { g[ri]._알림 = newState; if (window._patchPinRowDom) window._patchPinRowDom(ri); } });
-        if (typeof logChange === 'function') logChange(rows[0], -1, '알림 설정', (newState ? '알림 켜짐' : '알림 꺼짐') + (rows.length > 1 ? ' (' + rows.length + '건)' : '') + ' — 보고 화면');
+        if (typeof logChange === 'function') logChange(rows[0], -1, '알림 설정', (whole ? (newState ? '목록 전체 알림 켜짐' : '목록 전체 알림 꺼짐') : (newState ? '알림 켜짐' : '알림 꺼짐')) + (rows.length > 1 ? ' (' + rows.length + '건)' : '') + ' — 보고 화면');
         warnLost(lost);
         if (window.showToast) window.showToast(T((newState ? '🚩 하이라이트(핀셋)를 켰습니다' : '하이라이트(핀셋)를 껐습니다') + ' — 간트 ' + rows.length + '행', (newState ? 'Highlighted ' : 'Un-highlighted ') + rows.length + ' row(s)'), 'info');
         window._rrRefresh();
         return newState;
     };
     window._rrPin = function (id) { var r = resolve(id); window._rrPinRows(r.rows, r.lost); };
+
+    // ── 🚩 머리글 전체 바 — 간트 No. 머리글의 막대(`wrToggleAllPins`)와 같은 규칙: 하나라도 켜져 있으면 **전체 해제**, 아니면 전체 켜기.
+    //    다른 점: 간트는 프로젝트 전체 행이지만 여기는 **지금 목록에 보이는 행**(필터·숨김 뒤)만 — 회의에서 이 화면을 정리하는 조작이라서.
+    function headHtml(rows) {
+        rows = rows || [];
+        var g = gd(), on = rows.filter(function (ri) { return g[ri] && g[ri]._알림; }).length;
+        if (!rows.length) return '<span class="rp-bar-head closed" title="' + esc(T('열린 프로젝트의 업무가 이 목록에 없습니다', 'No open-project tasks in this list')) + '"></span>';
+        var tip = on ? T('🚩 이 목록의 하이라이트(핀셋) 전체 해제 — ' + on + '건 켜짐 (간트 머리글 막대와 같음)', 'Turn off all highlights in this list (' + on + ' on)')
+                     : T('이 목록 전체 하이라이트(핀셋) 켜기 — 간트 머리글 막대와 같음', 'Highlight all rows in this list');
+        return '<span class="rp-bar-head' + (on ? ' on' : '') + '" onclick="event.stopPropagation(); window._rrPinAll(' + register(rows) + ')" title="' + esc(tip) + '"></span>';
+    }
+    window._rrPinAll = function (id) {
+        var r = resolve(id), g = gd();
+        if (!r.rows.length) { warnLost(r.lost); return; }
+        var anyOn = r.rows.some(function (ri) { return g[ri] && g[ri]._알림; });
+        window._rrPinSet(r.rows, !anyOn, r.lost, true);
+    };
 
     // ── 현황(상태) · 삭제 ──
     window._rrStatus = function (id, val) {
@@ -145,7 +166,7 @@
     }
 
     window._rr = {
-        STATUSES: STATUSES, barHtml: barHtml, opsHtml: opsHtml, koStatus: koStatus, rowStatus: rowStatus, nameOf: nameOf, register: register, resolve: resolve,
+        STATUSES: STATUSES, barHtml: barHtml, headHtml: headHtml, opsHtml: opsHtml, koStatus: koStatus, rowStatus: rowStatus, nameOf: nameOf, register: register, resolve: resolve,
         /** 완료인가 — 열린 프로젝트 행이면 **지금 간트 값**, 아니면 사실에 적혀 있던 값. */
         isDone: function (ri, fallbackStatus) { return (ri != null && ri >= 0 ? rowStatus(ri) : koStatus(fallbackStatus)) === '완료'; }
     };
