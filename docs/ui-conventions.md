@@ -102,7 +102,10 @@ PPT 슬라이드 제목. 사용자 데이터(자재 `품명`/`규격`처럼 프�
 고른 hex 하나에서 hue(색상환 각도)만 뽑고, `CP_ROLES`에 미리 정의된 고정 채도/명도 공식(예: `bg`
 s58/l94, `darkText` s100/l25, `hoverBg` s48/l75 등)에 그 hue를 대입해 "배경/헤더틴트/테두리/제브라/
 진한텍스트/호버배경/호버테두리" 7개 역할색(`gen.*`)을 만들어낸다 — 즉 **어떤 색을 고르든 항상 같은
-파스텔 규칙**이 유지된다. `_cpApplyLive(hex)`가 이 역할색들로 `<style id="cp-live-style">`를 매번
+파스텔 규칙**이 유지된다. 🎨 **(2026-11-26) 채도도 반영한다** — 고른 색의 채도(S)로 비율 k(`_cpChroma`,
+S≥40 → 1, S≤6 → 0, 사이는 비례)를 구해 역할 채도에 곱한다(`_cpTone(hue,k,s,l)`). 명도는 그대로라 글자
+가독성은 안 바뀐다. 그래서 회색(무채색) 테마·차분한 톤이 되고, 옛 프리셋(채도 50%↑)은 결과가 같다.
+새 역할색을 만들 땐 `_cpHslToHex(hue,…)` 대신 `_cpTone(hue,k,…)` 를 쓸 것. `_cpApplyLive(hex)`가 이 역할색들로 `<style id="cp-live-style">`를 매번
 새로 만들어 `document.body` 끝에 붙이는 방식으로 실시간 적용하고(페이지 로드 시엔
 `_cpApplyStoredTheme`가 저장된 hex로 동일 함수를 호출), 결과 CSS 텍스트를 `localStorage
 ('gantt_theme_css_v1')`에도 캐시해 다음 로드 때 FOUC 없이 즉시 재주입한다(`kortek_pm.html`

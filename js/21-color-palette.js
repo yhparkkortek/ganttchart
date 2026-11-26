@@ -29,6 +29,23 @@ window._cpHslToHex = function(h, s, l) {
     const toHex = v => Math.round((v + m) * 255).toString(16).padStart(2, '0');
     return '#' + toHex(r) + toHex(g) + toHex(b);
 };
+// 🎨 [2026-11-26] 채도 반영 — 예전엔 고른 색의 hue 만 쓰고 채도는 역할마다 고정이라 ① 무채색(회색)을
+//    못 골랐고 ② "직접 선택"에서 채도를 끌어도 아무 변화가 없었다. 이제 고른 색의 채도로 모든 역할의
+//    채도를 비례해서 낮춘다(명도는 역할별 고정 그대로 — 글자 가독성은 그대로 지킨다).
+//    ⚠️ 채도가 full 이상이면 k=1 → 예전과 똑같다. 기존 프리셋 8색은 전부 채도 50% 넘음(가장 낮은
+//    파랑 #2c5f8a ≈52%)이라 이미 저장된 프로젝트 색은 안 바뀐다. gray 이하이면 k=0(완전 무채색) —
+//    회색의 hue 는 RGB 오차에서 나온 쓰레기 값이라 조금이라도 물들이면 엉뚱한 파란빛이 돌았다.
+window.CP_CHROMA = { full: 40, gray: 6 };
+window._cpChroma = function(hex) {
+    const s = window._cpHexToHsl(hex || '#000000').s;
+    const c = window.CP_CHROMA;
+    if (s <= c.gray) return 0;
+    return Math.min(1, s / c.full);
+};
+// 역할색 한 칸 — hue 는 고른 색, 채도는 역할 채도 × k, 명도는 역할 명도
+window._cpTone = function(hue, k, s, l) {
+    return window._cpHslToHex(k > 0 ? hue : 0, s * k, l);
+};
 // 💡 지금 청록 테마 실측값(bg #e0f5f7, 헤더 #eef6f7, 테두리 #cfe3e5, 제브라B #e8f2f3,
 //    진한글씨 #00707d, 호버배경 #a3d9e0, 호버테두리 #52a5af)을 역산해서 얻은 채도/명도 공식.
 //    hue만 입력색에서 뽑아 쓰고 s/l은 고정값이라, 어떤 색을 골라도 "청록과 같은 파스텔 규칙"이 유지됨.
@@ -53,7 +70,38 @@ window.CP_CURRENT_NAV = { base: '#aedae0', hover: '#90cdd5', active: '#72c0ca', 
 // 💡 [2026-08-30 버그 수정] 회색 계열(#495057)이 있었는데, 이 팔레트 도구는 "원색의 색상환 각도(hue)만
 // 뽑아서 재조합"하는 방식이라 무채색(회색)은 hue 자체가 없어서(R/G/B가 거의 같음) RGB의 미세한 오차로
 // 엉뚱한 hue(파란빛)가 뽑혀 나갔음 — 애초에 이 방식으로는 "무채색 테마"를 표현할 수 없어 프리셋에서 제외.
-window.CP_PRESETS = ['#e03131', '#e67e22', '#f1c40f', '#2f9e44', '#00707d', '#2c5f8a', '#6f42c1', '#d6336c'];
+// 🎨 [2026-11-26] 8색 → 24색. 테마는 "색상(hue) + 채도 비율(k)" 두 값으로만 정해지므로(명도는 역할별
+//    고정) 같은 hue·같은 k 인 색은 화면이 똑같다 — 그래서 유채색은 hue 가 겹치지 않게 골랐고, 무채색·
+//    저채도는 k 가 서로 다르게 골랐다(검정·회색·흰색은 전부 k=0 이라 하나만 둔다).
+//    ⚠️ 옛 8색은 hex 그대로 들어 있다 — 저장된 테마와 같은 원이 계속 표시되고, 청록(#00707d)은
+//    "원래대로 되돌리기" 구분(openColorPaletteModal)에 쓰인다.
+window.CP_PRESET_DEFS = [
+    { hex: '#e03131', ko: '빨강', en: 'Red' },
+    { hex: '#f4511e', ko: '주홍', en: 'Vermilion' },
+    { hex: '#e67e22', ko: '주황', en: 'Orange' },
+    { hex: '#f59f00', ko: '호박', en: 'Amber' },
+    { hex: '#f1c40f', ko: '노랑', en: 'Yellow' },
+    { hex: '#c0ca33', ko: '올리브', en: 'Olive' },
+    { hex: '#82c91e', ko: '라임', en: 'Lime' },
+    { hex: '#5cb82e', ko: '연두', en: 'Yellow green' },
+    { hex: '#2f9e44', ko: '초록', en: 'Green' },
+    { hex: '#12b886', ko: '민트', en: 'Mint' },
+    { hex: '#00707d', ko: '청록', en: 'Teal' },
+    { hex: '#1aa3d9', ko: '하늘', en: 'Sky' },
+    { hex: '#2c5f8a', ko: '파랑', en: 'Blue' },
+    { hex: '#3b5bdb', ko: '코발트', en: 'Cobalt' },
+    { hex: '#4a4fd8', ko: '남색', en: 'Indigo' },
+    { hex: '#6f42c1', ko: '보라', en: 'Violet' },
+    { hex: '#9c36b5', ko: '자주', en: 'Purple' },
+    { hex: '#c2369e', ko: '마젠타', en: 'Magenta' },
+    { hex: '#d6336c', ko: '분홍', en: 'Pink' },
+    { hex: '#808080', ko: '회색(무채색)', en: 'Gray (neutral)' },
+    { hex: '#5c6b7a', ko: '슬레이트', en: 'Slate' },
+    { hex: '#8a7f72', ko: '웜그레이', en: 'Warm gray' },
+    { hex: '#8d6e63', ko: '브라운', en: 'Brown' },
+    { hex: '#9c7a8f', ko: '모브', en: 'Mauve' }
+];
+window.CP_PRESETS = window.CP_PRESET_DEFS.map(function(d) { return d.hex; });
 // 💡 [2026-08-31 신규] 프로젝트에 저장된 테마색이 없을 때(=새 프로젝트, 또는 아직 팔레트를 한 번도
 //    안 건드린 프로젝트) 적용할 기본값 — 기존엔 이게 없어서 "아무 것도 안 하면" HTML/CSS에 하드코딩된
 //    청록(#00707d)이 그대로 보였다. 청록 → 파랑 프리셋으로 기본값을 바꾼다(아래 _cpApplyStoredTheme 참고).
@@ -71,9 +119,10 @@ window._cpRenderPreview = function(hex) {
     document.getElementById('cp-custom-color').value = hex;
     document.getElementById('cp-custom-color').title = window._t('직접 선택 (' + hex + ') — 클릭하면 색상 선택기가 열립니다', 'Custom (' + hex + ') — click to open the color picker'); // 💡 별도 텍스트(cp-custom-hex) 대신 툴팁으로 통합
     const hue = window._cpHexToHsl(hex).h;
+    const k = window._cpChroma(hex);
     const gen = {};
-    window.CP_ROLES.forEach(r => { gen[r.key] = window._cpHslToHex(hue, r.s, r.l); });
-    const genNav = window._cpComputeGenNav(hue);
+    window.CP_ROLES.forEach(r => { gen[r.key] = window._cpTone(hue, k, r.s, r.l); });
+    const genNav = window._cpComputeGenNav(hue, k);
     document.getElementById('cp-preview-swatches').innerHTML = window.CP_ROLES.map(r => window._cpSwatch(gen[r.key], window._t ? window._t(r.label, r.en || r.label) : r.label)).join('')
         + window._cpSwatch(genNav.base, window._t('사이드바/상단바 배경', 'Sidebar / top bar background')) + window._cpSwatch(genNav.hover, window._t('메뉴 호버', 'Menu hover'))
         + window._cpSwatch(genNav.active, window._t('메뉴 active', 'Menu active')) + window._cpSwatch(genNav.text, window._t('메뉴 글자색', 'Menu text'));
@@ -104,6 +153,7 @@ window._cpRenderPreview = function(hex) {
     //    이게 드래그 중 초당 수십 번 실행되며 브라우저를 멈추게 했다. 여기서는 디바운스(80ms)로 미뤄서
     //    드래그가 실제로 멈췄을 때만 한 번 적용되게 하고, 스와치/미리보기 표(이 함수의 위쪽 절반, 작은
     //    DOM 일부만 갱신)는 지금처럼 매 이벤트마다 즉시 갱신해 "실시간으로 보인다"는 체감은 유지한다.
+    if (window._cpMarkPreset) window._cpMarkPreset(hex);   // 직접 선택으로 프리셋과 같은 색을 고르면 그 원도 표시
     if (window._cpLiveAppliedHex && hex !== window._cpLiveAppliedHex) window._cpApplyLiveDebounced(hex);
 };
 window._cpApplyLiveTimer = null;
@@ -121,14 +171,11 @@ window._cpApplyLiveDebounced = function(hex) {
 //    (사이드바·상단바·표 헤더·제브라·테두리·버튼 호버까지) 한 번에 반영해서 진짜로 눈으로 비교 가능.
 //    background-color/border-color만 건드리고(border-style이 없으면 안 보여서 안전), 텍스트 역할
 //    (darkText/nav text)에는 color만 건드려서 엉뚱한 곳에 배경이 생기는 부작용을 막았다.
-window._cpComputeGenNav = function(hue) {
+window._cpComputeGenNav = function(hue, k) {
     const nav = window.CP_CURRENT_NAV;
-    return {
-        base: window._cpHslToHex(hue, window._cpHexToHsl(nav.base).s, window._cpHexToHsl(nav.base).l),
-        hover: window._cpHslToHex(hue, window._cpHexToHsl(nav.hover).s, window._cpHexToHsl(nav.hover).l),
-        active: window._cpHslToHex(hue, window._cpHexToHsl(nav.active).s, window._cpHexToHsl(nav.active).l),
-        text: window._cpHslToHex(hue, window._cpHexToHsl(nav.text).s, window._cpHexToHsl(nav.text).l)
-    };
+    if (k == null) k = 1;
+    const T = function(ref) { const h = window._cpHexToHsl(ref); return window._cpTone(hue, k, h.s, h.l); };
+    return { base: T(nav.base), hover: T(nav.hover), active: T(nav.active), text: T(nav.text) };
 };
 window._cpLiveAppliedHex = null;
 // 💡 [2026-08-30 신규] "지금 프로젝트 파일에 실제로 저장되어 있는" 테마 색 기준값 — populateTabData
@@ -137,20 +184,23 @@ window._cpLiveAppliedHex = null;
 window._cpSavedThemeHex = null;
 window._cpApplyLive = function(hex, skipSave) {
     const hue = window._cpHexToHsl(hex).h;
+    const k = window._cpChroma(hex);
     const gen = {};
-    window.CP_ROLES.forEach(r => { gen[r.key] = window._cpHslToHex(hue, r.s, r.l); });
+    window.CP_ROLES.forEach(r => { gen[r.key] = window._cpTone(hue, k, r.s, r.l); });
     const nav = window.CP_CURRENT_NAV;
-    const genNav = window._cpComputeGenNav(hue);
+    const genNav = window._cpComputeGenNav(hue, k);
 
     // 💡 [2026-08-30 신규] Calendar 페이지의 "핀셋 알람"/"이번달·이번주 강조"는 테마색 그 자체가 아니라
     // 색상환 반대편(보색, hue+180°)으로 강조되도록 요청받음 — 같은 CP_ROLES 공식(S/L 고정, hue만 교체)을
     // 보색 hue에 적용해서, 어떤 테마를 고르든 항상 "테마와 대비되는" 파스텔 강조색이 자동으로 나오게 한다.
     const compHue = (hue + 180) % 360;
     const compGen = {};
-    window.CP_ROLES.forEach(r => { compGen[r.key] = window._cpHslToHex(compHue, r.s, r.l); });
+    // ⚠️ 보색 강조는 채도를 줄이지 않는다 — 무채색 테마에서도 핀셋 알람·이번주 강조는 눈에 띄어야 한다
+    //    (회색 테마의 hue 는 0 으로 두므로 보색은 청록 계열이 된다).
+    window.CP_ROLES.forEach(r => { compGen[r.key] = window._cpHslToHex(k > 0 ? compHue : 180, r.s, r.l); });
 
     const logoHsl = window._cpHexToHsl('#00a1b6');
-    const genLogo = window._cpHslToHex(hue, logoHsl.s, logoHsl.l);
+    const genLogo = window._cpTone(hue, k, logoHsl.s, logoHsl.l);
 
     // 🐛 [버그 수정] 처음엔 hex 하나당 [style*="그 hex"] 한 줄로 배경/테두리를 한꺼번에 덮어썼는데,
     // 한 요소의 style 문자열 안에 "배경용 hex"와 "테두리용 hex"가 같이 들어있으면(예:
@@ -482,7 +532,7 @@ window._cpApplyLive = function(hex, skipSave) {
         h = h.replace('#', '');
         return parseInt(h.slice(0,2),16) + ', ' + parseInt(h.slice(2,4),16) + ', ' + parseInt(h.slice(4,6),16);
     })(gen.darkText);
-    const genDarkHover = window._cpHslToHex(hue, 100, 18); // darkText(l=25)보다 약간 더 진한 hover 색
+    const genDarkHover = window._cpTone(hue, k, 100, 18); // darkText(l=25)보다 약간 더 진한 hover 색
     css += '.btn.active { background-color: ' + gen.darkText + ' !important; border-color: ' + gen.darkText + ' !important; box-shadow: 0 0 5px rgba(' + _dtRgb + ', 0.4) !important; }\n'
         + '.btn.active:hover { background-color: ' + genDarkHover + ' !important; border-color: ' + genDarkHover + ' !important; }\n'
         + '.btn.active .badge { color: ' + gen.darkText + ' !important; }\n'
@@ -511,12 +561,12 @@ window._cpApplyLive = function(hex, skipSave) {
     //    styles.css의 .bom-row-* 기본값(청록)을 그대로 덮어써서 어떤 팔레트를 골라도 따라온다.
     //    호버는 CSS :hover로만 처리한다 — onmouseover JS로 배경을 쓰면 그 인라인 값이 남아 테마가 풀린다.
     css += '.bom-row-l1      { background: ' + gen.zebraB + ' !important; }\n'
-        + '.bom-row-l1-alt  { background: ' + window._cpHslToHex(hue, 30, 89) + ' !important; }\n'
-        + '.bom-row-sub-alt { background: ' + window._cpHslToHex(hue, 30, 98) + ' !important; }\n'
+        + '.bom-row-l1-alt  { background: ' + window._cpTone(hue, k, 30, 89) + ' !important; }\n'
+        + '.bom-row-sub-alt { background: ' + window._cpTone(hue, k, 30, 98) + ' !important; }\n'
         + '.bom-row-top     { background: ' + gen.bg + ' !important; }\n'
         + '.bom-row-sum     { background: ' + gen.headerTint + ' !important; }\n'
-        + '.bom-lvhdr       { background: ' + window._cpHslToHex(hue, 36, 91) + ' !important; }\n'
-        + '#bom-body tr.bom-row:hover > td { background: ' + window._cpHslToHex(hue, 45, 86) + ' !important; }\n';
+        + '.bom-lvhdr       { background: ' + window._cpTone(hue, k, 36, 91) + ' !important; }\n'
+        + '#bom-body tr.bom-row:hover > td { background: ' + window._cpTone(hue, k, 45, 86) + ' !important; }\n';
 
     // ⚡ [2026-10-19] Elec Parts 헤더의 SPEC/BOM 전환 토글 — 형제 버튼과 같은 공식으로 맞춘다.
     //    비활성: 배경 bg + 글자 darkText(다른 헤더 버튼과 동일), 활성: 배경 darkText + 흰 글자.
@@ -608,8 +658,9 @@ window._cpRoleHexFor = function(roleKey, baseHex) {
     let hex;
     if (baseHex) {
         const hue = window._cpHexToHsl(baseHex).h;
+        const k = window._cpChroma(baseHex);
         const roleDef = window.CP_ROLES.find(function(r) { return r.key === roleKey; });
-        hex = roleDef ? window._cpHslToHex(hue, roleDef.s, roleDef.l) : window.CP_CURRENT_TEAL[roleKey];
+        hex = roleDef ? window._cpTone(hue, k, roleDef.s, roleDef.l) : window.CP_CURRENT_TEAL[roleKey];
     } else {
         hex = window.CP_CURRENT_TEAL[roleKey];
     }
@@ -707,17 +758,30 @@ window._cpUpdateApplyStatus = function() {
     }
 };
 
+window._cpMarkPreset = function(hex) {
+    hex = String(hex || '').toLowerCase();
+    document.querySelectorAll('#cp-preset-swatches-list .cp-preset-dot').forEach(function(el) {
+        el.style.boxShadow = (el.getAttribute('data-hex') === hex) ? '0 0 0 2px #333' : '0 0 0 1px #ddd';
+    });
+};
 window.openColorPaletteModal = function() {
     // 💡 [2026-08-30 수정] 청록(#00707d) 프리셋만은 다른 프리셋처럼 _cpApplyLive(hex)로 "그 색을 새로
     // 적용"하는 게 아니라 _cpRevertLive()로 "원래 기본 상태로 되돌리기"를 호출한다 — 둘 다 화면에
     // 보이는 색은 똑같지만(청록 hue로 역산한 값이라), _cpApplyLive는 _cpLiveAppliedHex를 '#00707d'로
     // 남겨 "커스텀 색을 청록과 우연히 같게 골랐을 뿐"인 상태가 되어 저장 시 불필요하게 "변경사항
     // 있음"으로 잡히던 문제(예전 "↩️ 청록으로 되돌리기" 버튼이 이 구분을 위해 따로 있었음)가 있었다.
-    document.getElementById('cp-preset-swatches-list').innerHTML = window.CP_PRESETS.map(function(hex) {
+    // 🎨 [2026-11-26] 24색 — 12칸 두 줄(유채색 → 무채색·저채도 순). 지금 적용 중인 색은 진한 테두리로 표시.
+    const _cpList = document.getElementById('cp-preset-swatches-list');
+    _cpList.style.cssText = 'display:grid; grid-template-columns:repeat(12, 26px); gap:6px;';
+    const _cpCur = String(window._cpLiveAppliedHex || '#00707d').toLowerCase();
+    _cpList.innerHTML = window.CP_PRESET_DEFS.map(function(d) {
+        const hex = d.hex;
         const isDefault = hex === '#00707d';
         const action = isDefault ? "window._cpRevertLive();" : "window._cpApplyLive('" + hex + "');";
-        const title = isDefault ? hex + window._t(' (기본 청록 — 클릭하면 원래대로 되돌아갑니다)', ' (default teal — click to go back to the original)') : hex;
-        return '<div onclick="window._cpRenderPreview(\'' + hex + '\'); ' + action + '" title="' + title + '" style="width:32px; height:32px; border-radius:50%; background:' + hex + '; cursor:pointer; border:2px solid #fff; box-shadow:0 0 0 1px #ddd;"></div>';
+        const name = window._t(d.ko, d.en);
+        const title = name + ' ' + hex + (isDefault ? window._t(' (기본 청록 — 클릭하면 원래대로 되돌아갑니다)', ' (default teal — click to go back to the original)') : '');
+        const ring = hex === _cpCur ? '0 0 0 2px #333' : '0 0 0 1px #ddd';
+        return '<div class="cp-preset-dot" data-hex="' + hex + '" onclick="window._cpRenderPreview(\'' + hex + '\'); ' + action + ' window._cpMarkPreset(\'' + hex + '\');" title="' + title + '" style="width:26px; height:26px; border-radius:50%; background:' + hex + '; cursor:pointer; border:2px solid #fff; box-shadow:' + ring + ';"></div>';
     }).join('');
     // 🐛 [버그 수정] "직접 선택" 칸이 항상 하드코딩 기본값(#2c5f8a)에서 시작해서, 이미 다른 색(예:
     // 빨강)이 저장/적용돼 있는 프로젝트에서 로고를 눌러 팔레트를 열기만 해도 그 기본값으로 미리보기가

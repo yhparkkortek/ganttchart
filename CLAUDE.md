@@ -135,7 +135,7 @@ Telegram 알람 + 주간 업무 보고 + 캘린더 뷰를 하나의 페이지에
 | `18-mail-analyzer-modal-drag.js` | 메일 분석기 모달 드래그 |
 | `19-shared-modal-drag.js` | 공통 모달 드래그 + 최소화(하단 taskbar) + **8방향 크기조절·헤더색 테두리·화면 안 보정**. `_makeDraggable(id, handleId)` 하나로 전부 딸려 온다 — **헤더·틀·주 버튼 팔레트색도 여기서**(`_modalHdrRegister`·`_modalBoxRestyle`, 2026-11-24). ⚠️ 잡는 띠는 **테두리가 한가운데**(바깥13/안쪽13, 투명) — 안쪽만 두면 **스크롤바에 덮여** 안 잡힌다. 헤더를 잡으면 드래그만(리사이즈와 동시 시작 금지). `offsetParent`로 보임 판정 금지(fixed는 항상 null) → `docs/modal-ux.md` |
 | `20-weekly-report.js` | 주간 업무 보고 기능 본체 📅 **(2026-11-26 사용자 요청 "시작일로 변경") 이번주·다음주 후보는 그 주에 시작한 업무만** — 기간이 걸치기만 한 업무는 뺐다(일일보고 `DAILY_SCAN.matchBy` 와 같은 규칙). 기준은 `WR_POLICY.matchBy`(데이터: `'start'` 기본 · `'overlap'` = 예전), 판정은 `wrOverlaps` 한 곳. 시작일이 비면 완료일로 대신. ⚠️ 이 보고는 "계획" 성격이라 진행 중인 장기 업무가 빠지는 것이 의도된 변화인지 팀 반응을 볼 것. 검증 `tests/weekly-start-date.browser.js`(빈 앱에서만 — globalData 를 합성 행으로 바꾼다) 4/4. |
-| `21-color-palette.js` | 컬러 팔레트 모달 (hex↔HSL) |
+| `21-color-palette.js` | 컬러 팔레트 모달 (hex↔HSL). 🎨 **(2026-11-26) 테마 = 색상(hue) + 채도 비율 k**(`_cpChroma`/`_cpTone`, 문턱 `CP_CHROMA` 데이터) — 명도는 역할별 고정. 채도 40% 이상이면 k=1(옛 8색·저장된 테마 그대로), 6% 이하면 무채색(회색 테마 가능), 그 사이는 차분한 톤 → 직접 선택의 채도 조절도 먹는다. 프리셋 24색은 `CP_PRESET_DEFS`(데이터, 같은 hue·같은 k 는 화면이 같으니 겹치지 않게). ⚠️ 새 역할색은 `_cpHslToHex(hue,…)` 말고 `_cpTone(hue,k,…)` 로(그래야 회색 테마에 물이 안 든다) · 보색 강조는 채도를 안 줄인다 |
 | `22a-summary-mctable-parse.js` | 엑셀 파싱: Summary/Brief SPEC/M.C Table |
 | `22b-summary-mctable-core1.js` | 탭·서머리·M.C테이블 렌더링 1/4, `_addrSplitNames`/`_addrFindByName` |
 | `22c-summary-mctable-core2.js` | 렌더링 2/4, `collectAlarmItems`/`saveAlarmSchedule` |
