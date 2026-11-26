@@ -460,8 +460,8 @@
         if (!n) return '';
         return '<div style="padding:5px 8px; font-size:11px; color:#00707d; background:#eef6f7; border-top:1px solid #cfe3e5; display:flex; align-items:center; gap:8px;">'
             + '▾ ' + esc(T(n + '개 열에 필터 적용 중', n + ' column filter(s) active'))
-            + '<button onclick="window._jiraClearAllFilters(\'' + (tbl || 'main') + '\')" style="border:none; background:none; color:#a3281c; cursor:pointer; font-size:11px; text-decoration:underline;">'
-            + T('전체 해제', 'Clear all') + '</button></div>';
+            + '<button onclick="window._jiraClearAllFilters(\'' + (tbl || 'main') + '\')" title="' + esc(T('필터 전체 해제', 'Clear all filters')) + '" style="' + window._uiBtnStyle('danger') + '">'
+            + '↺ ' + T('전체 해제', 'Clear all') + '</button></div>';
     }
 
     function renderTable(merged, note) {

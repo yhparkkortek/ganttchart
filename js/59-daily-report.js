@@ -2430,7 +2430,7 @@
         });
         function sel(key, label, opts, cur) {
             return '<select onchange="window.dailySetFilter(\'' + key + '\', this.value)" ' +
-                'style="' + uiSel(!!cur) + ' color:#50616f;">' +
+                'style="' + uiSel(!!cur) + '">' +
                 '<option value="">' + esc(label) + '</option>' +
                 opts.map(function (o) {
                     return '<option value="' + esc(o[0]) + '"' + (o[0] === cur ? ' selected' : '') + '>' + esc(o[1]) + '</option>';

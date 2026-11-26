@@ -237,7 +237,8 @@ ${mailText}`;
                _UI_BOX + ' padding:0 9px; line-height:20px; cursor:pointer; white-space:nowrap;';
     };
     window._uiSelectStyle = function (active) {
-        return 'padding:0 6px; border:1px solid ' + (active ? ACC_LN : '#cfd8e3') + '; background:' + (active ? ACC_BG : '#fff') + ';' + _UI_BOX;
+        // 🎨 [2026-11-26 "필터 통일"] 글자색을 적는다 — 없으면 브라우저 기본 #000 이고 Daily 만 #50616f 를 따로 줬다
+        return 'padding:0 6px; border:1px solid ' + (active ? ACC_LN : '#cfd8e3') + '; background:' + (active ? ACC_BG : '#fff') + '; color:#333;' + _UI_BOX;
     };
     /** 🏷 [2026-11-24 "배지 통일"] 작은 배지(상태·출처·담당자 표시) 모양 한 벌 — 크기·둥글기만, 색은 부르는 쪽이 붙인다.
      *  실측: JIRA 상태 11px·패딩 2/8·둥글기 10(19px) · JIRA 출처 10px·1/5·8(15px) · Project Review 담당자 10.5px·1/6·8(16px) 로 제각각이었다.
