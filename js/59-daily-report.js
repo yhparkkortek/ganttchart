@@ -1193,6 +1193,7 @@
         _emptiedByUser = false;      // 날짜가 바뀌면 "사람이 비웠다" 는 표시도 처음부터
         _deleted = null;
         _candProj = '';              // 📒 프로젝트 좁히기도 풀고 연다(좁힌 채 열면 "없다" 로 보인다)
+        try { window._ft.reset('daily-cand'); } catch (e) { /* 표 정렬·필터도 처음부터 */ }
         _candPeriod = { mode: 'today', start: '', end: '' };
         _candQuery = '';
         // 🪪 계정을 모르면 쓸 파일이 정해지지 않는다 — 열기 전에 한 번 확보하고,
@@ -1332,19 +1333,10 @@
             });
         }
 
-        // 📒 [2026-11-09 요청] 프로젝트 고르기 — 내 프로젝트가 여럿이면 한 목록에 섞여 나온다.
-        //    ⚠️ 고를 거리는 **거르기 전** 목록으로 만든다(js/62 와 같은 규칙) — 거른 뒤로 만들면
-        //       한 번 고르는 순간 다른 프로젝트가 목록에서 사라져 되돌아갈 수 없다.
-        var projOpts = [];
-        cand.forEach(function (c) {
-            var p = String(c.project || '').trim();
-            if (p && projOpts.indexOf(p) < 0) projOpts.push(p);
-        });
-        if (_candProj && projOpts.indexOf(_candProj) < 0) _candProj = '';   // 그 프로젝트가 사라졌다
-        var shown = _candProj ? cand.filter(function (c) { return String(c.project || '').trim() === _candProj; }) : cand;
-        // ⚠️ `_dailyAdd(i)` 는 이 배열의 **자리**로 집는다 — 반드시 화면에 그리는 목록과 같아야 한다.
-        window._dailyCand = shown;
-
+        // 📋 [2026-11-26 사용자 요청 "업무 내용을 도표로, 오름·내림 필터, 프로젝트 리뷰와 통일"]
+        //    카드 목록 → **표**(공용 엔진 js/79 `_ft`, 프로젝트 리뷰의 근거 사실 목록과 같은 표).
+        //    📒 프로젝트 고르기(전엔 상자 하나)도 이 표의 열 필터가 한다 — 고를 목록은 **거르기 전** 전체로 만든다(엔진이 그렇게 한다).
+        //    ⚠️ `_dailyAdd(i)` 는 **화면에 그린 순서(정렬·필터 뒤)** 의 자리로 집는다 → `_dailyCand` = 엔진이 돌려준 view.
         var note = '';
         if (o.busy) {
             note = T('다른 프로젝트에서도 찾는 중… ', 'Scanning other projects… ') + o.done + ' / ' + o.total;
@@ -1360,58 +1352,53 @@
             : '';
         var noteTxt = note ? '<div style="font-size:11px; color:#aaa; margin-bottom:4px;">' + esc(note) + '</div>' : '';
 
-        // 프로젝트 고르기 — 2개 이상일 때만 띄운다(하나뿐이면 고를 게 없다)
-        var pickTxt = '';
-        if (projOpts.length > 1) {
-            pickTxt = '<div style="margin-bottom:5px;"><select onchange="window._dailySetCandProj(this.value)" ' +
-                      'style="' + uiSel(!!_candProj) + ' max-width:260px;">' +
-                      '<option value=""' + (_candProj ? '' : ' selected') + '>' +
-                      esc(T('프로젝트 전체', 'All projects')) + ' (' + cand.length + ')</option>' +
-                      projOpts.map(function (p) {
-                          var n = cand.filter(function (c) { return String(c.project || '').trim() === p; }).length;
-                          return '<option value="' + esc(p) + '"' + (_candProj === p ? ' selected' : '') + '>' +
-                                 esc(p) + ' (' + n + ')</option>';
-                      }).join('') + '</select></div>';
-        }
-
         var carryTxt = carryOverHtml();
-        if (!shown.length) {
-            return carryTxt + noteTxt + errTxt + pickTxt + '<div style="color:#aaa; font-size:11.5px;">' +
-                   esc(_candProj ? T('이 프로젝트엔 오늘 날짜가 걸린 업무가 없습니다.', 'No tasks dated today in this project.')
-                                 : T('오늘 날짜가 걸린 업무가 없습니다.', 'No tasks dated today.')) + '</div>';
+        if (!cand.length) {
+            window._dailyCand = [];
+            return carryTxt + noteTxt + errTxt + '<div style="color:#aaa; font-size:11.5px;">' +
+                   esc(T('오늘 날짜가 걸린 업무가 없습니다.', 'No tasks dated today.')) + '</div>';
         }
         var max = +(window.DAILY_SCAN || {}).maxCandidates || 80;
-        return carryTxt + noteTxt + errTxt + pickTxt + shown.slice(0, max).map(function (c, i) {
-            var pj = String(c.project || '').trim();
-            return '<div onclick="window._dailyAdd(' + i + ')" style="cursor:pointer; padding:5px 7px; border:1px solid #eee; border-radius:5px; margin-bottom:4px; background:#fafbfc;" ' +
-                   'onmouseover="this.style.background=\'#eef6f7\';" onmouseout="this.style.background=\'#fafbfc\';">' +
-                   '<div style="font-size:12px; font-weight:bold; color:#2c5f8a;">+ ' + catBadge(c.cat) + esc(c.name) +
-                     (c.mailRaw
-                       ? ' <span onclick="event.stopPropagation(); window._dailyCandShowMailRaw(' + i + ')" title="' +
-                           esc(T('메일 원문 보기 · 아웃룩으로 열기', 'View mail source · Open in Outlook')) +
-                           '" style="cursor:pointer; text-decoration:underline dotted;">📧</span>'
-                       : (c.isMail ? ' <span title="' + esc(T('메일 분석에서 온 업무', 'From mail analysis')) + '">📧</span>' : '')) +
-                     (c.late ? ' <span style="color:#b1432f; font-size:10.5px;">' + esc(T('지연', 'late')) + '</span>' : '') +
-                     // 📅 [2026-11-17 요청] "왜 이 날짜에 이 업무가 뜨지?" — 기간이 겹치기만
-                     //    해도 후보로 든다(진행 중인 일도 매일 다시 챙기라는 설계, scanOne 참고).
-                     //    그 기간을 같이 보여 줘야 "오늘만의 일"로 오인하지 않는다 — 여러 날에
-                     //    걸친 업무(회의 시리즈 등)만, 하루짜리는 굳이 안 보여준다.
-                     (c.start && c.end && md(c.start) !== md(c.end)
-                       ? ' <span style="color:#999; font-size:10.5px; font-weight:normal;" title="' +
-                         esc(T('이 업무의 전체 기간 — 겹치는 날마다 후보로 뜹니다', "This task's full date range — it's a candidate on every day it covers")) +
-                         '">📆 ' + esc(md(c.start)) + '~' + esc(md(c.end)) + '</span>'
-                       : '') +
-                     // 📒 어느 프로젝트 것인지 — **언제나** 적는다.
-                     //    ⚠️ [2026-11-09 신고 "아래 정보는 뭐야?"] 예전엔 열린 프로젝트면 생략했는데,
-                     //       그래서 라벨 없는 줄과 있는 줄이 섞여 사람이 "이건 뭐지?" 하고 멈췄다.
-                     //       `ELECTRICAL*` 처럼 프로젝트마다 같은 이름을 쓰면 더더욱 못 가린다.
-                     //       열린 프로젝트는 📂 로 구분만 해 준다(지우지 않는다).
-                     (pj ? ' <span style="color:#888; font-size:10.5px; font-weight:normal;">' +
-                           (pj === openName ? '📂 ' : '') + '(' + esc(pj) + ')</span>' : '') +
-                   '</div>' +
-                   (c.core ? '<div style="font-size:11px; color:#666; margin-top:2px;">' + esc(c.core) + '</div>' : '') +
-                   '</div>';
-        }).join('');
+        var cfg = {
+            // 기본 정렬 없음 — 내 일을 먼저 모은 순서(위에서 그렇게 합쳤다)를 깨지 않는다. 열 머리글을 눌렀을 때만 정렬한다.
+            max: max,
+            repaint: paintCands,
+            rowAttr: function (c, i) { return 'onclick="window._dailyAdd(' + i + ')" title="' + esc(T('눌러서 오늘 보고에 담기', 'Click to add to today\'s report')) + '" style="cursor:pointer;"'; },
+            cols: [
+                { id: 'add', label: '', w: '24px', align: 'center', html: function () { return '<span style="color:#2c5f8a; font-weight:bold;">+</span>'; } },
+                { id: 'cat', label: T('구분', 'Role'), w: '58px', nowrap: true, sort: function (c) { return c.cat || '~'; }, opt: function (c) { return c.cat || ''; },
+                  html: function (c) { return catBadge(c.cat); } },
+                { id: 'proj', label: T('프로젝트', 'Project'), sort: function (c) { return String(c.project || '').trim(); }, opt: function (c) { return String(c.project || '').trim(); },
+                  html: function (c) {
+                      var pj = String(c.project || '').trim();
+                      // 📒 어느 프로젝트 것인지 **언제나** 적는다(2026-11-09 신고) — 열린 프로젝트는 📂 로 구분만 해 준다.
+                      return pj ? '<span style="font-size:11.5px;">' + (pj === openName ? '📂 ' : '') + esc(pj) + '</span>' : '';
+                  } },
+                { id: 'task', label: T('업무', 'Task'), w: '26%', sort: function (c) { return c.name || ''; }, html: function (c, i) {
+                    return '<b style="color:#2c5f8a;">' + esc(c.name) + '</b>' +
+                        (c.mailRaw
+                            ? ' <span onclick="event.stopPropagation(); window._dailyCandShowMailRaw(' + i + ')" title="' + esc(T('메일 원문 보기 · 아웃룩으로 열기', 'View mail source · Open in Outlook')) + '" style="cursor:pointer; text-decoration:underline dotted;">📧</span>'
+                            : (c.isMail ? ' <span title="' + esc(T('메일 분석에서 온 업무', 'From mail analysis')) + '">📧</span>' : '')) +
+                        (c.late ? ' <span style="color:#b1432f; font-size:10.5px;">' + esc(T('지연', 'late')) + '</span>' : '');
+                } },
+                { id: 'text', label: T('내용', 'Content'), w: '40%', sort: function (c) { return c.core || c.todo || c.issue || ''; }, html: function (c) {
+                    return (c.core ? '<div style="color:#222;">' + esc(c.core) + '</div>' : '') +
+                           (c.todo ? '<div style="color:#1971c2; margin-top:2px;">To do: ' + esc(c.todo) + '</div>' : '') +
+                           (c.issue ? '<div style="color:#b1432f; margin-top:2px;">⚠️ ' + esc(c.issue) + '</div>' : '');
+                } },
+                // 📅 [2026-11-17 요청] "왜 이 날짜에 이 업무가 뜨지?" — 기간이 겹치기만 해도 후보로 든다(진행 중인 일도 매일 다시 챙기라는 설계).
+                //    그 기간을 같이 보여 줘야 "오늘만의 일" 로 오인하지 않는다.
+                { id: 'when', label: T('기간', 'Period'), w: '84px', nowrap: true, firstDir: -1, sort: function (c) { return c.start || 0; },
+                  html: function (c) {
+                      if (!c.start) return '';
+                      return (c.end && md(c.start) !== md(c.end)) ? esc(md(c.start)) + '~' + esc(md(c.end)) : esc(md(c.start));
+                  } }
+            ]
+        };
+        var built = window._ft.build('daily-cand', cfg, cand);
+        // ⚠️ 정렬·필터가 끝난 순서 그대로 — `_dailyAdd(i)`·`_dailyCandShowMailRaw(i)` 가 이 배열의 자리로 집는다.
+        window._dailyCand = built.view;
+        return carryTxt + noteTxt + errTxt + built.html;
     }
 
     function paintCands() {
@@ -1423,7 +1410,7 @@
      *  다시 그리면 사람이 치던 칸에서 포커스가 날아간다. */
     window._dailySetCandProj = function (v) {
         _candProj = String(v || '').trim();
-        paintCands();
+        window._ftSet('daily-cand', 'proj', _candProj);   // 표의 프로젝트 열 필터와 같은 것
     };
 
     /** 다른 프로젝트 스캔을 지금 기간으로 다시 돈다(캐시 열쇠가 다르면 `dailyScanOtherProjects`
@@ -1534,7 +1521,7 @@
 
 
         wrap.innerHTML =
-'<div id="daily-box" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); width:min(720px,94vw); max-height:90vh; display:flex; flex-direction:column; background:#fff; border-radius:10px; box-shadow:0 8px 32px rgba(0,0,0,.22); overflow:hidden;">' +
+'<div id="daily-box" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); width:min(900px,94vw); max-height:90vh; display:flex; flex-direction:column; background:#fff; border-radius:10px; box-shadow:0 8px 32px rgba(0,0,0,.22); overflow:hidden;">' +
   '<div id="daily-drag" style="flex-shrink:0; padding:12px 17px; background:#e7f3ff; border-bottom:1px solid #a5c8f0; color:#1971c2; font-weight:bold; font-size:14px; display:flex; justify-content:space-between; align-items:center; cursor:grab; user-select:none;">' +
     '<span>📔 ' + esc(T('일일 업무보고', 'Daily Report')) + ' — ' + esc(dayLabel(_date)) +
       (me().name ? ' <span style="font-weight:normal; font-size:11.5px; color:#5a8ab5;">' + esc(me().name) + '</span>' : '') + '</span>' +

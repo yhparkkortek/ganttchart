@@ -288,12 +288,14 @@
                     var td = tr.children[4], s = td.textContent.trim(), ee = kind(s);
                     if (!judge(pt, ee, getComputedStyle(td), { wkNormal: true })) pt.bad.push([s, ee]);
                 });
-                [].slice.call(document.querySelectorAll('#ps-facts-det > div[class*="ps-date"]')).forEach(function (dv) {
-                    var s = dv.textContent.trim().slice(0, 10), ee = kind(s);
-                    if (!judge(pf, ee, getComputedStyle(dv))) pf.bad.push([s, ee]);      // 사실 목록 제목은 평일도 원래 볼드(#555)
+                // 📋 [2026-11-26] 근거 사실 목록은 카드 → 표(js/79) — 날짜는 둘째 칸. AI 요약 표와 같은 규칙(평일은 평범한 회색).
+                [].slice.call(document.querySelectorAll('#ps-facts-body tbody tr[id^="ps-fact-"]')).forEach(function (tr) {
+                    var td = tr.children[1], s = td.textContent.trim().slice(0, 10), ee = kind(s);
+                    if (!judge(pf, ee, getComputedStyle(td), { wkNormal: true })) pf.bad.push([s, ee]);
                 });
+                ok('Project Review 근거 사실 표에 행이 그려졌다', document.querySelectorAll('#ps-facts-body tbody tr[id^="ps-fact-"]').length > 0);
                 report('Project Review 표 날짜 열(' + dates.length + '행)', pt);
-                report('Project Review 근거 사실 목록 날짜 제목', pf);
+                report('Project Review 근거 사실 표 날짜 열', pf);
             } catch (err) { ok('Project Review 실행', false, err.message); }
 
             // ── 7) JIRA 표·검색 표·Alarm·Notice — ⚠️ 간접 확인(범위 CSS) ──

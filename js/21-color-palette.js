@@ -403,7 +403,7 @@ window._cpApplyLive = function(hex, skipSave) {
         + '#daily-report-page table th.daily-mdate-sat { color: #1e6fe8 !important; }\n'
         + '#daily-report-page table th.daily-mdate-wk { color: #555 !important; font-weight: normal; }\n'
         // ⚠️ Project Review 제브라는 tr 에 칠하고 !important 를 안 붙인다 — 근거에서 돌아올 때 inline 깜빡임이 이겨야 한다
-        + '#psummary-page tr.ps-zebra-b, tr.jira-zebra-b { background: ' + gen.zebraB + '; }\n'
+        + '#psummary-page tr.ps-zebra-b, tr.jira-zebra-b, tr.ft-zebra-b { background: ' + gen.zebraB + '; }\n'   // ft- = 공용 사실 표(js/79)
         + '#psummary-page .ps-date-wk { color: #555 !important; }\n'
         + '#psummary-page .ps-date-hol { color: #d32f2f !important; font-weight: bold; }\n'
         + '#psummary-page .ps-date-sat { color: #1e6fe8 !important; font-weight: bold; }\n'

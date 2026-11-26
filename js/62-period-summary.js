@@ -1016,28 +1016,10 @@
                       '<br><span style="color:#888;">' + esc(T('열린 프로젝트: ' + (col.funnel.open || '(없음)') + ' · 그 업무 ' + col.funnel.local + '건 — 조건을 바꾸거나 ↺ 로 해제하세요', 'Open project: ' + (col.funnel.open || '(none)') + ' · ' + col.funnel.local + ' tasks')) + '</span></div>'
                     : '<div style="padding:24px 10px; text-align:center; color:#999; font-size:12.5px;">' + esc(T('이 기간에 메일 분석으로 들어온 업무가 없습니다.', 'No mail-derived tasks in this period.')) + (P.includeNonMail ? '' : '<br>' + esc(T('(사람이 직접 적은 업무는 세지 않습니다 — PERIOD_SUMMARY.includeNonMail)', '(hand-typed tasks are not counted)'))) + '</div>'));
         } else {
-            var byDate = {};
             var factsShown = _psTbl.pinned ? col.facts.filter(factPinned) : col.facts;
+            _psLast.factsShown = factsShown;   // 표를 다시 그릴 때(정렬·필터) 쓴다 — paintFacts
             if (_psTbl.pinned && !factsShown.length) h.push('<div style="padding:24px 10px; text-align:center; color:#999; font-size:12.5px;">' + esc(T('📌 핀셋을 켠 업무가 없습니다 — 열린 프로젝트의 업무만 셉니다', 'No pinned tasks (open project only)')) + '</div>');
-            factsShown.forEach(function (f) { (byDate[f.date] = byDate[f.date] || []).push(f); });
-            Object.keys(byDate).sort().reverse().forEach(function (d) {
-                h.push('<div class="' + dateCls(d) + '" style="font-size:12px; font-weight:bold; color:#555; margin:10px 0 4px; border-bottom:1px solid #eee; padding-bottom:2px;">' + esc(d) + ' <span style="font-weight:normal; color:#999;">(' + byDate[d].length + ')</span></div>');
-                byDate[d].forEach(function (f) {
-                    // 🎯 [2026-11-23] 표의 근거를 누르면 이 카드로 온다(id = 프로젝트#행) — 카드를 누르면 표의 그 행으로 돌아간다.
-                    h.push('<div id="ps-fact-' + factKey(f) + '" onclick="window._psFactBack(event)" style="font-size:12px; padding:6px 8px; margin-bottom:4px; background:#fff; border:1px solid #eef1f4; border-radius:6px; transition:box-shadow .3s, background .3s;">' +
-                           '<div>' + pinBtnHtml((function () { var ri = factGanttRow(f); return ri >= 0 ? [ri] : []; })(), 'window._psPinFact(\'' + factKey(f) + '\')') + ' ' + (f.local ? link(f.idx) : '<span style="color:#bbb;">#G' + f.idx + '</span>') + ' <b>' + esc(f.task) + '</b>' + (f.cat ? ' <span style="' + window._uiBadgeStyle() + ' background:#eef3f7; color:#2c5f8a;">' + esc(f.cat) + (f.assignee ? ' · ' + esc(f.assignee) : '') + '</span>' : (f.assignee ? ' <span style="font-size:10.5px; color:#888;">' + esc(f.assignee) + '</span>' : '')) +
-                           ((f.project && f.project !== String(window.currentDriveFileName || '').replace(/\.json$/i, '')) ? ' <span style="font-size:10.5px; color:#888;">(' + esc(f.project) + ')</span>' : '') +
-                           ((f.sender || f.receiver) ? ' <span style="color:#888;">' + esc(f.sender || '?') + ' → ' + esc(f.receiver || '?') + '</span>' : '') +
-                           // 📧 원문 — 일일보고와 같은 공용 뷰어(showMailRawModal). 메일 원문이 남아 있는 행만.
-                           (f.mailRaw && window.showMailRawModal ? ' <button onclick="event.stopPropagation(); window._psShowMail(\'' + factKey(f) + '\')" style="' + window._uiBtnStyle() + ' height:20px; line-height:18px; background:#fff8e6; border-color:#ffe08a; color:#7a5210;">📧 ' + esc(T('원문보기', 'Source')) + '</button>' : '') +
-                           '</div>' +
-                           (f.core ? '<div style="color:#333; margin-top:2px;">' + esc(f.core) + '</div>' : '') +
-                           (f.todo ? '<div style="color:#1971c2; margin-top:2px;">To do: ' + esc(f.todo) + '</div>' : '') +
-                           (f.issue ? '<div style="color:#b1432f; margin-top:2px;">⚠️ ' + esc(f.issue) + (f.fix ? ' → ' + esc(f.fix) : '') + '</div>' : '') +
-                           (f.answer ? '<div style="color:#2f9e44; margin-top:2px;">↩ ' + esc(f.answer) + '</div>' : '') +
-                           '</div>');
-                });
-            });
+            else h.push('<div id="ps-facts-body">' + factsTableHtml(factsShown) + '</div>');
         }
         if (shown && shown.rows.length) h.push('</details>');
         h.push('</div>');
@@ -1281,6 +1263,53 @@
         return '<a href="javascript:void(0)" onclick="window._psGoFact(\'' + key + '\', ' + rowI + ')" title="' + title + '" style="color:var(--ui-accent, #00707d); text-decoration:underline dotted; white-space:nowrap; cursor:pointer;">' +
                (showProj ? esc(x.p || '?') + ' ' : '') + '#' + esc(x.row != null ? x.row : x.g) + '</a>';
     }
+    // 📋 [2026-11-26 사용자 요청 "업무 내용을 도표로, 오름·내림 필터, 일일보고와 통일"] 근거 사실 목록 = 카드 → **표**.
+    //    정렬·필터·모양은 공용 엔진(js/79 `_ft`) — 일일보고의 간트에서 불러오기와 같은 표다.
+    //    ⚠️ 행 id(`ps-fact-<열쇠>`)·`#G` 링크·📌 핀셋·📧 원문은 카드 때와 똑같이 둔다(표의 근거 → 이 행으로 이동/돌아오기가 그 id 를 쓴다).
+    function factsCfg() {
+        var thisProj = String(window.currentDriveFileName || '').replace(/\.json$/i, '');
+        return {
+            defaultSort: { col: 'date', dir: -1 },
+            empty: T('이 기간에 메일 분석으로 들어온 업무가 없습니다.', 'No mail-derived tasks in this period.'),
+            repaint: function () { paintFacts(); },
+            rowAttr: function (f) { return 'id="ps-fact-' + factKey(f) + '" onclick="window._psFactBack(event)" style="transition:box-shadow .3s, background .3s;"'; },
+            cols: [
+                { id: 'pin', label: '📌', w: '28px', align: 'center', html: function (f) {
+                    var ri = factGanttRow(f);
+                    return pinBtnHtml(ri >= 0 ? [ri] : [], "window._psPinFact('" + factKey(f) + "')");
+                } },
+                { id: 'date', label: T('날짜', 'Date'), w: '82px', nowrap: true, firstDir: -1, sort: function (f) { return f.date || ''; },
+                  tdCls: function (f) { return dateCls(f.date); }, html: function (f) { return esc(f.date || ''); } },
+                { id: 'cat', label: T('구분', 'Role'), w: '58px', nowrap: true, sort: function (f) { return f.cat || '~'; }, opt: function (f) { return f.cat || ''; },
+                  html: function (f) { return f.cat ? '<span style="' + window._uiBadgeStyle() + ' background:#eef3f7; color:#2c5f8a;">' + esc(f.cat) + '</span>' : ''; } },
+                { id: 'who', label: T('담당자', 'Assignee'), sort: function (f) { return f.assignee || '~'; },
+                  opt: function (f) { return String(f.assignee || '').split(',').map(function (x) { return x.trim(); }); },
+                  html: function (f) { return esc(f.assignee || ''); } },
+                { id: 'proj', label: T('프로젝트', 'Project'), sort: function (f) { return f.project || ''; }, opt: function (f) { return f.project || ''; },
+                  html: function (f) { return '<span style="font-size:11.5px;">' + esc(f.project || '') + (f.project && f.project === thisProj ? ' <span title="' + esc(T('지금 열린 프로젝트', 'Open project')) + '">📂</span>' : '') + '</span>'; } },
+                { id: 'task', label: T('업무', 'Task'), w: '24%', sort: function (f) { return f.task || ''; }, html: function (f) {
+                    return (f.local ? link(f.idx) : '<span style="color:#bbb;">#G' + f.idx + '</span>') + ' <b>' + esc(f.task) + '</b>' +
+                           ((f.sender || f.receiver) ? '<div style="color:#888; font-size:11px;">' + esc(f.sender || '?') + ' → ' + esc(f.receiver || '?') + '</div>' : '');
+                } },
+                { id: 'text', label: T('내용', 'Content'), w: '38%', sort: function (f) { return f.core || f.todo || f.issue || ''; }, html: function (f) {
+                    return '<span data-ft-main="1"></span>' +
+                           (f.core ? '<div style="color:#222;">' + esc(f.core) + '</div>' : '') +
+                           (f.todo ? '<div style="color:#1971c2; margin-top:2px;">To do: ' + esc(f.todo) + '</div>' : '') +
+                           (f.issue ? '<div style="color:#b1432f; margin-top:2px;">⚠️ ' + esc(f.issue) + (f.fix ? ' → ' + esc(f.fix) : '') + '</div>' : '') +
+                           (f.answer ? '<div style="color:#2f9e44; margin-top:2px;">↩ ' + esc(f.answer) + '</div>' : '');
+                } },
+                { id: 'src', label: T('원문', 'Source'), w: '66px', nowrap: true, align: 'center', html: function (f) {
+                    return (f.mailRaw && window.showMailRawModal)
+                        ? '<button onclick="event.stopPropagation(); window._psShowMail(\'' + factKey(f) + '\')" style="' + window._uiBtnStyle() + ' height:20px; line-height:18px; background:#fff8e6; border-color:#ffe08a; color:#7a5210;">📧 ' + esc(T('원문', 'Source')) + '</button>' : '';
+                } }
+            ]
+        };
+    }
+    function factsTableHtml(facts) { return window._ft.build('ps-facts', factsCfg(), facts).html; }
+    function paintFacts() {
+        var el = document.getElementById('ps-facts-body');
+        if (el && _psLast && _psLast.factsShown) el.innerHTML = factsTableHtml(_psLast.factsShown);
+    }
     function tableHtml() {
         var rows = viewRows();
         var all = (_psLast && _psLast.shown && _psLast.shown.rows) || [];
@@ -1473,7 +1502,9 @@
         }
         _psBackRow = rowI;
         var old = document.getElementById('ps-back-hint'); if (old) old.remove();
-        el.insertAdjacentHTML('afterbegin', '<div id="ps-back-hint" style="float:right; font-size:10.5px; color:#1971c2; cursor:pointer;">↩ ' + esc(T('누르면 표로 돌아갑니다', 'Click to go back')) + '</div>');
+        // 표 행(TR) 안에 div 를 바로 넣을 수 없다 → 내용 칸(td)에 넣는다
+        var host = el.tagName === 'TR' ? (el.querySelector('[data-ft-main]') || el.lastElementChild).parentNode : el;
+        host.insertAdjacentHTML('afterbegin', '<div id="ps-back-hint" style="float:right; font-size:10.5px; color:#1971c2; cursor:pointer;">↩ ' + esc(T('누르면 표로 돌아갑니다', 'Click to go back')) + '</div>');
         el.style.cursor = 'pointer';
         el.scrollIntoView({ block: 'center', behavior: 'smooth' });
         flash(el, '#e7f5ff');
@@ -1484,7 +1515,7 @@
         if (t && t.closest && t.closest('button, a, select, input, textarea') && !t.closest('#ps-back-hint')) return;   // 카드 안 단추(원문·간트)는 그대로
         var row = document.getElementById('ps-row-' + _psBackRow);
         _psBackRow = null;
-        var hint = document.getElementById('ps-back-hint'); if (hint) { var card = hint.parentNode; hint.remove(); if (card) card.style.cursor = ''; }
+        var hint = document.getElementById('ps-back-hint'); if (hint) { var card = hint.closest('[id^="ps-fact-"]'); hint.remove(); if (card) card.style.cursor = ''; }
         if (!row) return;
         row.scrollIntoView({ block: 'center', behavior: 'smooth' });
         flash(row, '#fff3bf');
