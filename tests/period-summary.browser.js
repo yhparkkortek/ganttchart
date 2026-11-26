@@ -188,6 +188,7 @@
             var meet = document.getElementById('ps-meet-0');
             ok('회의에서 정할 것 줄이 눌린다', !!meet && /_psGoBrief/.test(meet.getAttribute('onclick') || ''));
             ok('회의 상자는 스크롤 밖 고정 머리에 있다', !!meet && !!meet.closest('#ps-sticky') && !meet.closest('#ps-scroll'));
+            ok('넓으면 여러 단으로 나뉜다(columns 520px)', !!meet && getComputedStyle(meet.parentNode).columnWidth === '520px' && getComputedStyle(meet).breakInside === 'avoid', meet && getComputedStyle(meet.parentNode).columnWidth);
             window._psTblSet({ big: true });
             ok('표를 다시 그려도(크게 보기) 회의 상자가 고정 머리에 하나만', document.querySelectorAll('#ps-sticky [id^="ps-meet-"]').length >= 1 && !document.querySelector('#ps-scroll [id^="ps-meet-"]') && document.querySelectorAll('#ps-meet-0').length === 1);
             window._psTblSet({ big: false });

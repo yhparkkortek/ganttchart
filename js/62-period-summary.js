@@ -1463,15 +1463,17 @@
         if (items.length) {
             box = '<div style="border:1px solid #f1b8b8; background:#fff5f5; border-radius:8px; padding:8px 12px; margin:6px 0 2px; max-height:32vh; overflow:auto; font-size:' + fs + 'px;">' +
                 '<div style="font-weight:bold; color:#c92a2a; margin-bottom:4px;">🚩 ' + esc(T('오늘 회의에서 정할 것 ' + items.length + '건', 'To settle in the meeting: ' + items.length)) + '</div>' +
+                // ▥ [2026-11-26 사용자 요청 "전체 페이지면 분할로 — 분홍 면적이 아깝다"] 넓으면 여러 단(위→아래로 번호 순), 좁으면 한 단.
+                '<div style="columns:520px; column-gap:22px;">' +
                 items.map(function (it, i) {
                     var r = it.r, ppl = peopleOf(r), roles = rolesOf(r);
                     var tn = -1; _psBriefTasks.forEach(function (t, n) { if (tn < 0 && t.ai.indexOf(it.ai) >= 0) tn = n; });
                     _psMeetTargets[i] = tn;
-                    return '<div id="ps-meet-' + i + '" onclick="window._psGoBrief(' + i + ')" title="' + esc(T('누르면 아래 그 업무 줄로 갑니다', 'Click to jump to the task')) + '" style="line-height:1.65; cursor:pointer; border-radius:4px; padding:0 4px; margin:0 -4px; transition:background .4s;">' + (i + 1) + '. <b style="color:#555;">[' + esc(r.common ? T('공통', 'Common') : (r.projects[0] || '')) + ']</b> ' + esc(r.text) + ' ' +
+                    return '<div id="ps-meet-' + i + '" onclick="window._psGoBrief(' + i + ')" title="' + esc(T('누르면 아래 그 업무 줄로 갑니다', 'Click to jump to the task')) + '" style="line-height:1.65; cursor:pointer; border-radius:4px; padding:0 4px; margin:0 -4px; break-inside:avoid; transition:background .4s;">' + (i + 1) + '. <b style="color:#555;">[' + esc(r.common ? T('공통', 'Common') : (r.projects[0] || '')) + ']</b> ' + esc(r.text) + ' ' +
                         '<span style="' + window._uiBadgeStyle() + ' background:' + (r.cat === 'blocked' ? '#ffe3e3; color:#c92a2a' : '#fff3bf; color:#8f5a00') + ';">' + esc(r.cat === 'blocked' ? T('막힘', 'Blocked') : T('결정 필요', 'Decide')) + '</span>' +
                         (it.age >= 1 ? ' <span style="color:#c92a2a; font-size:11px;" title="' + esc(T('근거 메일 중 가장 이른 날짜 기준', 'Since the earliest source mail')) + '">' + esc(T(it.age + '일 경과', it.age + 'd')) + '</span>' : '') +
                         (ppl.length || roles.length ? ' <span style="color:#555; font-size:11.5px;">· ' + whoTip(ppl, roles) + '</span>' : '') + '</div>';
-                }).join('') + '</div>';
+                }).join('') + '</div></div>';
         }
         }
         // ── 표 ──
