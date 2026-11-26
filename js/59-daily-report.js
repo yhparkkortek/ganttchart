@@ -1413,7 +1413,8 @@
                       var pj = String(c.project || '').trim();
                       // 📒 어느 프로젝트 것인지 **언제나** 적는다(2026-11-09 신고) — 열린 프로젝트는 📂 로 구분만 해 준다.
                       var more = (!isChild && c._g && c._g.projects.length > 1) ? ' <span style="color:#888;" title="' + esc(c._g.projects.join('\n')) + '">' + esc(T('외 ' + (c._g.projects.length - 1), '+' + (c._g.projects.length - 1))) + '</span>' : '';
-                      return pj ? '<span style="font-size:11.5px;">' + (pj === openName ? '📂 ' : '') + esc(pj) + more + '</span>' : '';
+                      // 📂 = 지금 열린 프로젝트(프로젝트 리뷰 표의 📂 와 같은 말풍선) — 붉은 바·현황·삭제가 이 프로젝트 줄에서만 간트에 반영된다
+                      return pj ? '<span style="font-size:11.5px;">' + (pj === openName ? '<span title="' + esc(T('지금 열린 프로젝트 — 붉은 바·현황·삭제가 간트에 바로 반영됩니다', 'Open project — red bar, status and delete apply to the Gantt right away')) + '">📂</span> ' : '') + esc(pj) + more + '</span>' : '';
                   } },
                 { id: 'task', label: T('업무', 'Task'), w: '26%', sort: function (c) { return c.name || ''; }, html: function (c, i, isChild) {
                     return (isChild ? window._fdup.childMark(c) : '') + '<b style="color:#2c5f8a;">' + esc(c.name) + '</b>' + window._fdup.cellHtml('daily-cand', c, isChild) +

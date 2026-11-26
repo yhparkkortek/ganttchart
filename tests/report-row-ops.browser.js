@@ -87,6 +87,12 @@
         // 다른 프로젝트 후보는 눌러도 안 바뀐다
         var closed = dc && dc.querySelector('.rp-bar.closed');
         ok('열지 않은 프로젝트 후보의 바는 꺼진 채 눌리지 않는다(closed)', !closed || (!closed.getAttribute('onclick') && /열면|Open this project/.test(closed.title)));
+        // 🛈 [2026-11-26 사용자 요청 "📂 말풍선 · 흐린 바·현황 글자에 '프로젝트를 열면 바꿀 수 있다' 안내"] — 열린 프로젝트는 📂 에 말풍선, 열지 않은 프로젝트 줄은 바·현황 글자에 안내가 달려 있다
+        var openRows = [].slice.call(dc.querySelectorAll('tbody tr[onclick]')).filter(function (t) { return t.querySelector('.rp-bar:not(.closed)'); });
+        var closedRows = [].slice.call(dc.querySelectorAll('tbody tr[onclick]')).filter(function (t) { return t.querySelector('.rp-bar.closed'); });
+        ok('열린 프로젝트 줄의 📂 에 말풍선이 있다', openRows.length > 0 && openRows.every(function (t) { var s = [].slice.call(t.querySelectorAll('span')).filter(function (x) { return x.textContent.trim() === '📂'; })[0]; return !!s && /열린 프로젝트/.test(s.title); }), openRows.length);
+        ok('열지 않은 프로젝트 줄의 흐린 바에 안내가 있다', closedRows.length > 0 && closedRows.every(function (t) { return /프로젝트를 열면|Open this project/.test(t.querySelector('.rp-bar.closed').title); }), closedRows.length);
+        ok('열지 않은 프로젝트 줄의 현황 글자에 안내가 있다', closedRows.every(function (t) { var cell = t.lastElementChild, sp = cell.querySelector('span[title]'); return !!sp && /프로젝트를 열면|Open this project/.test(sp.title); }), closedRows.length);
         window.dailyCloseModal(); localStorage.removeItem(window.DAILY_POLICY.draftKey);
     } catch (e) { ok('실행', false, e && e.message); }
     console.log(res.join('\n')); return res;
