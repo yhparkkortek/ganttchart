@@ -2547,64 +2547,6 @@
         return { ok: true, issues: r.issues, projectKeys: keys };
     };
 
-    // ══════════════════════════════════════════════════════════════════════
-    // 🅿️ [2026-11-26 사용자 요청] "JIRA 페이지에서 모달을 열어 두고 다른 페이지로 가면 모달이
-    //    계속 떠 있어 이상하다 — 닫아 주고, JIRA 로 돌아오면 그 모달을 다시 열어 달라."
-    //    → 닫는 게 아니라 **숨긴다**(display 만 none). DOM 을 그대로 두므로 적던 댓글·고른 필터·
-    //    검색 결과·스크롤 자리가 전부 그대로 돌아온다(다시 그리면 그게 다 날아간다).
-    //    ⚠️ 이 페이지 안에서만 기억한다 — 새로고침하면 다시 안 열린다(앱을 켤 때마다 모달이
-    //       저절로 뜨면 그게 더 이상하다).
-    //    ⚠️ 최소화한 모달(하단 작업표시줄 칩)은 건드리지 않는다 — 칩과 상태가 어긋난다.
-    //    ⚠️ 숨긴 뒤 사람이 다른 페이지에서 그 모달을 다시 열었으면(AI 문답 칩 등) 이미 보이는
-    //       중이니 돌아올 때 손대지 않는다.
-    // ══════════════════════════════════════════════════════════════════════
-    var JIRA_PARK_MODALS = ['jira-search-modal', 'jira-link-modal', 'jira-issue-modal', 'jira-create-modal'];
-    var _jiraParked = [];   // 숨긴 모달 id — 겹친 순서(z-index 낮은 것부터)
-
-    function _jiraModalShown(el) { return !!el && el.style.display !== 'none' && getComputedStyle(el).display !== 'none'; }
-    function _jiraModalMinimized(id) {
-        var m = window._modalMinimized || {};
-        return !!(m[id] || m[id.replace(/-modal$/, '-box')]);
-    }
-    function _jiraParkModals() {
-        var list = [];
-        JIRA_PARK_MODALS.forEach(function (id) {
-            var el = document.getElementById(id);
-            if (!_jiraModalShown(el) || _jiraModalMinimized(id)) return;
-            list.push({ id: id, z: parseInt(getComputedStyle(el).zIndex, 10) || 0 });
-        });
-        list.sort(function (a, b) { return a.z - b.z; });
-        list.forEach(function (it) { document.getElementById(it.id).style.display = 'none'; });
-        _jiraParked = list.map(function (it) { return it.id; });
-        // 표 머리글 ▾ 열 필터 상자는 body 에 떠 있어 모달과 같이 안 숨는다 — 혼자 남지 않게 닫는다
-        //    (사람 찾기 목록은 모달 안에 있어 모달과 같이 숨는다)
-        var fb = document.getElementById('jira-colfilter-box');
-        if (fb) fb.style.display = 'none';
-    }
-    function _jiraUnparkModals() {
-        var ids = _jiraParked;
-        _jiraParked = [];
-        ids.forEach(function (id) {
-            var el = document.getElementById(id);
-            if (!el || _jiraModalShown(el)) return;
-            el.style.display = 'block';
-            if (window.bringModalToFront) window.bringModalToFront(id);   // 원래 겹친 순서대로 다시 앞으로
-        });
-    }
-    window._jiraParkedModals = function () { return _jiraParked.slice(); };   // 하네스·진단용
-
-    (function wrapSwitchTab() {
-        var orig = window.switchTab;
-        if (typeof orig !== 'function' || orig._jiraPark) return;
-        var wrapped = function (tabName) {
-            var prev = document.querySelector('.tab-panel.active');
-            var prevTab = prev ? prev.id.replace(/^tab-/, '') : null;
-            if (prevTab === 'jira' && tabName !== 'jira') { try { _jiraParkModals(); } catch (e) { /* 숨기기 실패가 탭 전환을 막으면 안 된다 */ } }
-            var r = orig.apply(this, arguments);
-            if (tabName === 'jira' && prevTab !== 'jira') { try { _jiraUnparkModals(); } catch (e) { /* 위와 같다 */ } }
-            return r;
-        };
-        wrapped._jiraPark = true;
-        window.switchTab = wrapped;
-    })();
+    // 🅿️ [2026-11-26] 다른 페이지로 가면 JIRA 모달을 숨기고 돌아오면 다시 띄우는 일은 공용 js/82-tab-modal-park.js 가 한다
+    //    (일일보고·캘린더·알람/공지 등 다른 페이지 모달과 같은 규칙 — 목록 PAGE_PARK_MODALS).
 })();
