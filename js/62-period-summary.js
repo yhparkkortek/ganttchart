@@ -1574,7 +1574,7 @@
             var c = catOf(r.cat);
             var ai = all.indexOf(r);   // 돌아올 자리 — 정렬·필터가 바뀌어도 같은 행을 가리키게 원본 순번
             return '<tr id="ps-row-' + ai + '"' + (vi % 2 || rowPinned(r) ? ' class="' + (vi % 2 ? 'ps-zebra-b ' : '') + (rowPinned(r) ? 'rp-on' : '') + '"' : '') + ' style="transition:background .4s;">' +
-                '<td class="rp-cell rp-pad" style="' + td + ' white-space:nowrap;">' + pinBtnHtml(resolveGanttRows(r).rows, 'window._psPinRow(' + ai + ')') + '<span style="padding:1px 7px; border-radius:9px; font-size:11px; font-weight:bold; color:' + c.color + '; background:' + c.bg + ';">' + esc(catName(r.cat)) + '</span></td>' +
+                '<td class="rp-cell rp-pad" style="' + td + ' white-space:nowrap;">' + pinBtnHtml(resolveGanttRows(r).rows, 'window._psPinRow(' + ai + ')') + '<span style="display:inline-block; padding:0 7px; line-height:16px; border-radius:9px; font-size:11px; font-weight:bold; border:1px solid ' + c.color + '; color:' + c.color + '; background:' + c.bg + ';">' + esc(catName(r.cat)) + '</span></td>' +
                 '<td style="' + td + '" title="' + esc(r.projects.join('\n')) + '">' + (r.common ? '<span style="padding:1px 6px; border-radius:8px; background:#fff3bf; color:#8f5a00; font-size:11px; font-weight:bold;">🔗 ' + esc(rowProj(r)) + '</span>' : esc(r.projects[0] || '')) + '</td>' +
                 '<td style="' + td + '">' + whoCellHtml(r, ai) + '</td>' +
                 '<td class="' + dateCls(r.date) + '" style="' + td + ' white-space:nowrap; color:#555;">' + esc(r.date || '') + '</td>' +

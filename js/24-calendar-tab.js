@@ -224,7 +224,7 @@ window.calShowDayPopup = function(dateKey, targetIdx) {
             + '<div style="margin-bottom:8px; font-size:12px; color:#777;">'
             + '📅 ' + wrFormatMD(ev.start) + ' ~ ' + wrFormatMD(ev.end)
             + (ev.assignee ? ' &nbsp;·&nbsp; 👤 ' + escapeHtml(ev.assignee) : '')
-            + ' &nbsp;·&nbsp; ' + escapeHtml(statusLabel)
+            + ' &nbsp;·&nbsp; ' + (window._ganttStatusChipHtml && ev.status ? window._ganttStatusChipHtml(ev.status) : escapeHtml(statusLabel))
             + '</div>'
             + (contentText ? '<div style="font-size:12px; white-space:pre-line; line-height:1.5; margin-bottom:6px;">' + escapeHtml(contentText) + '</div>' : '')
             + (!contentText ? '<div style="color:#aaa; padding:24px; text-align:center; font-size:12px;">상세 내용 없음</div>' : '')
@@ -247,7 +247,7 @@ window.calShowDayPopup = function(dateKey, targetIdx) {
                 return '<div class="cal-day-popup-item' + alarmCls + '" onclick="window.calShowDayPopup(\'' + dateKey + '\', ' + ev.idx + ');">'
                     + '<div style="font-weight:bold; margin-bottom:3px;">' + bell + escapeHtml(ev.name) + '</div>'
                     + '<div style="color:#777; font-size:11px;">' + wrFormatMD(ev.start) + ' ~ ' + wrFormatMD(ev.end)
-                    + (ev.assignee ? ' · ' + escapeHtml(ev.assignee) : '') + ' · ' + escapeHtml(statusLabel) + '</div>'
+                    + (ev.assignee ? ' · ' + escapeHtml(ev.assignee) : '') + ' · ' + (window._ganttStatusChipHtml && ev.status ? window._ganttStatusChipHtml(ev.status) : escapeHtml(statusLabel)) + '</div>'
                     + '</div>';
             }).join('');
         }

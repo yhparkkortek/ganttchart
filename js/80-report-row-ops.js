@@ -12,7 +12,9 @@
 
     var T = function (ko, en) { return (window._currentLang === 'en') ? en : ko; };
     var esc = function (s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); };
-    var STATUSES = ['진행', '완료', '지연', '대기'];
+    // 🏷 [2026-11-26] 순서·이름은 간트와 같다(js/04j GANTT_STATUS_CHOICES·_ganttStatusLabel) — 값은 저장값 그대로
+    var STATUSES = window.GANTT_STATUS_CHOICES || ['완료', '진행', '지연', '대기'];
+    var stLabel = function (s) { return window._ganttStatusLabel ? window._ganttStatusLabel(s) : s; };
     var REG = {}, _n = 0, REG_MAX = 4000;
 
     function gd() { return (typeof globalData !== 'undefined' && globalData) ? globalData : (window.globalData || []); }
@@ -150,13 +152,13 @@
     function opsHtml(rows, fallbackStatus, closedWhy) {
         rows = rows || [];
         if (!rows.length) {
-            return '<span title="' + esc(closedWhy || T('이 프로젝트를 열면 여기서 현황을 바꾸거나 삭제할 수 있습니다', 'Open this project to change status or delete here')) + '" style="color:#999; font-size:11px; white-space:nowrap;">' + esc(koStatus(fallbackStatus) || '—') + '</span>';
+            return '<span title="' + esc(closedWhy || T('이 프로젝트를 열면 여기서 현황을 바꾸거나 삭제할 수 있습니다', 'Open this project to change status or delete here')) + '" style="' + (koStatus(fallbackStatus) && window._ganttStatusChipStyle ? window._ganttStatusChipStyle(koStatus(fallbackStatus)) + ' opacity:.55;' : 'color:#999; font-size:11px; white-space:nowrap;') + '">' + esc(koStatus(fallbackStatus) ? stLabel(koStatus(fallbackStatus)) : '—') + '</span>';
         }
         var sts = uniqStatuses(rows), cur = sts.length === 1 ? sts[0] : '';
         var id = register(rows);
-        var sel = '<select onclick="event.stopPropagation()" onchange="event.stopPropagation(); window._rrStatus(' + id + ', this.value)" title="' + esc(T('간트의 상태 칸을 바꿉니다 — 완료로 보내면 이 목록에서 숨습니다', 'Changes the Gantt status — Done rows are hidden from this list')) + '" style="' + (window._uiSelectStyle ? window._uiSelectStyle(false) : '') + ' height:20px; font-size:11px; padding:0 2px; max-width:64px; cursor:pointer;">' +
+        var sel = '<select onclick="event.stopPropagation()" onchange="event.stopPropagation(); window._rrStatus(' + id + ', this.value)" title="' + esc(T('간트의 상태 칸을 바꿉니다 — 완료로 보내면 이 목록에서 숨습니다', 'Changes the Gantt status — Done rows are hidden from this list')) + '" style="' + (cur && window._ganttStatusChipStyle ? window._ganttStatusChipStyle(cur) + ' height:18px; padding:0 4px; text-align-last:center; appearance:none; -webkit-appearance:none;' : (window._uiSelectStyle ? window._uiSelectStyle(false) : '') + ' height:20px; font-size:11px; padding:0 2px;') + ' max-width:70px; cursor:pointer;">' +
             (cur ? '' : '<option value="" selected>' + esc(T('혼합', 'Mixed')) + '</option>') +
-            STATUSES.map(function (s) { return '<option value="' + s + '"' + (s === cur ? ' selected' : '') + '>' + s + '</option>'; }).join('') + '</select>';
+            STATUSES.map(function (s) { return '<option value="' + s + '"' + (s === cur ? ' selected' : '') + ' style="background:#fff; color:#333; font-weight:normal;">' + esc(stLabel(s)) + '</option>'; }).join('') + '</select>';
         var del = '<button onclick="event.stopPropagation(); window._rrDelete(' + id + ')" title="' + esc(T('간트 행까지 삭제 (Ctrl+Z 로 되돌리기)', 'Delete the Gantt row (Ctrl+Z to undo)')) + '" style="' + (window._uiBtnStyle ? window._uiBtnStyle('danger') : '') + ' height:20px; padding:0 5px; line-height:18px;">🗑️</button>';
         return '<span style="display:inline-flex; gap:3px; align-items:center; white-space:nowrap;">' + sel + del + '</span>';
     }

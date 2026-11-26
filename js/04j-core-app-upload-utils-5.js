@@ -127,7 +127,9 @@
             header: { 'no':'No', '시작':'시작', '완료':'완료', '개발업무(wbs)':'개발업무 (WBS)', '기간':'기간', '소요일':'소요', '상태':'상태', '업무상세내용':'업무 상세내용', '현황':'현황' },
             status: ['진행','완료','대기','지연'],
             statusMap: { '진행':'진행','완료':'완료','대기':'대기','지연':'지연','보류':'지연',
-                         'In Progress':'진행','Done':'완료','Pending':'대기','On Hold':'지연','On going':'진행','Delay':'지연' },
+                         'In Progress':'진행','Done':'완료','Pending':'대기','On Hold':'지연','On going':'진행','Delay':'지연',
+                         // 🏷 [2026-11-26] 화면 이름(js/04j GANTT_STATUS_LABELS) — 엑셀 출력에 이름이 실리므로 되읽을 때 저장값으로
+                         '할 일':'진행','한 일':'완료','막힌 일':'지연','결정·요청':'대기','To do':'진행','Blocked':'지연','Decision':'대기' },
             btnText: '🌐 ENG',
             ui: {
                 'file-menu-btn':     '📁 프로젝트',
@@ -441,7 +443,8 @@
             header: { 'no':'No', '시작':'Start', '완료':'End', '개발업무(wbs)':'Task (WBS)', '기간':'Dur.', '소요일':'work', '상태':'Status', '업무상세내용':'Details', '현황':'Chart' },
             status: ['On going','Done','Pending','Delay'],
             statusMap: { '진행':'On going','완료':'Done','대기':'Pending','보류':'Delay','지연':'Delay',
-                         'Progress':'On going','On going':'On going','Done':'Done','Pending':'Pending','On Hold':'Delay','Delay':'Delay' },
+                         'Progress':'On going','On going':'On going','Done':'Done','Pending':'Pending','On Hold':'Delay','Delay':'Delay',
+                         '할 일':'On going','한 일':'Done','막힌 일':'Delay','결정·요청':'Pending','To do':'On going','Blocked':'Delay','Decision':'Pending' },
             btnText: '🌐 한글',
             ui: {
                 'file-menu-btn':     '📁 Project',
@@ -788,6 +791,26 @@
             if (window.GANTT_STATUS_WORDS[k].indexOf(w) >= 0) return k;
         }
         return '';
+    };
+    /** 🎨 상태 칩 색 — Project Review 분류 칩(js/62 P.summaryCats)과 **같은 값**. 모양은 리뷰 필터 칩
+     *  (`_uiPillStyle` 꺼짐 상태: 1px 같은 색 테두리 + 연한 바탕 + 같은 색 굵은 글자)과 같다.
+     *  간트 칸(styles.css .status-td.st-*)·캘린더 칩(styles.css .chip-*)도 같은 값 — 바꾸면 셋을 같이. */
+    window.GANTT_STATUS_COLORS = {
+        done:     { color: '#2f9e44', bg: '#ebfbee' },
+        todo:     { color: '#1971c2', bg: '#e7f5ff' },
+        blocked:  { color: '#c92a2a', bg: '#fff5f5' },
+        decision: { color: '#7048e8', bg: '#f3f0ff' }
+    };
+    /** 칩 인라인 모양 한 벌(새 화면은 이걸 쓴다) */
+    window._ganttStatusChipStyle = function (v) {
+        var c = window.GANTT_STATUS_COLORS[window._ganttStatusKind(v)] || window.GANTT_STATUS_COLORS.todo;
+        return 'display:inline-block; border:1px solid ' + c.color + '; background:' + c.bg + '; color:' + c.color + ';' +
+               ' border-radius:9px; padding:0 7px; font-size:11px; font-weight:bold; line-height:16px; white-space:nowrap;';
+    };
+    window._ganttStatusChipHtml = function (v) {
+        if (v == null || String(v).trim() === '') return '';
+        var t = window._ganttStatusLabel(v).replace(/&/g, '&amp;').replace(/</g, '&lt;');
+        return '<span class="gantt-status-chip" style="' + window._ganttStatusChipStyle(v) + '">' + t + '</span>';
     };
     /** 칩 종류 — todo / done / blocked / decision (모르는 값은 todo) */
     window._ganttStatusKind = function (v) {

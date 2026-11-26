@@ -662,7 +662,7 @@ div:has(> [onclick*="_toggleAlarmSection"]) { border-color: var(--ui-cell-line, 
        '한 일' 줄의 흐림(위 status-done)은 그대로 둔다. 상태 데이터는 js/04j GANTT_STATUS_* 한 곳. */
     #myTable tbody tr td.status-td .status-select {
         display: inline-block; min-width: 46px; max-width: 100%; box-sizing: border-box;
-        padding: 1px 7px; border-radius: 9px; border: none !important;
+        padding: 0 7px; border-radius: 9px; border: 1px solid currentColor !important;
         font-size: 11px; font-weight: bold !important; line-height: 16px; text-align: center; text-align-last: center; cursor: pointer;
     }
     #myTable tbody tr td.status-td.st-done .status-select     { background: #ebfbee !important; color: #2f9e44 !important; }
@@ -1561,14 +1561,16 @@ tr.bm-selected > td:last-child { border-right:2px solid #ffc107 !important; }
 
 .cal-event-chip.cal-gw-chip { background:#f1ecfb; color:#5b3fa3; border-left:2px dashed #7e5bc4; }
 .cal-event-chip.cal-gw-chip:hover { background:#e6dcf7; }
-.cal-event-chip.chip-done    { background:#f0f0f0; color:#999; border-left-color:#aaa; }
-.cal-event-chip.chip-delay   { background:#ffeef0; color:#c0392b; border-left-color:#e03131; }
-.cal-event-chip.chip-pending { background:#fff4e6; color:#c96a00; border-left-color:#e67e22; }
+/* 🏷 [2026-11-26] 상태 칩 색 = 간트·Project Review 와 같은 값(js/04j GANTT_STATUS_COLORS) — 한 일 초록·막힌 일 빨강·결정·요청 보라.
+   할 일(진행)은 캘린더 기본 칩(테마색) 그대로 */
+.cal-event-chip.chip-done    { background:#ebfbee; color:#2f9e44; border-left-color:#2f9e44; }
+.cal-event-chip.chip-delay   { background:#fff5f5; color:#c92a2a; border-left-color:#c92a2a; }
+.cal-event-chip.chip-pending { background:#f3f0ff; color:#7048e8; border-left-color:#7048e8; }
 .cal-event-chip.cal-alarm-on { background:#fff3cd; border-left-color:#e67e22; color:#7a5210; }
 /* 🖱 [2026-10-29] 상태·핀셋 칩에도 호버 — 위 색 지정이 기본 칩 :hover보다 뒤라 덮어써 색이 고정돼 보였다 */
-.cal-event-chip.chip-done:hover    { background:#e2e2e2; }
-.cal-event-chip.chip-delay:hover   { background:#ffdde1; }
-.cal-event-chip.chip-pending:hover { background:#ffe6c7; }
+.cal-event-chip.chip-done:hover    { background:#d3f9d8; }
+.cal-event-chip.chip-delay:hover   { background:#ffe3e3; }
+.cal-event-chip.chip-pending:hover { background:#e5dbff; }
 .cal-event-chip.cal-alarm-on:hover { background:#ffe69c; }
 .cal-event-chip.cal-selected { background:#2c5f8a !important; color:#fff !important; border-left-color:#1c3f5c !important; font-weight:bold; }
 /* 💡 [기간 막대 개선] 예전엔 얇고(3px) 반투명해서 눈에 잘 안 띄었음 — 두껍고(6px) 진한 알약모양
