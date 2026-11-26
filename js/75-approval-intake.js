@@ -44,7 +44,15 @@
         maxAgeDays: 120,               // 그 뒤에도 이보다 오래된 문서가 새로 보이면(참조로 뒤늦게 추가 등) 가져오지 않는다
         maxPerRun: 100,                // 한 번에 처리할 새 문서 상한 (2026-11-24 사용자 요청 25→100 — 90일 소급을 한 번에)
         firstDelaySec: 90,             // 앱을 연 뒤 첫 배경 스캔까지
-        intervalMin: 120,              // 배경 스캔 간격(그룹웨어가 로그인돼 있을 때만)
+        intervalMin: 30,               // 배경 스캔 간격(그룹웨어가 로그인돼 있을 때만) — 2026-11-26 120→30: 목록 읽기 5번뿐이라 가볍고, 2시간이면 창이 켜진 틈을 놓쳤다
+        // 🩺 [2026-11-26 사용자 "결재 건이 없는 건지 안 가져오는 건지 알 수가 없다"] 배경 확인이 건너뛴 이유를 사람 말로(데이터).
+        //    건너뛰기도 장부에 남기고(lastTryAt/lastSkip) 보관함 [📋 결재 가져오기] 칩에 마지막 확인 시각·멈춘 이유를 보인다.
+        skipLabels: {
+            gw_not_ready:  ['그룹웨어 창이 꺼져 있거나 로그인 안 됨', 'groupware window closed or signed out'],
+            gw_login:      ['그룹웨어 로그인 실패', 'groupware sign-in failed'],
+            no_candidates: ['후보 프로젝트 목록을 못 읽음', 'could not load candidate projects'],
+            no_router:     ['판정기 준비 안 됨', 'router not ready']
+        },
         // 양식 이름에 이 말이 있으면 가져오지 않는다 — 프로젝트와 무관한 개인 근무·인사 결재
         //  (2026-11-24 사용자 지적 "연장근로·근무계획은 왜 배치되나" → 근무시간 계열 추가)
         skipForms: ['휴가', '연차', '반차', '근태', '경조', '조퇴', '외출', '연장근로', '연장근무', '근무계획', '근무 계획', '시간외', '특근', '휴일근무', '당직',
@@ -452,7 +460,7 @@
             } else {
                 var st = null;
                 try { st = await fetch(BASE + '/gw/status').then(function (r) { return r.json(); }); } catch (e) { st = null; }
-                if (!st || !st.ok) { res.skipped = 'gw_not_ready'; return finish(res, opts); }
+                if (!st || !st.ok) { res.skipped = 'gw_not_ready'; res.message = (st && st.message) || ''; return finish(res, opts); }
             }
             // ② 후보 프로젝트 — 메일과 같은 색인
             var cands = [];
@@ -618,8 +626,35 @@
             if (window.renderTaskInbox && ov && ov.style.display === 'flex') window.renderTaskInbox();
         }
     };
+    // 🩺 건너뛴 것도 남긴다 — 예전엔 성공한 실행만 lastRunAt 을 적어, 창이 꺼져 계속 건너뛰어도 흔적이 없었다.
+    var _skipToastShown = false;
+    function noteTry(res, opts) {
+        if (res.skipped === 'busy' || res.skipped === 'off') return;
+        var s = loadStore();
+        s.lastTryAt = new Date().toISOString();
+        s.lastTryManual = !!opts.manual;
+        s.lastSkip = res.skipped ? { reason: res.skipped, message: String(res.message || '').slice(0, 160), at: s.lastTryAt } : null;
+        saveStore(s);
+        // 배경에서 처음 막혔을 때 한 번만 알린다(2시간마다 토스트가 뜨면 소음이다 — 이후는 보관함 칩이 말한다)
+        if (res.skipped && !opts.manual && !_skipToastShown && opts.toast !== false && window.showToast) {
+            _skipToastShown = true;
+            window.showToast(T('📋 결재 자동 확인을 못 했습니다 — ' + skipLabel(res.skipped)[0] + '. 업무 보관함의 [📋 결재 가져오기]를 누르면 로그인 후 가져옵니다.',
+                               '📋 Approval auto-check skipped — ' + skipLabel(res.skipped)[1] + '. Press [📋 Fetch approvals] in the Task Inbox.'), 'warning', 9000);
+        }
+    }
+    function skipLabel(k) { var L = (P.skipLabels || {})[k]; return L || [k, k]; }
+    /** 보관함 칩·콘솔 점검용 — 마지막 확인·마지막 건너뜀 */
+    window.approvalIntakeStatus = function () {
+        var s = loadStore();
+        var lastRun = s.lastRunAt ? Date.parse(s.lastRunAt) : 0, lastTry = s.lastTryAt ? Date.parse(s.lastTryAt) : 0;
+        var stuck = !!(s.lastSkip && lastTry && lastTry >= lastRun);
+        return { lastRunAt: s.lastRunAt || '', lastRes: s.lastRes || null, lastTryAt: s.lastTryAt || '',
+                 lastSkip: s.lastSkip || null, stuck: stuck, stuckLabel: stuck ? skipLabel(s.lastSkip.reason) : null,
+                 intervalMin: P.intervalMin, firstRunAt: s.firstRunAt || '' };
+    };
     function finish(res, opts) {
         try { console.info('[결재 가져오기]', JSON.stringify(res)); } catch (e) { /* 무시 */ }
+        try { noteTry(res, opts); } catch (e) { /* 기록 실패는 실행을 막지 않는다 */ }
         if (opts.toast === false || !window.showToast) return res;
         if (res.skipped === 'gw_login') { window.showToast(res.message || T('⚠️ 그룹웨어 로그인이 필요합니다.', '⚠️ Groupware sign-in needed.'), 'error', 7000); return res; }
         if (res.skipped === 'no_candidates') { window.showToast(T('⚠️ 배치할 후보 프로젝트를 불러오지 못했습니다.', '⚠️ Could not load candidate projects.'), 'error'); return res; }

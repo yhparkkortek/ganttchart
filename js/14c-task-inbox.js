@@ -699,10 +699,27 @@ window._tiBuildSummaryHtml = function(items) {
         // 📋 [2026-11-24] 전자결재 가져오기 — 기안·결재·참조/열람 문서함의 새 문서를 메일과 같은 판정기로 배치(js/75, AI 0회)
         (window.approvalIntakeRun
             ? (function () { const _b = window._approvalIntakeBusy && window._approvalIntakeBusy();
-                return `<span class="ti-apvscan" title="${_en ? 'Fetch new groupware approval documents (drafted / to approve / cc) and place them like mail (no AI)' : '그룹웨어 기안·결재·참조/열람 문서함의 새 문서를 메일처럼 판정해 배치합니다 (AI 안 씀)'}" ` +
-                  `style="display:inline-block;background:#e8f4fd;color:#1a4f7a;border-radius:10px;padding:2px 8px;margin:2px 4px 2px 0;` +
-                  `font-size:11px;white-space:nowrap;cursor:${_b ? 'wait' : 'pointer'};border:1px solid #a5c8f0;${_b ? 'opacity:.7;' : ''}">` +
-                  (_b ? (_en ? '⏳ Fetching approvals…' : '⏳ 결재 가져오는 중…') : (_en ? '📋 Fetch approvals' : '📋 결재 가져오기')) + `</span>`; })()
+                // 🩺 [2026-11-26] 마지막 확인 시각·멈춘 이유를 칩에 — "결재가 없는 건지, 안 가져오는 건지" 를 가른다(js/75 approvalIntakeStatus)
+                const _st = window.approvalIntakeStatus ? window.approvalIntakeStatus() : null;
+                const _hm = function (iso) { const d = iso ? new Date(iso) : null; if (!d || isNaN(d)) return ''; const p = n => String(n).padStart(2, '0');
+                    const today = new Date().toDateString() === d.toDateString(); return (today ? '' : (d.getMonth() + 1) + '/' + d.getDate() + ' ') + p(d.getHours()) + ':' + p(d.getMinutes()); };
+                const _r = _st && _st.lastRes;
+                let _tail = '', _tip = _en ? 'Fetch new groupware approval documents (drafted / to approve / cc / received) and place them like mail (no AI)' : '그룹웨어 기안·결재·참조/열람·수신 문서함의 새 문서를 메일처럼 판정해 배치합니다 (AI 안 씀)';
+                if (_st) {
+                    _tip += '\n\n' + (_st.lastRunAt
+                        ? (_en ? 'Last check: ' : '마지막 확인: ') + _hm(_st.lastRunAt) + (_r ? (_en ? ` — ${_r.looked} docs, new ${_r.fresh} (placed ${_r.placed} · pending ${_r.pending} · no match ${_r.noMatch})` : ` — 문서 ${_r.looked}건 확인, 새 문서 ${_r.fresh}건 (배치 ${_r.placed} · 대기 ${_r.pending} · 후보 없음 ${_r.noMatch})`) : '')
+                        : (_en ? 'Never checked yet on this PC.' : '이 PC에서는 아직 한 번도 확인하지 못했습니다.'));
+                    if (_st.stuck) _tip += '\n' +(_en ? '⚠️ Auto-check stopped since ' : '⚠️ 자동 확인 멈춤 — ') + _hm(_st.lastSkip.at) + ': ' + _st.stuckLabel[_en ? 1 : 0] +
+                        (_en ? '. Press to sign in and fetch.' : '. 누르면 그룹웨어 로그인 후 가져옵니다.');
+                    _tip += '\n' + (_en ? `Auto-check every ${_st.intervalMin} min while the groupware window is signed in.` : `자동 확인: 그룹웨어 창이 로그인돼 있으면 ${_st.intervalMin}분마다.`);
+                    if (!_b) _tail = _st.stuck ? (_en ? ' · ⚠️ auto stopped' : ' · ⚠️ 자동 멈춤')
+                                              : (_st.lastRunAt ? ' · ' + _hm(_st.lastRunAt) + (_r && _r.fresh ? (_en ? ` new ${_r.fresh}` : ` 새 ${_r.fresh}`) : '') : '');
+                }
+                const _warn = !_b && _st && _st.stuck;
+                return `<span class="ti-apvscan" title="${String(_tip).replace(/"/g, '&quot;')}" ` +
+                  `style="display:inline-block;background:${_warn ? '#fff4e5' : '#e8f4fd'};color:${_warn ? '#8a4b00' : '#1a4f7a'};border-radius:10px;padding:2px 8px;margin:2px 4px 2px 0;` +
+                  `font-size:11px;white-space:nowrap;cursor:${_b ? 'wait' : 'pointer'};border:1px solid ${_warn ? '#f0b46a' : '#a5c8f0'};${_b ? 'opacity:.7;' : ''}">` +
+                  (_b ? (_en ? '⏳ Fetching approvals…' : '⏳ 결재 가져오는 중…') : (_en ? '📋 Fetch approvals' : '📋 결재 가져오기')) + _tail + `</span>`; })()
             : '') +
         `</div>`;
 
