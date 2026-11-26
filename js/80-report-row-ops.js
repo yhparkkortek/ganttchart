@@ -170,6 +170,21 @@
     window._rr = {
         STATUSES: STATUSES, barHtml: barHtml, headHtml: headHtml, opsHtml: opsHtml, koStatus: koStatus, rowStatus: rowStatus, nameOf: nameOf, register: register, resolve: resolve,
         /** 완료인가 — 열린 프로젝트 행이면 **지금 간트 값**, 아니면 사실에 적혀 있던 값. */
-        isDone: function (ri, fallbackStatus) { return (ri != null && ri >= 0 ? rowStatus(ri) : koStatus(fallbackStatus)) === '완료'; }
+        isDone: function (ri, fallbackStatus) { return (ri != null && ri >= 0 ? rowStatus(ri) : koStatus(fallbackStatus)) === '완료'; },
+        /** ▾ [2026-11-26 "상태 필터"] 표 엔진(js/79) 현황 열의 필터 값 — 간트와 같은 이름(한 일/할 일/막힌 일/결정·요청).
+         *  열린 프로젝트 행이면 **지금 간트 값**, 아니면 사실에 적혀 있던 값. 여러 행이 서로 다르면 '혼합'. */
+        statusLabel: function (rows, fallbackStatus) {
+            var sts = (rows && rows.length) ? uniqStatuses(rows) : [koStatus(fallbackStatus)];
+            sts = sts.filter(function (s) { return s; });
+            if (!sts.length) return T('(없음)', '(none)');
+            if (sts.length > 1) return T('혼합', 'Mixed');
+            return window._ganttStatusLabel ? window._ganttStatusLabel(sts[0]) : sts[0];
+        },
+        /** 정렬 열쇠 — 간트 드롭다운 순서(한 일·할 일·막힌 일·결정·요청), 모르는 값은 뒤 */
+        statusOrder: function (rows, fallbackStatus) {
+            var sts = (rows && rows.length) ? uniqStatuses(rows) : [koStatus(fallbackStatus)];
+            var i = sts.length === 1 ? STATUSES.indexOf(sts[0] === '보류' ? '지연' : sts[0]) : -1;
+            return i < 0 ? 99 : i;
+        }
     };
 })();

@@ -1048,7 +1048,8 @@
             // ✅ [2026-11-26] 현황이 '완료' 인 업무는 회의에서 정리된 것 — 기본으로 숨기고 "숨김 N건 보기" 로 되돌린다(열린 프로젝트는 지금 간트 값).
             var doneAll = col.facts.filter(function (f) { return window._rr.isDone(factGanttRow(f), f.status); }).length;
             if (!_psTbl.showDone) factsShown = factsShown.filter(function (f) { return !window._rr.isDone(factGanttRow(f), f.status); });
-            if (doneAll) h.push('<div style="margin:0 0 5px;"><button onclick="window._psTblSet({showDone:' + (!_psTbl.showDone) + '})" title="' + esc(T('간트 상태가 완료인 업무 — 회의에서 정리된 것', 'Gantt status = Done')) + '" style="' + window._uiPillStyle(!!_psTbl.showDone) + '">✅ ' + esc(_psTbl.showDone ? T('완료 ' + doneAll + '건 포함 중 — 숨기기', 'Done ' + doneAll + ' shown — hide') : T('완료 ' + doneAll + '건 숨김 — 보기', 'Done ' + doneAll + ' hidden — show')) + '</button></div>');
+            // 🗜 [2026-11-26 사용자 요청 "칩 버튼 1행으로"] 완료 숨김·🔗≈ 칩·열 필터를 **한 줄**에 — 표 엔진의 필터 줄 앞(cfg.barPre)에 넣는다.
+            _psFactsPre = doneAll ? '<button onclick="window._psTblSet({showDone:' + (!_psTbl.showDone) + '})" title="' + esc(T('간트 상태가 완료인 업무 — 회의에서 정리된 것', 'Gantt status = Done')) + '" style="' + window._uiPillStyle(!!_psTbl.showDone) + '">✅ ' + esc(_psTbl.showDone ? T('완료 ' + doneAll + '건 포함 중 — 숨기기', 'Done ' + doneAll + ' shown — hide') : T('완료 ' + doneAll + '건 숨김 — 보기', 'Done ' + doneAll + ' hidden — show')) + '</button>' : '';
             _psLast.factsShown = factsShown;   // 표를 다시 그릴 때(정렬·필터) 쓴다 — paintFacts
             if (_psTbl.pinned && !factsShown.length) h.push('<div style="padding:24px 10px; text-align:center; color:#999; font-size:12.5px;">' + esc(T('📌 핀셋을 켠 업무가 없습니다 — 열린 프로젝트의 업무만 셉니다', 'No pinned tasks (open project only)')) + '</div>');
             else h.push('<div id="ps-facts-body">' + factsTableHtml(factsShown) + '</div>');
@@ -1320,7 +1321,10 @@
                            (f.answer ? '<div style="color:#2f9e44; margin-top:2px;">↩ ' + esc(f.answer) + '</div>' : '');
                 } },
                 // 🚩 [2026-11-26] 회의하며 바로 — 현황(간트 상태 칸)을 바꾸거나 간트 행을 지운다. 완료로 보내면 이 목록에서 숨는다.
-                { id: 'ops', label: T('현황·삭제', 'Status'), w: '112px', nowrap: true, align: 'center', html: function (f) {
+                { id: 'ops', label: T('현황·삭제', 'Status'), w: '112px', nowrap: true, align: 'center',
+                  opt:  function (f) { var ri = factGanttRow(f); return window._rr.statusLabel(ri >= 0 ? [ri] : [], f.status); },   // ▾ 상태 필터(간트 이름)
+                  sort: function (f) { var ri = factGanttRow(f); return window._rr.statusOrder(ri >= 0 ? [ri] : [], f.status); },
+                  html: function (f) {
                     var ri = factGanttRow(f);
                     return window._rr.opsHtml(ri >= 0 ? [ri] : [], f.status);
                 } },
@@ -1331,6 +1335,7 @@
             ]
         };
     }
+    var _psFactsPre = '';
     function factsTableHtml(facts) {
         // 🔗≈ 묶기·비슷한 업무는 **표 엔진 앞에서**(js/81) — 대표 줄만 엔진에 넣고, 칩 줄을 표 위에 둔다. 열린 프로젝트의 사실이 대표(간트 조작이 거기서만 된다).
         var dup = window._fdup.build('ps-facts', facts, {
@@ -1338,8 +1343,9 @@
             prefer: function (f) { return factGanttRow(f) >= 0; },
             repaint: paintFacts
         });
-        var chips = window._fdup.chipsHtml('ps-facts');
-        return (chips ? '<div style="margin:0 0 5px; display:flex; gap:5px; flex-wrap:wrap;">' + chips + '</div>' : '') + window._ft.build('ps-facts', factsCfg(), dup.rows).html;
+        var cfg = factsCfg();
+        cfg.barPre = _psFactsPre + window._fdup.chipsHtml('ps-facts');   // 한 줄: 완료 숨김 · 🔗 같은 메일 · ≈ 비슷한 업무 · 열 필터 · 건수
+        return window._ft.build('ps-facts', cfg, dup.rows).html;
     }
     function paintFacts() {
         var el = document.getElementById('ps-facts-body');

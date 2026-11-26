@@ -1439,7 +1439,10 @@
                       if (!c.start) return '';
                       return (c.end && md(c.start) !== md(c.end)) ? esc(md(c.start)) + '~' + esc(md(c.end)) : esc(md(c.start));
                   } },
-                { id: 'ops', label: T('현황·삭제', 'Status'), w: '112px', nowrap: true, align: 'center', html: function (c) { return window._rr.opsHtml(candRows(c), c.status); } }
+                { id: 'ops', label: T('현황·삭제', 'Status'), w: '112px', nowrap: true, align: 'center',
+                  opt:  function (c) { return window._rr.statusLabel(candRows(c), c.status); },    // ▾ 상태 필터(간트와 같은 이름)
+                  sort: function (c) { return window._rr.statusOrder(candRows(c), c.status); },
+                  html: function (c) { return window._rr.opsHtml(candRows(c), c.status); } }
             ]
         };
         var built = window._ft.build('daily-cand', cfg, engineRows);
