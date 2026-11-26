@@ -83,8 +83,8 @@
                 '<span style="margin-left:auto; font-size:11px; color:#888;">' + view.length + ' / ' + rows.length + esc(T('건', '')) + '</span></div>';
 
             // ── 표 ──
-            var thBase = 'position:sticky; top:0; z-index:20; white-space:nowrap; padding:5px 6px; background:#eef6f7; color:#2c5f8a; border-right:1px solid #cdd9e6; border-bottom:1px solid #cdd9e6; font-size:11.5px; text-align:center;';
-            var tdBase = 'padding:5px 6px; border-right:1px solid #e3e8ee; border-bottom:1px solid #e3e8ee; vertical-align:top; font-size:12px;';
+            var thBase = 'position:sticky; top:0; z-index:20; white-space:nowrap; padding:5px 6px; background:#eef6f7; color:#2c5f8a; border-right:1px solid var(--ui-cell-line, #cfe3e5); border-bottom:1px solid var(--ui-cell-line, #cfe3e5); font-size:11.5px; text-align:center;';
+            var tdBase = 'padding:5px 6px; border-right:1px solid var(--ui-cell-line, #cfe3e5); border-bottom:1px solid var(--ui-cell-line, #cfe3e5); vertical-align:top; font-size:12px;';
             var head = cols.map(function (c) {
                 var on = c.sort && s.col === c.id;
                 return '<th' + (c.sort ? ' onclick="window._ftSort(\'' + id + '\', \'' + c.id + '\')" title="' + esc(T('눌러서 정렬 (오름↔내림)', 'Click to sort (asc/desc)')) + '"' : '') +
@@ -107,7 +107,7 @@
             }
             var more = (cfg.max && view.length > cfg.max)
                 ? '<div style="font-size:11px; color:#999; margin-top:4px;">' + esc(T('… 외 ' + (view.length - cfg.max) + '건 — 필터·검색으로 좁혀 보세요', '… and ' + (view.length - cfg.max) + ' more — narrow with filters/search')) + '</div>' : '';
-            var table = '<table class="ui-round-tbl" style="width:100%; border-collapse:separate; border-spacing:0; border-left:1px solid #cdd9e6; border-top:1px solid #cdd9e6; table-layout:auto; background:#fff;">' +
+            var table = '<table class="ui-round-tbl" style="width:100%; border-collapse:separate; border-spacing:0; border-left:1px solid var(--ui-cell-line, #cfe3e5); border-top:1px solid var(--ui-cell-line, #cfe3e5); table-layout:auto; background:#fff;">' +
                         '<thead><tr>' + head + '</tr></thead><tbody>' + body + '</tbody></table>' + more;
             return { view: view, html: bar + table };
         },

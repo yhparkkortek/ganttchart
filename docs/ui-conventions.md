@@ -809,6 +809,7 @@ Sample Report **원본저장** 구간이 옛 `/doc/docx` 한 길만 기대해서
   | Notice · 예약 규칙 | 머리글 줄 아래 2px + 칸 선이 전역 기본 회색 `#ddd`(테마 안 따름) | 1px + `ui-line-tbl` |
   | Daily 하루·월 보기 | 칸 선 고정 회색 `#e3e6ea` | `ui-line-tbl` |
 - 바깥 틀(둥근 상자)은 앞서 정한 `ui-round-wrap`·`.concept-table` 모서리 규칙 그대로. PARTS 비교표는 손대지 않음.
+- 🔁 2026-11-26 재측정(계산값, 1600px): Project list·Summary(마일스톤·주요자재)·Customer SPEC·BOM·PARTS·M.C·JIRA·간트·Daily·Alarm·주소록 전부 `1px solid` 그 테마 칸 선. **새로 생긴 Project Review 표 둘**(js/62 AI 요약 표 · js/79 근거 사실 표 — 일일보고 '간트에서 불러오기'도 이 표)만 고정 회색이었다(칸 `#e3e8ee`·머리글/바깥 `#cdd9e6`) → `var(--ui-cell-line, #cfe3e5)`. 머리글 색·배경은 이미 js/21 이 테마로 칠하고 있었다. PARTS 머리글 한 칸의 점선은 원래 모양(예외).
 - 검증: 고친 뒤 실제 화면에서 JIRA·Alarm·Notice(공지 한 건을 메모리에만 넣어 그림, 저장 안 함)·Daily·주소록 칸 선이 전부 `1px rgb(213,230,226)`(그 테마의 칸 선), 테마를 `#6741d9` 로 바꾸면 Daily·주소록이 같이 `rgb(218,213,230)` 으로 바뀌는 것.
 
 ### 드롭다운 끌기 — 마무리 검증 (2026-11-25, 실제 프로젝트)
