@@ -341,7 +341,9 @@
             if (!hit) { out.push(a); byKey[a.key] = a; if (a.name) byName[String(a.name).trim()] = a; return; }
             if (!String(hit.name || '').trim()) hit.name = a.name;
             if (!String(hit.team || '').trim()) hit.team = a.team;
-            if (!String(hit.tgChatId || '').trim()) hit.tgChatId = a.tgChatId;
+            // 📱 [2026-11-26] 빈 텔레그램 ID 를 주소록에서 채웠으면 표식을 단다 — 표식이 없으면
+            //    📣 PC 가 "더할 사람이 없다" 며 파일에 안 적어, 백엔드(파일만 본다)는 그 사람을 끝내 모른다.
+            if (!String(hit.tgChatId || '').trim() && a.tgChatId) { hit.tgChatId = a.tgChatId; hit.tgFromAddr = true; }
         });
         return out;
     }
@@ -383,13 +385,14 @@
         var mine = list.filter(function (m) { return String(m.key || '').toLowerCase() === k; })[0];
         if (!mine || !mine.notifier) return null;              // 📣 담당 PC 가 아니면 안 쓴다
         var added = list.filter(function (m) { return m && m.fromAddr; });
-        if (!added.length) return null;                        // 더할 게 없으면 안 쓴다
+        var filled = list.filter(function (m) { return m && !m.fromAddr && m.tgFromAddr; });
+        if (!added.length && !filled.length) return null;      // 더할 것도 채울 것도 없으면 안 쓴다
         try {
             var cur = await window.nasAppFile.get(window.DAILY_PATHS.roster, { json: true });
             if (cur && _rosterRev != null && (cur.rev || 0) !== _rosterRev) return null;
             var members = list.map(function (m) {
                 var c = Object.assign({}, m);
-                delete c.fromAddr;                             // 파생 표식은 파일에 안 남긴다
+                delete c.fromAddr; delete c.tgFromAddr;        // 파생 표식은 파일에 안 남긴다
                 return c;
             });
             if (!members.length) return null;
@@ -398,8 +401,10 @@
             await window.nasAppFile.put(window.DAILY_PATHS.roster, doc);
             _roster = members;
             _rosterRev = doc.rev;
-            toast('👥 ' + T('주소록에서 팀원 ' + added.length + '명을 명단에 담았습니다.',
+            if (added.length) toast('👥 ' + T('주소록에서 팀원 ' + added.length + '명을 명단에 담았습니다.',
                             'Added ' + added.length + ' teammate(s) from the Address Book.'), 'info', 6000);
+            if (filled.length) toast('📱 ' + T('주소록의 텔레그램 ID ' + filled.length + '건을 명단에 옮겼습니다.',
+                            'Copied ' + filled.length + ' Telegram ID(s) from the Address Book to the roster.'), 'info', 6000);
             return doc;
         } catch (e) {
             console.warn('[일일보고] 명단 자동 반영 건너뜀:', e.message);
@@ -2714,7 +2719,7 @@
     window.dailySaveRoster = async function () {
         var list = (window._dailyRosterDraft || [])
             .filter(function (m) { return String(m.key || '').trim(); })
-            .map(function (m) { var c = Object.assign({}, m); delete c.fromAddr; return c; });
+            .map(function (m) { var c = Object.assign({}, m); delete c.fromAddr; delete c.tgFromAddr; return c; });
         if (!list.length) { toast(T('계정id가 있는 사람이 한 명도 없습니다.', 'No one has a key.'), 'warning'); return; }
         if (list.filter(function (m) { return m.notifier; }).length > 1) {
             toast(T('📣 담당은 한 명만 고를 수 있습니다.', 'Only one 📣 notifier allowed.'), 'warning'); return;

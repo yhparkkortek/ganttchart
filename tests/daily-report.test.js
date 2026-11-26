@@ -93,6 +93,9 @@ win.nasAppFile = {
     exists: async () => false
 };
 
+// ── 진짜 js/79(공용 사실 표 — js/59 가 후보 목록을 그릴 때 쓴다, 2026-11-26) ──
+new Function('window', 'document', 'localStorage',
+    fs.readFileSync(path.join(__dirname, '..', 'js', '79-fact-table.js'), 'utf8'))(win, global.document, global.localStorage);
 // ── 진짜 js/59 로드 ─────────────────────────────────────────────────────────
 const src = fs.readFileSync(path.join(__dirname, '..', 'js', '59-daily-report.js'), 'utf8');
 new Function('window', 'document', 'localStorage', src)(win, global.document, global.localStorage);
@@ -739,6 +742,32 @@ nas[win.DAILY_PATHS.roster] = JSON.stringify({ members: [
     ok('빈 칸만 주소록으로 채운다', byK['jschoi'].name === '최종석' && byK['jschoi'].team === '개발3팀',
         JSON.stringify(byK['jschoi']));
     ok('남의 팀은 안 들어온다', !byK['other'], Object.keys(byK).join(','));
+
+    // 📱 [2026-11-26] 이미 명단에 있는 사람의 **빈 텔레그램 ID** 를 주소록에서 채웠으면
+    //    📣 PC 가 파일에도 적어야 한다 — 백엔드는 파일만 본다(전엔 "새 사람" 이 있을 때만 썼다).
+    console.log('\n■ 주소록의 텔레그램 ID 가 명단 파일로 넘어간다 (이미 있는 사람)');
+    win.tabData.addressBook = [
+        { name: '박용훈', dept: '개발3팀', email: 'yhpark@x.co.kr', telegramId: '8790493335' },
+        { name: '장영익', dept: '개발3팀', email: 'yijang@x.co.kr', telegramId: '111' }
+    ];
+    nas[win.DAILY_PATHS.roster] = JSON.stringify({
+        rev: 5,
+        members: [
+            { key: 'yhpark', name: '박용훈', team: '개발3팀', aliases: [], tgChatId: '8790493335',
+              active: true, notifier: true },
+            { key: 'yijang', name: '장영익', team: '개발3팀', aliases: [], tgChatId: '', active: true }
+        ]
+    });
+    await win.dailyLoadRoster(true);
+    const synced = await win.dailyRosterSyncIfNotifier();
+    const rf = JSON.parse(nas[win.DAILY_PATHS.roster]);
+    const rk = {};
+    (rf.members || []).forEach((m) => { rk[m.key] = m; });
+    ok('새 사람이 없어도 채운 ID 는 파일에 적는다', !!synced && rf.rev === 6 && (rk['yijang'] || {}).tgChatId === '111',
+        JSON.stringify(rf));
+    ok('표식(tgFromAddr)은 파일에 안 남는다', !(rf.members || []).some((m) => 'tgFromAddr' in m || 'fromAddr' in m),
+        JSON.stringify(rf.members));
+    ok('📣 표시는 그대로', (rk['yhpark'] || {}).notifier === true);
 
 
     // ══ 업무별 보고 (2026-11-05 요청) ═════════════════════════════════════
