@@ -155,8 +155,12 @@
         if (!rowStart && !rowEnd) return false;
         const s = rowStart || rowEnd;
         const e = rowEnd || rowStart;
-        return s <= rangeEnd && e >= rangeStart;
+        // 📅 [2026-11-26 사용자 요청 "일일보고처럼 시작일만"] 기본은 그 주에 **시작한** 업무만 — 기간이 걸치기만 한 업무는 뺀다.
+        //    'overlap' 으로 두면 예전처럼 기간이 겹치면 든다. 시작일이 비어 있으면 완료일로 대신한다(일일보고 DAILY_SCAN.matchBy 와 같은 규칙).
+        if ((window.WR_POLICY || {}).matchBy === 'overlap') return s <= rangeEnd && e >= rangeStart;
+        return s >= rangeStart && s <= rangeEnd;
     }
+    window.WR_POLICY = window.WR_POLICY || { matchBy: 'start' };   // 데이터: 'start'(기본) | 'overlap'(예전)
 
     // ── 이번주/다음주 분류 ────────────────────────────────
     window.wrBaseDate = window.wrBaseDate || new Date();   // 주차 이동의 기준 날짜 (기본값: 오늘)
