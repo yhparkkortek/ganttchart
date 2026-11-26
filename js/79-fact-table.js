@@ -83,8 +83,8 @@
                 '<span style="margin-left:auto; font-size:11px; color:#888;">' + view.length + ' / ' + rows.length + esc(T('건', '')) + '</span></div>';
 
             // ── 표 ──
-            var thBase = 'position:sticky; top:0; z-index:20; white-space:nowrap; padding:5px 6px; background:#eef6f7; color:#2c5f8a; border-right:1px solid var(--ui-cell-line, #cfe3e5); border-bottom:1px solid var(--ui-cell-line, #cfe3e5); font-size:11.5px; text-align:center;';
-            var tdBase = 'padding:5px 6px; border-right:1px solid var(--ui-cell-line, #cfe3e5); border-bottom:1px solid var(--ui-cell-line, #cfe3e5); vertical-align:top; font-size:12px;';
+            var thBase = 'position:sticky; top:0; z-index:20; white-space:nowrap; padding:10px 8px; background:#eef6f7; color:#2c5f8a; border-right:1px solid var(--ui-cell-line, #cfe3e5); border-bottom:1px solid var(--ui-cell-line, #cfe3e5); font-size:12.5px; font-weight:600; text-align:center;';
+            var tdBase = 'padding:6px 8px; border-right:1px solid var(--ui-cell-line, #cfe3e5); border-bottom:1px solid var(--ui-cell-line, #cfe3e5); vertical-align:top; font-size:12.5px;';
             var head = cols.map(function (c) {
                 var on = c.sort && s.col === c.id;
                 return '<th' + (c.sort ? ' onclick="window._ftSort(\'' + id + '\', \'' + c.id + '\')" title="' + esc(T('눌러서 정렬 (오름↔내림)', 'Click to sort (asc/desc)')) + '"' : '') +
