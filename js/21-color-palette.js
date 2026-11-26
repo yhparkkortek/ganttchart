@@ -388,6 +388,7 @@ window._cpApplyLive = function(hex, skipSave) {
         + '#myTable tbody tr.alarm-on .row-pin-bar { background-color: ' + alarmAccent + ' !important; }\n'
         + '#myTable .row-pin-bar:hover { background-color: ' + alarmAccent + ' !important; opacity: 0.5; }\n'
         // 🚩 보고 화면의 붉은 바(js/80)도 같은 색 — 간트와 통일(켜짐=팔레트 보색)
+        + 'tr.rp-on > td { background-color: ' + alarmBg + ' !important; }\n'
         + '.rp-bar.on, .rp-bar.some { background-color: ' + alarmAccent + ' !important; }\n'
         + '.rp-bar:not(.closed):hover { background-color: ' + alarmAccent + ' !important; opacity: 0.5; }\n';
 

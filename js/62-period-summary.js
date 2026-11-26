@@ -1153,8 +1153,11 @@
         // 보관본 보기에서도 된다 — 바뀌는 건 보관본이 아니라 간트 행이다.
         var canEdit = localRefs(r).length && typeof window.setWbsDiscipline === 'function';
         if (!canEdit) {
-            var why = T('이 프로젝트를 열면 여기서 담당 구분을 바꿀 수 있습니다(위 📂 열기)', 'Open this project to change the role here');
-            return '<span title="' + esc(why) + '">' + txt + '</span>';
+            // 📂 [2026-11-26 사용자 요청 "자동으로 열어주고 안내문 삭제"] 안내 띠 대신 칸을 누르면 그 프로젝트를 연다 → 열리면 고르기 상자가 된다.
+            var pn = (uniqRefs(r.refs).filter(function (x) { return x.p; })[0] || {}).p || '';
+            if (!pn || typeof window.setWbsDiscipline !== 'function') return '<span>' + txt + '</span>';
+            var oi = _psOpenNames.indexOf(pn); if (oi < 0) oi = _psOpenNames.push(pn) - 1;
+            return '<span onclick="window._psOpenProjectName(' + oi + ')" title="' + esc(T('누르면 ' + pn + ' 을(를) 열어 여기서 바로 바꿀 수 있습니다', 'Click to open ' + pn + ' and edit here')) + '" style="cursor:pointer; border-bottom:1px dotted #8aa;">' + (txt || '<span style="color:#aaa;">—</span>') + ' <span style="font-size:10px; opacity:.6;">📂</span></span>';
         }
         var meta = window.projectMeta || {}, m3 = (window.tabData && window.tabData.projectMembers3) || [];
         var manualNow = liveFacts(r).some(function (f) { return f.manual; });
@@ -1174,6 +1177,7 @@
         return '<select onchange="window._psSetRole(' + ai + ', this.value)" title="' + esc(T('담당 구분 바꾸기 또는 담당자 직접 입력 — 간트 행에 바로 반영됩니다', 'Change role or type an assignee — written to the Gantt row')) + '" style="' + window._uiSelectStyle(manualNow) + ' height:20px; font-size:11px; max-width:140px; cursor:pointer;">' + opts + '</select>';
     }
     /** 이 요약 행의 근거 → 지금 간트의 행 번호들. 행 번호가 밀렸으면 업무명이 **하나뿐인** 행을 찾고, 없으면 빼고 센다. */
+    var _psOpenNames = [];   // 담당자 칸이 순번으로 집는다(이름에 따옴표·> 가 들어 있다)
     function resolveGanttRows(r) {
         var gd = (typeof globalData !== 'undefined' && globalData) ? globalData : window.globalData;
         var out = [], lost = 0;
@@ -1331,7 +1335,29 @@
     //    · "N일 경과" 는 코드가 근거 사실 중 가장 이른 날짜로 센다(AI 가 지어내지 않는다).
     //    · 맨 위 "오늘 회의에서 정할 것" = 막힌 일·결정·요청 중 오래된 순 상위 P.meetingTop 건.
     P.meetingTop = P.meetingTop || 6;
-    var _psBriefTasks = [];   // 핀셋 단추가 순번으로 집는다(이름에 따옴표가 들어 있다)
+    var _psBriefTasks = [], _psMeetTargets = [], _psMeetBack = null;   // 핀셋 단추·회의 줄이 순번으로 집는다(이름에 따옴표가 들어 있다)
+    // 🚩→📋 [2026-11-26 사용자 요청] "오늘 회의에서 정할 것" 한 줄을 누르면 아래 그 업무 줄로 가서 깜빡이고, 그 줄을 누르면 돌아온다.
+    window._psGoBrief = function (i) {
+        var el = document.getElementById('ps-brief-' + _psMeetTargets[i]);
+        if (!el) return;
+        _psMeetBack = i;
+        var old = document.getElementById('ps-meet-hint'); if (old) old.remove();
+        el.firstElementChild.insertAdjacentHTML('afterbegin', '<div id="ps-meet-hint" style="float:right; font-size:10.5px; color:#1971c2;">↩ ' + esc(T('누르면 위로 돌아갑니다', 'Click to go back')) + '</div>');
+        el.style.cursor = 'pointer';
+        el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        flash(el, '#fff3bf');
+    };
+    window._psBriefBack = function (ev) {
+        if (_psMeetBack == null) return;
+        var t = ev && ev.target;
+        if (t && t.closest && t.closest('button, a, select, input, textarea, .rp-bar') && !t.closest('#ps-meet-hint')) return;   // 줄 안 단추는 그대로
+        var back = document.getElementById('ps-meet-' + _psMeetBack);
+        _psMeetBack = null;
+        var hint = document.getElementById('ps-meet-hint'); if (hint) { var tr = hint.closest('tr'); hint.remove(); if (tr) tr.style.cursor = ''; }
+        if (!back) return;
+        back.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        flash(back, '#ffe3e3');
+    };
     function daysSince(d) {
         if (!d) return 0;
         var n = new Date(), t = new Date(n.getFullYear(), n.getMonth(), n.getDate()), x = new Date(d + 'T00:00:00');
@@ -1414,16 +1440,21 @@
             return kb - ka;
         }).slice(0, P.meetingTop);
         var box = '';
+        _psMeetTargets = [];
+        function meetBox() {   // 표(업무 줄 번호)가 먼저 만들어져야 각 줄이 갈 자리를 안다
         if (items.length) {
             box = '<div style="border:1px solid #f1b8b8; background:#fff5f5; border-radius:8px; padding:8px 12px; margin-bottom:10px; font-size:' + fs + 'px;">' +
                 '<div style="font-weight:bold; color:#c92a2a; margin-bottom:4px;">🚩 ' + esc(T('오늘 회의에서 정할 것 ' + items.length + '건', 'To settle in the meeting: ' + items.length)) + '</div>' +
                 items.map(function (it, i) {
                     var r = it.r, ppl = peopleOf(r), roles = rolesOf(r);
-                    return '<div style="line-height:1.65;">' + (i + 1) + '. <b style="color:#555;">[' + esc(r.common ? T('공통', 'Common') : (r.projects[0] || '')) + ']</b> ' + esc(r.text) + ' ' +
+                    var tn = -1; _psBriefTasks.forEach(function (t, n) { if (tn < 0 && t.ai.indexOf(it.ai) >= 0) tn = n; });
+                    _psMeetTargets[i] = tn;
+                    return '<div id="ps-meet-' + i + '" onclick="window._psGoBrief(' + i + ')" title="' + esc(T('누르면 아래 그 업무 줄로 갑니다', 'Click to jump to the task')) + '" style="line-height:1.65; cursor:pointer; border-radius:4px; padding:0 4px; margin:0 -4px; transition:background .4s;">' + (i + 1) + '. <b style="color:#555;">[' + esc(r.common ? T('공통', 'Common') : (r.projects[0] || '')) + ']</b> ' + esc(r.text) + ' ' +
                         '<span style="' + window._uiBadgeStyle() + ' background:' + (r.cat === 'blocked' ? '#ffe3e3; color:#c92a2a' : '#fff3bf; color:#8f5a00') + ';">' + esc(r.cat === 'blocked' ? T('막힘', 'Blocked') : T('결정 필요', 'Decide')) + '</span>' +
                         (it.age >= 1 ? ' <span style="color:#c92a2a; font-size:11px;" title="' + esc(T('근거 메일 중 가장 이른 날짜 기준', 'Since the earliest source mail')) + '">' + esc(T(it.age + '일 경과', it.age + 'd')) + '</span>' : '') +
                         (ppl.length || roles.length ? ' <span style="color:#555; font-size:11.5px;">· ' + whoTip(ppl, roles) + '</span>' : '') + '</div>';
                 }).join('') + '</div>';
+        }
         }
         // ── 표 ──
         var td = 'padding:6px 8px; border-right:1px solid var(--ui-cell-line, #cfe3e5); border-bottom:1px solid var(--ui-cell-line, #cfe3e5); vertical-align:top; font-size:' + fs + 'px; line-height:1.5;';
@@ -1438,7 +1469,7 @@
                 var rg = ganttRowsOfTask(t).rows;
                 var sub = by === 'who' ? (t.proj ? '<div style="color:#888; font-size:11px;">' + esc(t.proj) + '</div>' : '') :
                     (t.sub ? '<div style="color:#888; font-size:11px;">' + esc(t.sub) + '</div>' : ((t.people.length || t.roles.length) ? '<div style="color:#666; font-size:11.5px;">' + whoTip(t.people, t.roles) + '</div>' : ''));
-                body += '<tr' + (ti % 2 ? ' class="ft-zebra-b"' : '') + '>' +
+                body += '<tr id="ps-brief-' + n + '" onclick="window._psBriefBack(event)"' + (ti % 2 ? ' class="ft-zebra-b"' : '') + ' style="transition:background .4s;">' +
                     '<td class="rp-cell rp-pad" style="' + td + '">' + pinBtnHtml(rg, 'window._psPinBrief(' + n + ')') + '<b>' + esc(t.task) + '</b>' + sub + '</td>' +
                     '<td style="' + td + '">' + briefLines(t.rows.done) + '</td>' +
                     '<td style="' + td + '">' + briefLines(t.rows.blocked) +
@@ -1448,6 +1479,7 @@
                       (rg.length ? '<div style="margin-top:5px;">' + window._rr.opsHtml(rg, '') + '</div>' : '') + '</td></tr>';
             });
         });
+        meetBox();
         return box + '<table class="ui-round-tbl" style="width:100%; border-collapse:separate; border-spacing:0; border-left:1px solid var(--ui-cell-line, #cfe3e5); border-top:1px solid var(--ui-cell-line, #cfe3e5); table-layout:fixed; background:#fff;"><thead><tr>' +
             th(T('업무', 'Task'), '22%') + th(T('지금 상태', 'Status'), '25%') + th(T('이슈·막힌 점', 'Issues'), '21%') + th(T('필요한 조치', 'Next actions'), '23%') + th(T('근거', 'Source'), '9%') +
             '</tr></thead><tbody>' + body + '</tbody></table>' +
@@ -1531,13 +1563,7 @@
             var openNow = (_psLast && _psLast.openName) || '';
             var closed = uniq([].concat.apply([], all.map(function (r) { return localRefs(r).length ? [] : uniqRefs(r.refs).map(function (x) { return x.p; }); })));
             if (_psLast) _psLast.closed = closed;   // 버튼은 이름 대신 순번을 넘긴다(이름에 따옴표·> 가 들어 있다)
-            if (closed.length) {
-                banner += '<div style="padding:4px 10px; margin-bottom:6px; background:#f4f8fb; border:1px solid #d6e6f2; border-radius:6px; font-size:11.5px; color:#2c5f8a; display:flex; gap:6px; align-items:center; flex-wrap:wrap;">✏️ ' +
-                    esc(T('업무 담당자는 그 프로젝트를 열어야 바꿀 수 있습니다(간트가 원본) · 지금 열린 프로젝트: ' + (openNow || '없음'), 'Open the project to change assignees · open now: ' + (openNow || 'none'))) +
-                    closed.slice(0, 3).map(function (p, pi) {
-                        return '<button onclick="window._psOpenProject(' + pi + ')" style="' + window._uiBtnStyle('accent') + '">📂 ' + esc(p) + ' ' + esc(T('열기', 'open')) + '</button>';
-                    }).join('') + '</div>';
-            }
+            // 🧹 [2026-11-26 사용자 요청] "프로젝트를 열어야 바꿀 수 있다" 안내 띠는 지웠다 — 담당자 칸을 누르면 그 프로젝트를 연다(_psOpenProjectName).
         }
         var isBrief = _psTbl.view !== 'rows';
         var tg = function (label, on, call) { return '<button onclick="window._psTblSet(' + call + ')" style="' + window._uiPillStyle(on) + '">' + esc(label) + '</button>'; };
@@ -1685,9 +1711,12 @@
         else if (window.showToast) window.showToast(T('메일 원문이 없습니다', 'No mail source'), 'info');
     };
     /** 📂 그 프로젝트를 앱의 평소 열기 경로(executeLoadFile)로 연다 — 열리면 표가 다시 그려져 담당자 칸이 고르기 상자가 된다. */
-    window._psOpenProject = async function (pi) {
-        var name = _psLast && _psLast.closed && _psLast.closed[pi];
-        if (!name) return;
+    window._psOpenProject = function (pi) { return openProjectByName(_psLast && _psLast.closed && _psLast.closed[pi]); };
+    window._psOpenProjectName = function (oi) { return openProjectByName(_psOpenNames[oi]); };
+    var _psOpening = false;
+    async function openProjectByName(name) {
+        if (!name || _psOpening) return;   // 두 번 눌러도 한 번만 연다
+        _psOpening = true;
         try {
             var files = (typeof window._listProjectFiles === 'function') ? await window._listProjectFiles() : [];
             var f = (files || []).filter(function (x) { return String(x.name || '').replace(/\.json$/i, '') === name; })[0];
@@ -1712,8 +1741,8 @@
             if ((pageActive() || (m && m.style.display !== 'none')) && window._renderAiProjectSummaryBody) window._renderAiProjectSummaryBody();
         } catch (err) {
             if (window.showToast) window.showToast('⚠️ ' + (err && err.message || err), 'error');
-        }
-    };
+        } finally { _psOpening = false; }
+    }
     window._psRegenerate = function () {
         return window.generatePeriodSummary(mode(), { force: true });
     };

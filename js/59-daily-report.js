@@ -1382,12 +1382,14 @@
         var cfg = {
             // 기본 정렬 없음 — 내 일을 먼저 모은 순서(위에서 그렇게 합쳤다)를 깨지 않는다. 열 머리글을 눌렀을 때만 정렬한다.
             max: max,
+            rowClass: function (c) { return candRows(c).some(function (ri) { return gdNow[ri] && gdNow[ri]._알림; }) ? 'rp-on' : ''; },   // 핀셋 켠 행은 간트처럼 옅게 물든다
             empty: T('보여 줄 업무가 없습니다 — 완료로 정리된 것은 위 칩에서 다시 볼 수 있습니다.', 'Nothing to show — Done items can be shown with the chip above.'),
             repaint: paintCands,
             rowAttr: function (c, i) { return 'onclick="window._dailyAdd(' + i + ')" title="' + esc(T('눌러서 오늘 보고에 담기', 'Click to add to today\'s report')) + '" style="cursor:pointer;"'; },
             cols: [
-                { id: 'bar', label: '', w: '14px', thPad: '0', tdCls: function () { return 'rp-cell rp-slim'; }, html: function (c) { return window._rr.barHtml(candRows(c)); } },
-                { id: 'add', label: '', w: '24px', align: 'center', html: function () { return '<span style="color:#2c5f8a; font-weight:bold;">+</span>'; } },
+                // 🚩 붉은 바는 첫 칸(＋) 왼쪽 끝에 — 간트 No. 칸과 같은 구조(별도 칸·테두리 없이)
+                { id: 'add', label: '', w: '24px', align: 'center', tdCls: function () { return 'rp-cell rp-pad'; },
+                  html: function (c) { return window._rr.barHtml(candRows(c)) + '<span style="color:#2c5f8a; font-weight:bold;">+</span>'; } },
                 { id: 'cat', label: T('구분', 'Role'), w: '58px', nowrap: true, sort: function (c) { return c.cat || '~'; }, opt: function (c) { return c.cat || ''; },
                   html: function (c) { return catBadge(c.cat); } },
                 { id: 'proj', label: T('프로젝트', 'Project'), sort: function (c) { return String(c.project || '').trim(); }, opt: function (c) { return String(c.project || '').trim(); },

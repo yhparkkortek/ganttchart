@@ -182,6 +182,24 @@
             delete window.globalData[1]._알림;
             window._renderAiProjectSummaryBody();
         }
+        // 🚩 [2026-11-26] 회의 브리핑 — "오늘 회의에서 정할 것" 한 줄 → 아래 업무 줄로 가서 깜빡 → 그 줄을 누르면 돌아온다.
+        {
+            window._psTblSet({ view: 'brief' });
+            var meet = document.getElementById('ps-meet-0');
+            ok('회의에서 정할 것 줄이 눌린다', !!meet && /_psGoBrief/.test(meet.getAttribute('onclick') || ''));
+            if (meet) {
+                meet.click();
+                var hint = document.getElementById('ps-meet-hint'), tr = hint && hint.closest('tr[id^="ps-brief-"]');
+                ok('누르면 그 업무 줄로 가서 깜빡이고 돌아가기 안내가 붙는다', !!tr && /fff3bf|255, 243, 191/.test(tr.style.background) && /결정 필요/.test(tr.textContent), tr && tr.outerHTML.slice(0, 200));
+                if (tr) tr.querySelector('td:nth-child(2)').click();
+                var meet2 = document.getElementById('ps-meet-0');
+                ok('업무 줄을 누르면 안내가 지워지고 회의 줄이 깜빡인다', !document.getElementById('ps-meet-hint') && !!meet2 && /ffe3e3|255, 227, 227/.test(meet2.style.background));
+                if (tr) tr.click();
+                ok('돌아온 뒤 업무 줄을 또 눌러도 아무 일 없다', !document.getElementById('ps-meet-hint'));
+            }
+            ok('"프로젝트를 열어야 바꿀 수 있다" 안내 띠는 없다', !/그 프로젝트를 열어야/.test(document.getElementById('psummary-page').textContent));
+            window._psTblSet({ view: 'rows' });
+        }
         // 🔁 [2026-11-23 "엑셀에 근거가 2번"] 같은 행의 두 사본(열린 쪽 #G7 · 훑은 쪽 #G200007)을 근거로 집어도 하나로
         var dup = window._psRowsFromAi({ items: [{ 분류: '한 일', 내용: 'x', 근거: ['#G7', '#G200007', '#G7'] }] },
             [{ idx: 7, project: 'P1', date: '2026-11-20', task: 't' }, { idx: 200007, rowIdx: 7, project: 'P1', date: '2026-11-20', task: 't' }]);

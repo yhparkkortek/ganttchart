@@ -2696,6 +2696,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
     width: 6px; border-right: 8px solid transparent; box-sizing: content-box; background-clip: padding-box;
     z-index: 1; cursor: pointer; background-color: #dfe4e9; transition: background-color .15s, opacity .15s;
 }
+tr.rp-on > td { background-color: #e3f2fd !important; }   /* 핀셋 켠 행 — 간트 `tr.alarm-on td` 와 같은 옅은 색(팔레트는 js/21) */
 .rp-bar:hover { background-color: #4285f4; opacity: .5; }
 .rp-bar.on { background-color: #4285f4; }
 .rp-bar.some { background-color: #4285f4; opacity: .45; }
