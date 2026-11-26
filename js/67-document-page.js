@@ -3755,6 +3755,21 @@
         window._docRender();
     };
     window._docSetStage = function (v) { window._docState.stage = v; window._docRender(); };
+    // ✍️🔍 [2026-11-26 사용자 요청 "문서 작성하는 페이지처럼"] 보기 둘 — 같은 데이터·같은 출력.
+    //   write(기본) = 책상 위 종이 한 장: 칸 테두리·출처 글을 숨기고(출처는 그 칸에 커서가 있을 때만
+    //                 작은 쪽지로), 장 제목은 테마 띠가 아니라 문서 제목 모양.
+    //   check       = 예전 화면 그대로(출처 전부 펼침·직접 고친 칸 노란 상자) — 결재 전에 훑는 용도.
+    //   ⚠️ 바뀌는 건 `#doc-page-body` 의 클래스 하나(`doc-mode-write`)뿐이다 — 칸·저장 열쇠·
+    //      `_docToAoa`(엑셀·워드 출력)는 손대지 않는다. 모양은 styles.css 의 write 블록이 정한다.
+    window._docView = function () {
+        var v = '';
+        try { v = localStorage.getItem('gantt_doc_view_v1') || ''; } catch (e) { /* 무시 */ }
+        return v === 'check' ? 'check' : 'write';
+    };
+    window._docSetView = function (v) {
+        try { localStorage.setItem('gantt_doc_view_v1', v === 'check' ? 'check' : 'write'); } catch (e) { /* 무시 */ }
+        window._docRender();
+    };
     // 🏷 모델(제품구분자) 전환 — BOM·Customer SPEC 과 같은 "누를 때마다 다음 모델" 버튼.
     //    같은 전환 함수(`mcSwitchUnit`)를 쓴다 — 저장 열쇠(`_dataKey`)가 바로 그 값을 본다.
     window.docCycleUnit = function () {
@@ -4848,7 +4863,7 @@
             + '<input type="' + (isDate ? 'date' : 'text') + '" value="' + _esc(value) + '"'
             + (isDate ? _dateAttrs() : ' placeholder="' + _esc(hint || '') + '"')
             + ' data-doc-key="' + _esc(key) + '" class="doc-in' + (own ? ' own' : '') + '">'
-            + '<div class="doc-src' + (own ? ' own' : '') + '">'
+            + '<div class="doc-src doc-src-field' + (own ? ' own' : '') + '">'
             + (own
                 ? '✏️ ' + _esc(_t('직접 적음', 'edited'))
                   + ' <a href="#" class="doc-noprint" onclick="window._docResetField(\'' + _esc(id) + '\',\'' + _esc(key) + '\');return false;"'
@@ -4863,7 +4878,7 @@
         if (typeof fn !== 'function') return '';
         var w = '';
         try { w = fn(key, value) || ''; } catch (e) { w = ''; }
-        return w ? '<div class="doc-src doc-noprint" style="color:#b1432f;">⚠️ ' + _esc(w) + '</div>' : '';
+        return w ? '<div class="doc-src doc-warn doc-noprint" style="color:#b1432f;">⚠️ ' + _esc(w) + '</div>' : '';
     };
 
     window._docRender = function () {
@@ -4986,6 +5001,19 @@
             //    장치인 `.btn-group`(styles.css 에서 `margin-left:auto`)을 그대로 쓴다.
             //    ⚠️ 직접 `margin-left:auto` 를 쓰지 않는다 — 한 곳에서 정하게 둔다.
             + '<span class="btn-group">'
+            // ✍️🔍 보기 전환 — PARTS SPEC/BOM 과 같은 한 쌍 버튼(`.elec-mode-btn`, 팔레트는 js/21 이 칠한다)
+            + (function () {
+                var w = window._docView() === 'write';
+                return '<span style="display:inline-flex; margin-right:8px;">'
+                    + '<button class="elec-mode-btn elec-mode-btn-l' + (w ? ' elec-mode-btn-active' : '') + '"'
+                    + ' onclick="window._docSetView(\'write\')" style="height:31px;"'
+                    + ' title="' + _esc(_t('문서처럼 보며 적습니다 — 출처는 그 칸을 누르면 보입니다', 'Write like a document — sources show when a field is focused')) + '">'
+                    + '✍️ ' + _esc(_t('작성', 'Write')) + '</button>'
+                    + '<button class="elec-mode-btn elec-mode-btn-r' + (w ? '' : ' elec-mode-btn-active') + '"'
+                    + ' onclick="window._docSetView(\'check\')" style="height:31px;"'
+                    + ' title="' + _esc(_t('모든 칸의 출처·직접 고친 칸을 펼쳐 봅니다', 'Show every source and edited field')) + '">'
+                    + '🔍 ' + _esc(_t('점검', 'Check')) + '</button></span>';
+            })()
             // 💾 [2026-11-09 요청] 인쇄 버튼은 **없앴다** — 브라우저 인쇄(Ctrl+P)로 대체.
             //    대신 **원본 문서 모양(.docx)** 으로 저장한다(실측 원본과 같은 Word 파일).
             + '<button onclick="window._docSaveDocx()" style="' + OPT + '">💾 ' + _esc(_t('원본저장', 'Save as Word')) + '</button>'
@@ -5041,7 +5069,7 @@
             //    시트마다 이미 제 접기 버튼이 있어 위에 한 겹 더 두면 군더더기다(사용자 지시).
             var secCollapsed = !!(window._docState.secCollapsed && window._docState.secCollapsed[s.title]);
             if (s.kind !== 'cover' && s.kind !== 'check') {
-                h += '<div class="doc-sec" style="display:flex; align-items:center; justify-content:space-between; gap:8px;">'
+                h += '<div class="doc-sec' + (secCollapsed ? ' doc-sec-collapsed' : '') + '" style="display:flex; align-items:center; justify-content:space-between; gap:8px;">'
                    + '<span>' + _esc(s.title) + '</span>'
                    + '<button class="doc-noprint" onclick="window._docToggleSectionCollapse(\''
                    + _esc(s.title).replace(/'/g, "\\'") + '\')" style="' + _COLLAPSE_BTN_STYLE + '">'
@@ -5179,7 +5207,7 @@
                               : (state === 'req' ? _t('전체 보기', 'Show all') : _t('접기', 'Collapse'));
                     var badge = state === 'collapsed' ? '(' + itemsAll.length + _t('개 항목', ' items') + ')'
                               : (state === 'req' ? '(' + reqCount + '/' + itemsAll.length + _t('개 항목', ' items') + ')' : '');
-                    h += '<div class="doc-sec" style="display:flex; align-items:center; justify-content:space-between; gap:8px;">'
+                    h += '<div class="doc-sec doc-sec-sub' + (state === 'collapsed' ? ' doc-sec-collapsed' : '') + '" style="display:flex; align-items:center; justify-content:space-between; gap:8px;">'
                        + '<span>' + _esc(sh.key) + (badge ? '<span class="doc-noprint" style="font-weight:normal;'
                            + ' color:#868e96; margin-left:8px;">' + _esc(badge) + '</span>' : '')
                        + '</span>'
@@ -5918,6 +5946,7 @@
         });
         h += '</div>';
 
+        body.classList.toggle('doc-mode-write', window._docView() === 'write');
         body.innerHTML = h;
         body.oninput = function (e) {
             var el = e.target;

@@ -173,10 +173,27 @@
             ok('흰 종이 영역이 있다', !!body.querySelector('.doc-paper'));
             // 🎨 구역 띠 색을 **고정 hex 로 검사하지 않는다** — 팔레트(js/21)를 따라 바뀌는 게 맞다.
             //    불변식은 "칠해져 있고, 헤더 박스와 **같은 팔레트 색**이다"(둘 다 `gen.bg`).
+            //    ✍️ [2026-11-26] 띠는 **🔍 점검 보기**의 모양이다 — ✍️ 작성 보기(기본)는 문서 제목 모양(띠 없음).
+            var _viewKeep = window._docView();
+            window._docSetView('check'); await sleep(30);
             var secBg = getComputedStyle(body.querySelector('.doc-sec')).backgroundColor;
             var hdrBg = getComputedStyle(document.getElementById('doc-header-box')).backgroundColor;
-            ok('구역 띠가 칠해져 있다', !!secBg && secBg !== 'rgba(0, 0, 0, 0)' && secBg !== 'transparent', secBg);
-            ok('구역 띠가 헤더와 같은 팔레트 색이다', secBg === hdrBg, secBg + ' vs ' + hdrBg);
+            ok('[점검] 구역 띠가 칠해져 있다', !!secBg && secBg !== 'rgba(0, 0, 0, 0)' && secBg !== 'transparent', secBg);
+            ok('[점검] 구역 띠가 헤더와 같은 팔레트 색이다', secBg === hdrBg, secBg + ' vs ' + hdrBg);
+            ok('[점검] 칸 출처 글이 보인다', !![].slice.call(body.querySelectorAll('.doc-src-field')).filter(function (e) { return e.offsetHeight > 0; }).length);
+            window._docSetView('write'); await sleep(30);
+            ok('[작성] 본문에 doc-mode-write 가 걸린다', body.classList.contains('doc-mode-write'));
+            var wBg = getComputedStyle(body.querySelector('.doc-sec')).backgroundColor;
+            ok('[작성] 장 제목은 띠가 아니다(배경 없음)', wBg === 'rgba(0, 0, 0, 0)' || wBg === 'transparent', wBg);
+            ok('[작성] 칸 출처 글은 평소엔 숨는다', ![].slice.call(body.querySelectorAll('.doc-src-field')).filter(function (e) { return e.offsetHeight > 0; }).length);
+            var wIn = body.querySelector('td > input.doc-in[data-doc-key]');
+            if (wIn) {
+                wIn.focus(); await sleep(20);
+                var wSrc = wIn.parentNode.querySelector('.doc-src-field');
+                ok('[작성] 칸에 커서가 가면 그 칸의 출처가 뜬다', !!wSrc && wSrc.offsetHeight > 0);
+                wIn.blur();
+            }
+            window._docSetView(_viewKeep); await sleep(30);
             // 색이 **클래스**로 와야 팔레트가 덮을 수 있다 — 주입 <style> 이 남아 있으면 안 된다
             ok('주입 <style> 없이 styles.css 가 맡는다', !document.getElementById('doc-page-style'));
 

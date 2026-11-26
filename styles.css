@@ -2808,6 +2808,48 @@ tr.jira-zebra-b { background: #e8f2f3; }
     #doc-page-body .doc-sec-wrap { display:block !important; }
 }
 
+/* ✍️ [2026-11-26 사용자 요청 "문서 작성하는 페이지처럼"] Document 작성 보기(js/67 `_docView()==='write'`).
+   책상(회색) 위 종이 한 장 + 테두리 없는 칸 + 문서 제목 모양 장 제목. 🔍 점검 보기는 위 규칙 그대로(예전 화면).
+   ⚠️ 종이 안은 **테마색이 아니라 검정·회색** — 원본 문서·출력물과 같아 보이게(점검 보기·버튼·체크칸은 팔레트 그대로).
+   ⚠️ js/21 라이브 규칙(`#doc-page-body .doc-*` !important)보다 선택자가 한 단계 높아서(클래스 하나 더) 여기서 이긴다
+      — js/21 을 같이 고칠 필요가 없다. 색을 테마로 되돌리려면 이 블록만 지우면 된다.
+   ⚠️ 출처 글(`.doc-src-field`)은 지우지 않고 **그 칸에 커서가 있을 때만** 칸 아래 쪽지로 띄운다(↺ 앱 값으로 포함).
+      칸 대조 경고(`.doc-warn`)·지금 보는 회차 표시는 늘 보인다. */
+#doc-page-body.doc-mode-write { background:#e9ecef; padding:22px 16px 6px; box-sizing:border-box; }
+#doc-page-body.doc-mode-write .doc-paper { max-width:880px; margin:0 auto 22px; padding:40px 48px 48px;
+    border:1px solid #d5d9dd !important; border-radius:2px; box-shadow:0 2px 8px rgba(0,0,0,.10); }
+#doc-page-body.doc-mode-write .doc-title { color:#212529 !important; border-bottom:2px solid #212529 !important;
+    font-size:22px; letter-spacing:3px; padding:0 0 12px; margin-bottom:22px; }
+#doc-page-body.doc-mode-write .doc-sec { background:none !important; border:none !important; border-radius:0;
+    border-bottom:1.5px solid #495057 !important; color:#212529 !important; font-size:14px; padding:4px 0 3px; margin:26px 0 8px; }
+#doc-page-body.doc-mode-write .doc-sec.doc-sec-sub { font-size:13px; border-bottom:1px solid #adb5bd !important; margin:16px 0 6px; }
+#doc-page-body.doc-mode-write .doc-sec > button { opacity:0; transition:opacity .15s; }
+#doc-page-body.doc-mode-write .doc-sec:hover > button,
+#doc-page-body.doc-mode-write .doc-sec.doc-sec-collapsed > button,
+#doc-page-body.doc-mode-write .doc-sec > button:focus { opacity:1; }
+#doc-page-body.doc-mode-write table.doc-t { border:1px solid #868e96; border-radius:0; overflow:visible; }
+#doc-page-body.doc-mode-write table.doc-t td,
+#doc-page-body.doc-mode-write table.doc-t th { border-color:#adb5bd !important; position:relative; }
+#doc-page-body.doc-mode-write table.doc-t th,
+#doc-page-body.doc-mode-write table.doc-t td.doc-lab { background:#f1f3f5 !important; color:#343a40 !important; }
+#doc-page-body.doc-mode-write .doc-in { border-color:transparent; background:transparent; border-radius:2px; padding:3px 4px; }
+#doc-page-body.doc-mode-write .doc-in:hover { background:#f8f9fa; }
+#doc-page-body.doc-mode-write .doc-in.own { border-color:transparent; background:transparent; font-weight:normal;
+    box-shadow:inset 3px 0 0 #f0b429; }
+#doc-page-body.doc-mode-write .doc-in::placeholder { color:#c4c9ce; }
+#doc-page-body.doc-mode-write .doc-src-field { display:none; }
+#doc-page-body.doc-mode-write td:focus-within > .doc-src-field { display:block; position:absolute; left:6px; top:calc(100% - 3px);
+    z-index:6; margin:0; padding:3px 8px; background:#fff; border:1px solid #ced4da; border-radius:4px;
+    box-shadow:0 2px 6px rgba(0,0,0,.12); white-space:nowrap; font-size:11px; }
+#doc-page-body.doc-mode-write .doc-att { border-color:#ced4da !important; background:#fafafa; }
+#doc-page-body.doc-mode-write .doc-att .thumb { border-color:#dee2e6 !important; }
+@media print {
+    #doc-page-body.doc-mode-write { background:none; padding:0; }
+    #doc-page-body.doc-mode-write .doc-paper { box-shadow:none; border:none !important; max-width:none; padding:0; margin:0; }
+    #doc-page-body.doc-mode-write .doc-in.own { box-shadow:none; }
+    #doc-page-body.doc-mode-write .doc-sec > button { display:none; }
+}
+
 /* 🔍 [2026-11-24] 주소록 검색 — 걸린 칸 강조(js/22f filterAddressRows). 색은 프로젝트 불러오기·Project list 의 <mark> 와 같다(js/04a _searchMarkHtml). */
 #address-table-body input.u-input.search-hit { background-color:#fff3bf !important; }
 
