@@ -3381,7 +3381,7 @@
                 }).join('');
             var trs = peopleM.map(function (p, pi) {
                 // 🦓 줄 색은 다른 표와 같은 흰색/팔레트 제브라(사람 단위). 작성함·주말 칸만 클래스로 제 색(styles.css·js/21)
-                return '<tr' + ((pi % 2) ? ' class="daily-mrow-b"' : '') + '><td style="padding:5px 7px; border:1px solid #e3e6ea; font-size:12px; font-weight:bold; white-space:nowrap;">' + esc(p.name || p.key) + '</td>'
+                return '<tr' + ((pi % 2) ? ' class="daily-mrow-b"' : '') + '><td style="padding:5px 7px; border:1px solid #e3e6ea; font-size:12.5px; font-weight:bold; white-space:nowrap;">' + esc(p.name || p.key) + '</td>'
                     + daysM.map(function (d) {
                         var off = offDay(d), has = !!(byKeyM[p.key] && byKeyM[p.key][d]);
                         var cls = (!off && has) ? ' class="daily-mcell-has"' : '';

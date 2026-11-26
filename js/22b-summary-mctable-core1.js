@@ -117,7 +117,7 @@ window.renderNoticeTab = function() {
           <td style="padding:6px 8px;text-align:center;font-size:12.5px;color:#555;">${targetLabel}</td>
           <td class="${window._dateDayCls(n.deadline)}" style="padding:6px 8px;text-align:center;font-size:12.5px;color:${isPast?'#aaa':'#333'};${isPast?' opacity:.6;':''}">${n.deadline}</td>
           <td style="padding:6px 8px;text-align:center;">
-            <span style="font-size:12px;font-weight:bold;color:${diffDays<=3&&diffDays>=0?'#e03131':diffDays<0?'#aaa':'#2c5f8a'};">${dDayStr}</span>
+            <span style="font-size:12.5px;font-weight:bold;color:${diffDays<=3&&diffDays>=0?'#e03131':diffDays<0?'#aaa':'#2c5f8a'};">${dDayStr}</span>
             <div style="font-size:10px;color:#aaa;">${dDaysLabel}</div>
           </td>
           <td style="padding:6px 8px;text-align:center;font-size:11.5px;color:#666;">${lastSent}</td>
@@ -644,9 +644,9 @@ window.renderScheduleRuleTable = function() {
             <div style="font-weight:bold;color:#333;font-size:12.5px;">${escapeHtml(r.title||'')}</div>
             <div style="font-size:11px;color:#888;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(r.message||'')}</div>
           </td>
-          <td style="padding:6px 8px;text-align:center;font-size:12px;color:#555;">${typeLabel}</td>
-          <td style="padding:6px 8px;text-align:center;font-size:11.5px;color:#555;">${dateLabel}</td>
-          <td style="padding:6px 8px;text-align:center;font-size:11.5px;color:#555;">${timeLabel}</td>
+          <td style="padding:6px 8px;text-align:center;font-size:12.5px;color:#555;">${typeLabel}</td>
+          <td style="padding:6px 8px;text-align:center;font-size:12.5px;color:#555;">${dateLabel}</td>
+          <td style="padding:6px 8px;text-align:center;font-size:12.5px;color:#555;">${timeLabel}</td>
           <td style="padding:6px 8px;text-align:center;">
             <div style="display:flex;gap:4px;justify-content:center;">
               <button onclick="window.openScheduleRuleEditModal('${r.id}')" title="${_en ? 'Edit' : '수정'}"

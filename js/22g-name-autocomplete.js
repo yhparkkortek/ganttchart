@@ -904,7 +904,7 @@ window.populateTabData = function() {
                     return '<td' + (border ? ' style="border-left:2px solid #2c5f8a;"' : '') + '><input type="text" class="u-input" style="background-color:transparent; font-weight:bold; color:#333; text-align:center;" value="' + fmtCurSummary(v) + '" readonly></td>';
                 };
                 let html = '<tr class="mc-summary-row" style="background-color:' + bgColor + '; font-weight:bold;">'
-                    + '<td colspan="' + (hidePnSpec ? 4 : 6) + '" style="text-align:right; padding-right:15px; font-size:13px; color:#333;">' + label + '</td>';
+                    + '<td colspan="' + (hidePnSpec ? 4 : 6) + '" style="text-align:right; padding-right:15px; font-size:12.5px; color:#333;">' + label + '</td>';
                 // 🔁 [2026-10-21] PROTO B 를 A 앞에 — 머리글(HTML)과 같은 순서를 지켜야 칸이 안 밀린다.
                 if (!hidePairs.protoB) html += valCell(sums.protoBCost, true) + valCell(sums.protoBNre);
                 if (!hidePairs.protoA) html += valCell(sums.protoCost, true) + valCell(sums.protoNre);
@@ -1030,7 +1030,7 @@ window.populateTabData = function() {
                 const display = raw ? '$' + parseNum(raw).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '';
                 return '<td' + (border ? ' style="border-left:2px solid #2c5f8a;"' : '') + '><input type="text" class="u-input" value="' + _escTabVal(display) + '" onchange="window.mcUpdateSalesPriceDetail(\'' + curRev + '\', \'' + field + '\', this.value, this)" style="background-color:transparent; font-weight:bold; color:#1f7a3d; text-align:center;"></td>';
             };
-            let salesHtml = '<tr class="mc-summary-row" style="background-color:#e6f6ea; font-weight:bold;"><td colspan="' + (hidePnSpec ? 4 : 6) + '" style="text-align:right; padding-right:15px; font-size:13px; color:#333;">영업판가</td>';
+            let salesHtml = '<tr class="mc-summary-row" style="background-color:#e6f6ea; font-weight:bold;"><td colspan="' + (hidePnSpec ? 4 : 6) + '" style="text-align:right; padding-right:15px; font-size:12.5px; color:#333;">영업판가</td>';
             if (!hidePairs.protoB) salesHtml += spCell('protoBCost', true) + spCell('protoBNre');
             if (!hidePairs.protoA) salesHtml += spCell('protoCost', true) + spCell('protoNre');
             if (!hidePairs.mp) salesHtml += spCell('mpCost', true) + spCell('mpNre');
@@ -1044,7 +1044,7 @@ window.populateTabData = function() {
                 const text = spVal > 0 ? (totalVal / spVal * 100).toFixed(1) + '%' : '-';
                 return '<td' + (border ? ' style="border-left:2px solid #2c5f8a; text-align:center; font-weight:bold; color:#b1432f;"' : ' style="text-align:center; font-weight:bold; color:#b1432f;"') + '>' + text + '</td>';
             };
-            let ratioHtml = '<tr class="mc-summary-row" style="background-color:#fbe4e2; font-weight:bold;"><td colspan="' + (hidePnSpec ? 4 : 6) + '" style="text-align:right; padding-right:15px; font-size:13px; color:#333;">재료비율 (M.C ÷ 영업판가) [%]</td>';
+            let ratioHtml = '<tr class="mc-summary-row" style="background-color:#fbe4e2; font-weight:bold;"><td colspan="' + (hidePnSpec ? 4 : 6) + '" style="text-align:right; padding-right:15px; font-size:12.5px; color:#333;">재료비율 (M.C ÷ 영업판가) [%]</td>';
             if (!hidePairs.protoB) ratioHtml += ratioCell('protoBCost', grandtotal.protoBCost, true) + ratioCell('protoBNre', grandtotal.protoBNre);
             if (!hidePairs.protoA) ratioHtml += ratioCell('protoCost', grandtotal.protoCost, true) + ratioCell('protoNre', grandtotal.protoNre);
             if (!hidePairs.mp) ratioHtml += ratioCell('mpCost', grandtotal.mpCost, true) + ratioCell('mpNre', grandtotal.mpNre);

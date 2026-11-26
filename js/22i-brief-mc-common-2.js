@@ -791,7 +791,7 @@ window.mcRenderComparisonTable = function() {
         const typeWillChange = !!(nextRow && nextType && nextType !== compCurrentType);
 
         if (compCurrentType && (itemHasNre || typeWillChange || isLastRow)) {
-            tbody += '<tr style="background-color:#fff8e6; font-weight:bold;"><td colspan="' + (expanded ? 6 : 4) + '" style="text-align:right; padding-right:15px; font-size:13px; color:#333;">' + compCurrentType + ' SUBTOTAL</td>';
+            tbody += '<tr style="background-color:#fff8e6; font-weight:bold;"><td colspan="' + (expanded ? 6 : 4) + '" style="text-align:right; padding-right:15px; font-size:12.5px; color:#333;">' + compCurrentType + ' SUBTOTAL</td>';
             visibleRevs.forEach(function(rev) {
             tbody += '<td class="mc-comp-divider" style="text-align:center; font-weight:bold; color:#333;">' + _mcFmtCurSummary(compSubtotal[rev].cost) + '</td>'
                 + '<td style="text-align:center; font-weight:bold; color:#333;">' + _mcFmtCurSummary(compSubtotal[rev].nre) + '</td>';
