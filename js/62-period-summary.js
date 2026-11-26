@@ -1463,8 +1463,8 @@
         if (items.length) {
             box = '<div style="border:1px solid #f1b8b8; background:#fff5f5; border-radius:8px; padding:8px 12px; margin:6px 0 2px; max-height:32vh; overflow:auto; font-size:' + fs + 'px;">' +
                 '<div style="font-weight:bold; color:#c92a2a; margin-bottom:4px;">🚩 ' + esc(T('오늘 회의에서 정할 것 ' + items.length + '건', 'To settle in the meeting: ' + items.length)) + '</div>' +
-                // ▥ [2026-11-26 사용자 요청 "전체 페이지면 분할로 — 분홍 면적이 아깝다"] 넓으면 여러 단(위→아래로 번호 순), 좁으면 한 단.
-                '<div style="columns:520px; column-gap:22px;">' +
+                // ▥ [2026-11-26 사용자 요청 "전체 페이지면 분할로 — 분홍 면적이 아깝다"] 전체 화면이면 2단(위→아래로 번호 순), 좁아지면(상자 폭 1422px 미만) 1단 — 3단은 쓰지 않는다(사용자 결정).
+                '<div style="columns:700px 2; column-gap:22px;">' +
                 items.map(function (it, i) {
                     var r = it.r, ppl = peopleOf(r), roles = rolesOf(r);
                     var tn = -1; _psBriefTasks.forEach(function (t, n) { if (tn < 0 && t.ai.indexOf(it.ai) >= 0) tn = n; });
