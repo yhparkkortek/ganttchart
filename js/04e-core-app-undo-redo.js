@@ -1503,6 +1503,27 @@
                     return a.ts - b.ts;
                 });
                 const maxGapMs = _WBS_GROUP_MAX_GAP_DAYS * 24 * 60 * 60 * 1000;
+                // 💡 [2026-11-26 사용자 요청 "추천 단어를 하나만 쓰고 있다 — 2단어 이상으로 추천 묶음 단어 표시"] 묶음 이름 = **멤버가 함께 가진 낱말 전부**(안 흔한 것만).
+                //    전원이 가진 낱말이 모자라면(멤버가 셋 이상일 때) 둘 이상의 멤버가 가진 낱말 중 많이 겹치는 것부터 채운다. 표기·어순은 제목 그대로(첫 멤버 순서).
+                const sharedName = function(ids) {
+                    const cnt = new Map();
+                    ids.forEach(function(i) { titleToks.get(i).forEach(function(t) { cnt.set(t, (cnt.get(t) || 0) + 1); }); });
+                    let pick = Array.from(cnt.keys()).filter(function(t) { return cnt.get(t) === ids.length; });
+                    if (pick.length < _WBS_GROUP_MIN_SHARED) {
+                        pick = Array.from(cnt.keys()).filter(function(t) { return cnt.get(t) >= 2; })
+                            .sort(function(x, y) { return cnt.get(y) - cnt.get(x); }).slice(0, Math.max(_WBS_GROUP_MIN_SHARED, pick.length));
+                    }
+                    if (pick.length < _WBS_GROUP_MIN_SHARED) return '';
+                    if (pick.length > 4) pick = pick.sort(function(x, y) { return cnt.get(y) - cnt.get(x); }).slice(0, 4);   // 이름이 너무 길어지지 않게
+                    const want = new Set(pick), out = [], seen = new Set();
+                    ids.forEach(function(i) {
+                        _wbsTokenize(_wbsRowOwnTitle(gd[i])).forEach(function(w) {
+                            const lw = String(w).toLowerCase();
+                            if (want.has(lw) && !seen.has(lw)) { seen.add(lw); out.push(w); }
+                        });
+                    });
+                    return out.join(' ');
+                };
                 let run = [];
                 const flushRun = function() {
                     if (run.length < 2) { run = []; return; }
@@ -1523,7 +1544,7 @@
                         //    그대로이므로, 적용 시점에 globalData.indexOf(ref)로 현재 위치를 다시
                         //    찾아내면 다른 후보를 몇 개를 먼저 적용했든 항상 정확하다.
                         memberRows: ids.map(function(i) { return gd[i]; }),
-                        suggestedName: bestTok || _wbsNormTitle(_wbsRowOwnTitle(gd[ids[0]])),
+                        suggestedName: sharedName(ids) || bestTok || _wbsNormTitle(_wbsRowOwnTitle(gd[ids[0]])),
                         titles: ids.map(function(i) { return _wbsNormTitle(_wbsRowOwnTitle(gd[i])); }),
                         dateRangeLabel: tsVals.length ? (new Date(Math.min.apply(null, tsVals)).toISOString().slice(0, 10) + ' ~ ' + new Date(Math.max.apply(null, tsVals)).toISOString().slice(0, 10)) : ''
                     });
