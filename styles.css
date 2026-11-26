@@ -70,6 +70,36 @@ a[onclick]:not([href]) { cursor: pointer; text-decoration: underline; }
 /* ↔ [2026-11-25] 표 머리글은 가운데 — 위 전역 `th, td` 기본이 left 라, 정렬을 안 적은 모달 표 머리글이 전부 왼쪽이었다.
    thead 안만(왼쪽 항목 이름 열로 쓰는 tbody th 는 그대로). 인라인·클래스로 정한 것은 그쪽이 이긴다. */
 thead th { text-align: center; }
+/* 🧩 [2026-11-26 사용자 "알람 공지 … 팔렛트 … 모달 UI 통일"] 모달 안 '접는 구역'(▶ 펼치기 머리 — `_toggleAlarmSection`)
+   — 알람 일정·공지 등록·설정 모달들이 같은 틀을 쓰는데 머리가 고정 회청색(#f0f4f8)·틀이 회색(#e0e0e0)·소구역이 고정 하늘(#f0f6ff)이라
+   테마를 안 따랐다. 인라인 색을 일일이 고치지 않고 여기 한 곳에서 팔레트로 덮는다(인라인 onmouseover 색도 !important 가 이긴다). */
+:root { --ui-head-tint: #eef6f7; --ui-zebra: #e8f2f3; }
+div:has(> [onclick*="_toggleAlarmSection"]) { border-color: var(--ui-cell-line, #cfe3e5) !important; }
+[onclick*="_toggleAlarmSection"] { background: var(--ui-head-tint, #eef6f7) !important; }
+[onclick*="_toggleAlarmSection"]:hover { background: var(--modal-hdr-bg, #e0f5f7) !important; }
+[onclick*="_toggleAlarmSection"] + div { border-top-color: var(--ui-cell-line, #cfe3e5) !important; }
+#nm-dday-fields, #nm-recur-fields, #as-dday-fields, #as-recur-fields,
+#nm-sec-send > div:first-child, #as-sec-send > div:first-child {
+    background: var(--ui-zebra, #e8f2f3) !important; border-color: var(--ui-cell-line, #cfe3e5) !important; }
+#nm-dday-fields > div[style*="border-top"], #as-dday-fields > div[style*="border-top"] { border-top-color: var(--ui-cell-line, #cfe3e5) !important; }
+/* 입력칸 — 앱 입력칸과 같게(흰 바탕·테마 선·6px·12.5px). 체크박스·라디오는 제외 */
+#notice-modal :is(input:not([type=checkbox]):not([type=radio]), textarea, select),
+#alarm-schedule-modal :is(input:not([type=checkbox]):not([type=radio]), textarea, select) {
+    background-color: #fff !important; border-color: var(--ui-cell-line, #cfe3e5) !important; border-radius: 6px !important; font-size: 12.5px !important; }
+/* 버튼 — 보통 크기 6px, 수신자 '전체 ✓' 같은 20px 칸은 4px(R 다섯 단계) */
+#notice-modal button, #alarm-schedule-modal button, #alarm-modal button { border-radius: 6px !important; }
+#nm-recipient-header button, #as-recip-header button { border-radius: 4px !important; }
+.nm-recipient-row, .as-recip-row { border-bottom-color: var(--ui-cell-line, #cfe3e5) !important; }
+/* 수신자 줄의 출처 꼬리표(summary 등) — 배지 한 벌(js/04a _uiBadgeStyle 과 같은 모양, 테마색) */
+.nm-recipient-row > span:not(.nm-rr-info), .as-recip-row > span:not(.as-recip-info) { background: var(--ui-accent-bg, #e0f5f7) !important; color: var(--ui-accent, #00707d) !important;
+    border-radius: 8px !important; font-size: 10.5px !important; line-height: 16px; padding: 0 7px !important; }
+/* 기본값으로(되돌리기)는 주황 한 개만 튀었다 → 닫기와 같은 보조(회색) 버튼 */
+#as-reset-btn { background: #f8f9fa !important; color: #555 !important; border-color: #ccc !important; }
+#as-reset-btn:hover { background: #e9ecef !important; }
+/* 알람 상세 — 라벨 칸을 표 머리글 틴트·테마 글자로, 줄 사이 테마 선(전엔 고정 회색 #f4f6f8·선 없음) */
+#alarm-modal-body table td { border-bottom: 1px solid var(--ui-cell-line, #cfe3e5); }
+#alarm-modal-body table td:first-child { background: var(--ui-head-tint, #eef6f7) !important; color: var(--modal-hdr-text, #00707d); font-weight: 600 !important; white-space: nowrap; }
+
 /* ▦ [2026-11-25] 표 칸 선 한 벌 — .concept-table 이 아닌 표(Notice·예약 규칙·Daily)도 같은 테마 선(1px). 색은 js/21 이 --ui-cell-line 으로. */
 .ui-line-tbl th, .ui-line-tbl td { border-color: var(--ui-cell-line, #cfe3e5) !important; }
 /* ▤ [2026-11-25] 누르면 열리는 행의 hover 한 벌 — 테마 연한 색(Project list 행 hover 와 같은 gen.bg). 칸(td)에 칠해 제브라 위로 보이게. */
