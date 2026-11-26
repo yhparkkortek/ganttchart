@@ -9,6 +9,16 @@ window._toggleAlarmSection = function(id) {
     const isEn = window._currentLang === 'en';
     if (arrow) arrow.textContent = open ? (isEn ? '▶ Expand' : '▶ 펼치기') : (isEn ? '▼ Collapse' : '▼ 접기');
 };
+// 📂 [2026-11-26 사용자 요청 "공지/알람 모달 펼치기를 기본값으로"] 열 때마다 구역을 전부 펼친다 — 전엔 처음엔 모두 접혀 있고
+//    한 번 접어 두면 다음에 열어도 그대로라, 내용을 보려면 매번 ▶ 를 눌러야 했다. 접는 건 그 자리에서만(다음에 열면 다시 펼침).
+window._alarmSectionsOpen = function(ids) {
+    const isEn = window._currentLang === 'en';
+    (ids || []).forEach(function(id) {
+        const el = document.getElementById(id), arrow = document.getElementById(id + '-arrow');
+        if (el) el.style.display = 'block';
+        if (arrow) arrow.textContent = isEn ? '▼ Collapse' : '▼ 접기';
+    });
+};
 
 // 💡 [2026-08-31] "처음 사용자 — 설치 안내" 섹션 안의 탭 전환 — 설치(Step1~4)/Telegram(Step5) 내용을
 //    한 번에 다 펼쳐 보여주면 너무 길어서, 예전 팝업(install-guide-modal)과 동일하게 하나씩만
@@ -219,6 +229,7 @@ window.openNoticeModal = async function(id) {
     const modal = document.getElementById('notice-modal');
     const bg    = document.getElementById('notice-modal-bg');
     if (!modal) return;
+    window._alarmSectionsOpen(['nm-sec-content', 'nm-sec-send', 'nm-sec-recip']);   // 📂 구역은 늘 펼친 채로 연다
 
     // 커스텀 D-day 초기화
     window._nmCustomDays = [];

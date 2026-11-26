@@ -430,6 +430,7 @@ window.openAlarmScheduleModal = async function(idx) {
     const item = (window._alarmItems || [])[idx];
     if (!item) return;
     window._alarmScheduleItem = item;
+    if (window._alarmSectionsOpen) window._alarmSectionsOpen(['as-sec-info', 'as-sec-send', 'as-sec-recip']);   // 📂 구역은 늘 펼친 채로 연다
 
     const current = new Set(item.alarmDays.map(Number));
     document.querySelectorAll('.alarm-sched-cb').forEach(cb => {

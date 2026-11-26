@@ -646,9 +646,9 @@
     <div onclick="window._toggleAlarmSection('as-sec-info')"
          style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:#f0f4f8; cursor:pointer; user-select:none; transition:background .15s;" onmouseover="this.style.background='#e4eaf1'" onmouseout="this.style.background='#f0f4f8'">
       <span id="as-sec-info-label" style="font-size:12.5px; font-weight:bold; color:#2c5f8a;">📋 업무 정보</span>
-      <span id="as-sec-info-arrow" style="font-size:11px; color:#888;">▶ 펼치기</span>
+      <span id="as-sec-info-arrow" style="font-size:11px; color:#888;">▼ 접기</span>
     </div>
-    <div id="as-sec-info" style="display:none; padding:14px; border-top:1px solid #e8e8e8;">
+    <div id="as-sec-info" style="display:block; padding:14px; border-top:1px solid #e8e8e8;">
       <!-- 💡 [2026-09-01] 예전엔 읽기 전용 표시였는데, 이 알람 발송에만 쓰일 제목/내용을 직접 다듬고 싶다는
            요청으로 편집 가능하게 변경 — 수정하면 Gantt 원본 업무는 그대로 두고 이 알람만의 "덮어쓰기"로
            저장되어(row._알림제목오버라이드/_알림내용오버라이드) 발송 시 그 값이 그대로 쓰인다
@@ -676,9 +676,9 @@
     <div onclick="window._toggleAlarmSection('as-sec-send')"
          style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:#f0f4f8; cursor:pointer; user-select:none; transition:background .15s;" onmouseover="this.style.background='#e4eaf1'" onmouseout="this.style.background='#f0f4f8'">
       <span id="as-sec-send-label" style="font-size:12.5px; font-weight:bold; color:#2c5f8a;">📤 발송 방식</span>
-      <span id="as-sec-send-arrow" style="font-size:11px; color:#888;">▶ 펼치기</span>
+      <span id="as-sec-send-arrow" style="font-size:11px; color:#888;">▼ 접기</span>
     </div>
-    <div id="as-sec-send" style="display:none; padding:14px; border-top:1px solid #e8e8e8;">
+    <div id="as-sec-send" style="display:block; padding:14px; border-top:1px solid #e8e8e8;">
       <!-- 💡 [2026-08-31 신규] 발송 방식 — 기존 "D-day 목록"(완료예정일 역산) 외에, 공지 시스템과 동일하게
            서버(kortek_backend.py)가 직접 스케줄을 도는 "기간·반복" 방식을 추가. 단, 공지와 달리 이 업무
            알람은 저장 시점 내용을 고정하지 않고 발송 직전 담당자/완료예정일/업무내용을 다시 조회한다. -->
@@ -798,9 +798,9 @@
     <div onclick="window._toggleAlarmSection('as-sec-recip')"
          style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:#f0f4f8; cursor:pointer; user-select:none; transition:background .15s;" onmouseover="this.style.background='#e4eaf1'" onmouseout="this.style.background='#f0f4f8'">
       <span id="as-sec-recip-label" style="font-size:12.5px; font-weight:bold; color:#2c5f8a;">👥 수신 대상</span>
-      <span id="as-sec-recip-arrow" style="font-size:11px; color:#888;">▶ 펼치기</span>
+      <span id="as-sec-recip-arrow" style="font-size:11px; color:#888;">▼ 접기</span>
     </div>
-    <div id="as-sec-recip" style="display:none; padding:14px; border-top:1px solid #e8e8e8;">
+    <div id="as-sec-recip" style="display:block; padding:14px; border-top:1px solid #e8e8e8;">
       <div style="display:flex; gap:14px; align-items:center; margin-bottom:6px;">
         <label style="font-size:12px; display:flex; align-items:center; gap:4px; cursor:pointer;">
           <input type="radio" name="as-recip-mode" id="as-recip-mode-default" value="default" checked onchange="window._asToggleRecipMode()"> <span id="as-recip-mode-default-label">기본수신</span>
@@ -930,9 +930,9 @@
     <div onclick="window._toggleAlarmSection('nm-sec-content')"
          style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:#f0f4f8; cursor:pointer; user-select:none; transition:background .15s;" onmouseover="this.style.background='#e4eaf1'" onmouseout="this.style.background='#f0f4f8'">
       <span id="nm-sec-content-label" style="font-size:12.5px; font-weight:bold; color:#2c5f8a;">📝 공지 내용</span>
-      <span id="nm-sec-content-arrow" style="font-size:11px; color:#888;">▶ 펼치기</span>
+      <span id="nm-sec-content-arrow" style="font-size:11px; color:#888;">▼ 접기</span>
     </div>
-    <div id="nm-sec-content" style="display:none; padding:14px; border-top:1px solid #e8e8e8;">
+    <div id="nm-sec-content" style="display:block; padding:14px; border-top:1px solid #e8e8e8;">
       <!-- 제목 -->
       <div style="margin-bottom:12px;">
         <label id="nm-lbl-title" style="font-size:12px; font-weight:bold; color:#444; display:block; margin-bottom:4px;">제목 *</label>
@@ -954,9 +954,9 @@
     <div onclick="window._toggleAlarmSection('nm-sec-send')"
          style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:#f0f4f8; cursor:pointer; user-select:none; transition:background .15s;" onmouseover="this.style.background='#e4eaf1'" onmouseout="this.style.background='#f0f4f8'">
       <span id="nm-sec-send-label" style="font-size:12.5px; font-weight:bold; color:#2c5f8a;">📤 발송 방식</span>
-      <span id="nm-sec-send-arrow" style="font-size:11px; color:#888;">▶ 펼치기</span>
+      <span id="nm-sec-send-arrow" style="font-size:11px; color:#888;">▼ 접기</span>
     </div>
-    <div id="nm-sec-send" style="display:none; padding:14px; border-top:1px solid #e8e8e8;">
+    <div id="nm-sec-send" style="display:block; padding:14px; border-top:1px solid #e8e8e8;">
       <!-- 💡 [2026-08-31 신규] 발송 방식 — 기존 "D-day 기준"(완료예정일 역산) 외에, 서버가 직접 스케줄을
            도는 "기간·반복" 방식을 추가. 브라우저 탭이 꺼져 있어도 kortek_backend.py만 켜져 있으면 동작함
            (자세한 설계는 대화 참고 — id/type이 있는 규칙은 /schedule API로 백엔드에 등록됨). -->
@@ -1084,9 +1084,9 @@
     <div onclick="window._toggleAlarmSection('nm-sec-recip')"
          style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:#f0f4f8; cursor:pointer; user-select:none; transition:background .15s;" onmouseover="this.style.background='#e4eaf1'" onmouseout="this.style.background='#f0f4f8'">
       <span id="nm-sec-recip-label" style="font-size:12.5px; font-weight:bold; color:#2c5f8a;">👥 수신 대상</span>
-      <span id="nm-sec-recip-arrow" style="font-size:11px; color:#888;">▶ 펼치기</span>
+      <span id="nm-sec-recip-arrow" style="font-size:11px; color:#888;">▼ 접기</span>
     </div>
-    <div id="nm-sec-recip" style="display:none; padding:14px; border-top:1px solid #e8e8e8;">
+    <div id="nm-sec-recip" style="display:block; padding:14px; border-top:1px solid #e8e8e8;">
       <!-- 💡 [2026-08-31 신규] 기본수신(업무별 알람과 공유하는 전체 공용 명단) / 개별수신(이 공지만의
            명단, 기존 동작) — 신규 등록은 항상 개별수신으로 시작(기존과 동일한 자동입력 유지). -->
       <div style="display:flex; gap:14px; align-items:center; margin-bottom:8px;">
@@ -2734,8 +2734,8 @@
 
 <!-- 22-tabs-summary-mctable.js 분리 (토큰 절약 · 협업용): 로딩 순서는 기존과 동일하게 유지 -->
 <script src="js/22a-summary-mctable-parse.js?v=2026112596"></script>
-<script src="js/22b-summary-mctable-core1.js?v=2026112699r"></script>
-<script src="js/22c-summary-mctable-core2.js?v=2026112700q"></script>
+<script src="js/22b-summary-mctable-core1.js?v=2026112701x"></script>
+<script src="js/22c-summary-mctable-core2.js?v=2026112701x"></script>
 <script src="js/22d-summary-mctable-core3.js?v=2026112801"></script>
 <script src="js/22e-summary-mctable-core4.js?v=2026112735"></script>
 <script src="js/22f-address-book.js?v=2026112811"></script>
