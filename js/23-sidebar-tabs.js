@@ -97,7 +97,13 @@
         if (tabName === 'elecparts') {
             let savedElecView = 'panel';
             try { savedElecView = localStorage.getItem('gantt_elec_view') || 'panel'; } catch(e) {}
+            // 🧭 [2026-11-26 사용자 요청 "다른 곳 갔다 와도 보던 정보"] SPEC/BOM 중 보던 쪽도 되살린다 —
+            //    예전엔 BOM 을 보다 다른 탭에 다녀오면 늘 SPEC 으로 돌아왔다. ⚠️ _switchElecView 가 'spec' 으로
+            //    적어 버리므로 **부르기 전에** 읽는다. BOM 화면은 저장된 BOM 을 그릴 뿐 SAP 조회는 안 한다.
+            let savedElecMode = 'spec';
+            try { savedElecMode = localStorage.getItem('gantt_elec_mode') || 'spec'; } catch(e) {}
             window._switchElecView(savedElecView);
+            if (savedElecMode === 'bom' && window._elecBomOpen) window._elecBomOpen(window._elecView || savedElecView);
         }
         // 🏢 Calendar 탭 진입 시 그룹웨어 일정 겹쳐보기 상태 동기화(js/39) — 켜져 있으면 다시 불러온다
         if (tabName === 'calendar' && window._gwOnCalendarTab) window._gwOnCalendarTab();
@@ -466,7 +472,7 @@
         } else if ((window.ELEC_PART_TYPES || {})[view]) {
             if (window.renderElecCompareTab) window.renderElecCompareTab(view);
         }
-        try { localStorage.setItem('gantt_elec_view', view); } catch(e) {}
+        try { localStorage.setItem('gantt_elec_view', view); localStorage.setItem('gantt_elec_mode', 'spec'); } catch(e) {}
         if (window._elecUpdateModeToggle) window._elecUpdateModeToggle('spec');
     };
 

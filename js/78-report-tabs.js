@@ -50,8 +50,17 @@
         if (wk) {
             var lab = wk.querySelector('.sb-label'); if (lab) lab.textContent = en ? LABEL.en : LABEL.ko;
             wk.title = en ? TIP.en : TIP.ko;
+            // 🧭 [2026-11-26 사용자 요청 "다른 곳 갔다 와도 보던 정보"] 사이드바 '보고/리뷰' 는 **마지막으로 보던 화면**으로.
+            //    예전엔 늘 주간 보고로 열려 리뷰를 보다 다녀오면 다시 골라야 했다. 코드가 부르는 switchTab('weekly') 은 그대로 주간 보고다.
+            wk.setAttribute('onclick', 'window._reportOpenLast()');
         }
     }
+    var LAST_KEY = 'gantt_report_view';
+    window._reportOpenLast = function () {
+        var v = 'weekly';
+        try { v = localStorage.getItem(LAST_KEY) || 'weekly'; } catch (e) { /* 무시 */ }
+        window.switchTab(VIEWS.indexOf(v) >= 0 ? v : 'weekly');
+    };
 
     /** 프로젝트 리뷰가 열려 있으면 '보고/리뷰' 항목이 켜져 있어야 한다. */
     function syncActive() {
@@ -140,6 +149,7 @@
             var act = document.querySelector('.tab-panel.active');
             var prevTab = act ? act.id.replace(/^tab-/, '') : '';
             var r = _switch.apply(this, arguments);
+            try { if (VIEWS.indexOf(tabName) >= 0) localStorage.setItem(LAST_KEY, tabName); } catch (e) { /* 기억은 덤 */ }
             try { syncActive(); } catch (e) { /* 표시만 — 탭 전환을 막지 않는다 */ }
             try { carry(prevTab, tabName); } catch (e) { /* 이어주기는 덤 — 탭 전환을 막지 않는다 */ }
             return r;

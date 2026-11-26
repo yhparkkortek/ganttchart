@@ -1387,6 +1387,8 @@
         }
         window._elecBomRender();
         if (window._elecUpdateModeToggle) window._elecUpdateModeToggle('bom');
+        // 🧭 [2026-11-26] PARTS 에 다시 들어오면 BOM 으로 열리게(js/23 switchTab 이 읽는다)
+        try { localStorage.setItem('gantt_elec_mode', 'bom'); } catch (e) { /* 무시 */ }
     };
 
     window._elecBomClose = function () {

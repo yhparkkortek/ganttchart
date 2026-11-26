@@ -473,6 +473,9 @@ window.bringModalToFront('outer-wrap-id');                  // 열릴 때 즉시
   `height:31px; border-radius:16px; padding:0 10px` — 옆 헤더 버튼과 같은 키(전엔 28px 라 3px 어긋났다), 딸린 🔍 버튼도 31px.
   간트 🔍 AI검색 바(js/26, 표 바로 위)는 22px·둥근 11px·11px 글자(`_GS_BOX`), 색은 테마색(`_updateSearchBarColors` 가 칠한다 —
   2026-11-24 부터 공용 칩도 테마색이라 이제 예외가 아니다).
+- 🔁 2026-11-26 재측정(1600px, 계산값): 헤더 🔍 위젯 11곳(Summary·Customer SPEC·BOM·PARTS·M.C·JIRA·Calendar·주간·Daily·Project Review·Alarm)
+  모두 같은 상자(28px·230px·둥글기 14·12px·테두리 #ccc) + 같은 🔍 버튼(31px) · 헤더 안 검색칸 Project list·Address 둘 다 31px·둥글기 16 ·
+  Project Review `업무 검색`(#ps-q)만 22px(요약 범위 조건이라 일부러 표 위 줄 — 위 "보고 페이지 헤더") → **고칠 것 없음**.
 
 #### 모달 크기 조절 / 이동 / 배경 조작
 - 위 구조(투명 래퍼 + `resize:both`)를 따르면 자동으로 적용됨
@@ -835,6 +838,22 @@ Sample Report **원본저장** 구간이 옛 `/doc/docx` 한 길만 기대해서
 
 그대로인 것: 초기화 ↺ 가 늘 보이는 표(Project list·AI 요약 표)와 걸렸을 때만 보이는 표(근거 사실 표·Project Review 위 필터)가 섞여 있다 — 모양은 같다.
 ⚠️ AI 요약 표는 AI 요약을 만들어야 그려져 화면으로는 못 봤다(코드만).
+
+## 🧭 헤더 드롭다운은 마지막으로 보던 화면을 기억한다 (2026-11-26)
+
+**규칙**(사용자 요청 "다른 곳 갔다 와도 보던 정보"): 페이지 헤더 맨 앞 화면 고르기 드롭다운은 고른 값을 **이 PC 의 localStorage** 에 적고,
+그 페이지에 다시 들어오거나 새로고침해도 그 화면으로 연다.
+
+| 드롭다운 | 저장 키 | 상태 |
+|---|---|---|
+| 알람/공지 | `gantt_alarm_view` | 원래 됨 |
+| 주요부품(PARTS) 구분 | `gantt_elec_view` | 원래 됨 |
+| PARTS **SPEC/BOM** | `gantt_elec_mode` | **추가** — BOM 을 보다 다녀오면 늘 SPEC 으로 돌아왔다. 저장된 BOM 을 그릴 뿐 SAP 조회는 안 한다 |
+| Document 서식 | `gantt_doc_last_form` | 원래 됨 |
+| 보고/리뷰 | `gantt_report_view` | **추가** — 사이드바 `보고/리뷰` 가 늘 주간 보고로 열렸다. 이제 `_reportOpenLast()`(js/78). 코드가 부르는 `switchTab('weekly')`(텔레그램·AI 문답)는 그대로 주간 보고 |
+
+- BOM 탭의 `다단계/단일`·레이아웃 드롭다운은 **지금 보는 BOM 을 조회한 설정**을 보여 준다(js/38 `bomRender`) — 기억이 아니라 그 BOM 에 맞추는 게 맞아서 그대로 뒀다.
+- 검증: 실제 사이드바·드롭다운을 눌러 다른 탭에 다녀오기 + 새로고침 뒤에도 CONV BOM·프로젝트 리뷰·공지로 열리는 것.
 
 ## ▤ 표 행 hover — 한 벌 (2026-11-25)
 
