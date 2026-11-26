@@ -2630,10 +2630,19 @@
         }
     };
 
+    /** ◀ ▶ 📅오늘 — 하루 보기에선 **하루씩**, 월 보기에선 **한 달씩**(2026-11-26 요청 "월 보기에선 이전달·다음달이어야 함").
+     *  월을 옮길 땐 같은 '일' 을 유지하되 그 달에 없으면 말일로(3/31 → 2월이면 2/28) — 하루 보기로 돌아왔을 때 엉뚱한 날이 아니게. */
     window.dailyShiftDay = function (n) {
-        var d = new Date((window._dailyTabDate || ymd()) + 'T00:00:00');
+        var cur = window._dailyTabDate || ymd();
         if (n === 0) window._dailyTabDate = ymd();
-        else { d.setDate(d.getDate() + n); window._dailyTabDate = ymd(d); }
+        else if (window._dailyView === 'month') {
+            var y = +cur.slice(0, 4), m = +cur.slice(5, 7) - 1, day = +cur.slice(8, 10);
+            var last = new Date(y, m + n + 1, 0).getDate();        // 옮긴 달의 말일
+            window._dailyTabDate = ymd(new Date(y, m + n, Math.min(day, last)));
+        } else {
+            var d = new Date(cur + 'T00:00:00');
+            d.setDate(d.getDate() + n); window._dailyTabDate = ymd(d);
+        }
         window.dailyRenderTab();
     };
 
@@ -3385,8 +3394,13 @@
         dailyEnsureSearchWidget();
         var date = window._dailyTabDate || ymd();
         var lbl = document.getElementById('daily-day-label');
+        var monthView = window._dailyView === 'month';
+        // ◀ ▶ 라벨 — 월 보기에선 이전달·다음달(HTML 에 data-i18n 을 달지 않았다: i18n 맵이 HTML 라벨을 덮어쓴다. 언어를 바꾸면 이 탭이 다시 그려져 여기서 맞춘다)
+        var pb = document.getElementById('daily-prev-btn'), nb = document.getElementById('daily-next-btn');
+        if (pb) pb.textContent = monthView ? '◀ ' + T('이전달', 'Prev Month') : '◀ ' + T('이전날', 'Prev Day');
+        if (nb) nb.textContent = monthView ? T('다음달', 'Next Month') + ' ▶' : T('다음날', 'Next Day') + ' ▶';
         if (lbl) {
-            lbl.textContent = dayLabel(date);
+            lbl.textContent = monthView ? T(date.slice(0, 4) + '년 ' + (+date.slice(5, 7)) + '월', date.slice(0, 7)) : dayLabel(date);
             // 🎨 [2026-11-25] 헤더 날짜 글자색 — 일·공휴일=빨강, 토=파랑, 평일은 원래 색(다른 페이지와 같은 규칙, 색은 styles.css/js/21)
             lbl.classList.remove('date-day-hol', 'date-day-sat');
             var dc = window._dateDayCls ? window._dateDayCls(date) : '';

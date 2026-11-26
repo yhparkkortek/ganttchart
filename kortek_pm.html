@@ -1963,9 +1963,9 @@
             <h2 data-page-title="daily">📔 일일 보고</h2>
             <span style="display:inline-block; width:1px; height:16px; background:#ddd; margin:0 12px;"></span>
             <div class="btn-group" style="flex:1; justify-content:center; gap:3px;">
-                <button data-i18n="btn-prev-day" onmouseover="this.style.background=(window._cpRoleHex?window._cpRoleHex('hoverBg'):'#a3d9e0');" onmouseout="this.style.background=(window._cpRoleHex?window._cpRoleHex('bg'):'#e0f5f7');" style="padding:6px 12px; background:#e0f5f7; border:none; color:#00707d; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s; white-space:nowrap;" onclick="window.dailyShiftDay(-1)">◀ 이전날</button>
+                <button id="daily-prev-btn" onmouseover="this.style.background=(window._cpRoleHex?window._cpRoleHex('hoverBg'):'#a3d9e0');" onmouseout="this.style.background=(window._cpRoleHex?window._cpRoleHex('bg'):'#e0f5f7');" style="padding:6px 12px; background:#e0f5f7; border:none; color:#00707d; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s; white-space:nowrap;" onclick="window.dailyShiftDay(-1)">◀ 이전날</button>
                 <span id="daily-day-label" style="font-size:13px; font-weight:bold; color:#444; padding:0 4px; min-width:150px; text-align:center;"></span>
-                <button data-i18n="btn-next-day" onmouseover="this.style.background=(window._cpRoleHex?window._cpRoleHex('hoverBg'):'#a3d9e0');" onmouseout="this.style.background=(window._cpRoleHex?window._cpRoleHex('bg'):'#e0f5f7');" style="padding:6px 12px; background:#e0f5f7; border:none; color:#00707d; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s; white-space:nowrap;" onclick="window.dailyShiftDay(1)">다음날 ▶</button>
+                <button id="daily-next-btn" onmouseover="this.style.background=(window._cpRoleHex?window._cpRoleHex('hoverBg'):'#a3d9e0');" onmouseout="this.style.background=(window._cpRoleHex?window._cpRoleHex('bg'):'#e0f5f7');" style="padding:6px 12px; background:#e0f5f7; border:none; color:#00707d; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s; white-space:nowrap;" onclick="window.dailyShiftDay(1)">다음날 ▶</button>
                 <button data-i18n="btn-today" onmouseover="this.style.background=(window._cpRoleHex?window._cpRoleHex('hoverBg'):'#a3d9e0');" onmouseout="this.style.background=(window._cpRoleHex?window._cpRoleHex('bg'):'#e0f5f7');" style="padding:6px 12px; background:#e0f5f7; border:none; color:#00707d; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s; white-space:nowrap;" onclick="window.dailyShiftDay(0)">📅 오늘</button>
             </div>
             <button id="daily-write-btn" data-i18n="btn-daily-write" onclick="window.dailyToggleModal()" onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';" style="padding:6px 12px; background:#e0f5f7; border:none; color:#00707d; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer;">✏️ 내 보고 쓰기</button>
@@ -2795,7 +2795,7 @@
     <!-- 🔀 저장소 어댑터(Drive ↔ 사내 NAS). 플래그 OFF 기본 — 아무것도 감싸지 않는다 -->
     <script src="js/57-storage-adapter.js?v=2026112591"></script>
     <!-- 📦 Drive → NAS 일괄 이사. 미러는 "쓸 때만" 옮기므로 이게 한 번은 돌아야 한다 -->
-    <script src="js/59-daily-report.js?v=2026112710"></script>
+    <script src="js/59-daily-report.js?v=2026112711"></script>
     <script src="js/60-telegram-qa-bridge.js?v=20261124a4"></script>
     <script src="js/61-mail-evidence.js?v=20261125a1"></script>
     <script src="js/62-period-summary.js?v=2026112706"></script>

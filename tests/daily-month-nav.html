@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>📔 일일보고 월 보기 ◀ ▶ = 이전달·다음달 시험</title></head><body style="margin:0">
+<!-- 📔 [2026-11-26] 월 보기에서 ◀ ▶ 는 하루가 아니라 **한 달**씩, 라벨도 이전달·다음달, 날짜 라벨은 "2026년 11월". 하루 보기는 그대로.
+     진짜 kortek_pm.html 을 iframe 으로 띄워 진짜 버튼(`#daily-prev-btn`·`#daily-next-btn`·`#daily-view-btn`)을 누른다. 가짜는 NAS 경계 셋(`dailyEnsureIdentity`·`dailyLoadRoster`·`dailyLoadMonth`/`dailyLoadDay`)뿐.
+     ⚠️ 빈 앱 전용(프로젝트가 열린 탭에서 돌리지 말 것). 실행: chrome --headless=new --disable-gpu --allow-file-access-from-files --window-size=1500,900
+        --virtual-time-budget=40000 --dump-dom file:///.../tests/daily-month-nav.html → <pre id="out"> (마지막 줄 N/M) -->
+<iframe id="f" src="../kortek_pm.html?dmonth=1" style="border:0;width:1400px;height:800px;"></iframe>
+<pre id="out">running…</pre>
+<script>
+var out = [], pass = 0, fail = 0;
+function chk(c, l) { c ? pass++ : fail++; out.push((c ? 'ok   ' : 'FAIL ') + l); }
+function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+var f = document.getElementById('f');
+f.onload = async function () {
+  await sleep(2500);
+  var W = f.contentWindow, D = f.contentDocument;
+  try {
+    if (W.currentDriveFileId) { out.push('SKIP 프로젝트가 열려 있다'); throw new Error('skip'); }
+    D.querySelectorAll('[id$="-overlay"],[id$="-modal"]').forEach(function (x) { if (x.style) x.style.display = 'none'; });
+    W.DAILY_SCAN.otherProjects = false;
+    W.dailyEnsureIdentity = async function () { return true; };
+    W.dailyLoadRoster = async function () { return []; };
+    W.dailyLoadMonth = async function () { return {}; };
+    W.dailyLoadDay = async function () { return []; };
+    W._currentLang = 'ko';
+    W.switchTab('daily'); await sleep(600);
+    var prev = D.getElementById('daily-prev-btn'), next = D.getElementById('daily-next-btn'), lbl = D.getElementById('daily-day-label'), view = D.getElementById('daily-view-btn'), today = D.querySelector('[onclick="window.dailyShiftDay(0)"]');
+    var go = async function (b) { b.click(); await sleep(700); };
+    var tx = function (e) { return e.textContent.replace(/\s+/g, ' ').trim(); };
+    var ymd = W._dailyYmd;
+    // ── 하루 보기(기본)는 그대로 ──
+    W._dailyTabDate = '2026-11-26'; W.dailyRenderTab(); await sleep(600);
+    chk(/이전날/.test(tx(prev)) && /다음날/.test(tx(next)), '하루 보기 라벨은 이전날·다음날 — ' + tx(prev) + ' / ' + tx(next));
+    await go(prev); chk(W._dailyTabDate === '2026-11-25', '하루 보기: ◀ 는 하루 전 — ' + W._dailyTabDate);
+    await go(next); await go(next); chk(W._dailyTabDate === '2026-11-27', '하루 보기: ▶ 는 하루 뒤 — ' + W._dailyTabDate);
+    // ── 월 보기 ──
+    W._dailyTabDate = '2026-11-26'; await go(view);
+    chk(W._dailyView === 'month', '월 보기로 바뀐다');
+    chk(/이전달/.test(tx(prev)) && /다음달/.test(tx(next)), '월 보기 라벨은 이전달·다음달 — ' + tx(prev) + ' / ' + tx(next));
+    chk(/2026년 11월/.test(tx(lbl)) && !/\(.\)/.test(tx(lbl)), '월 보기 날짜 라벨은 "2026년 11월" — ' + tx(lbl));
+    await go(prev); chk(W._dailyTabDate === '2026-10-26' && /2026년 10월/.test(tx(lbl)), '월 보기: ◀ 는 한 달 전 — ' + W._dailyTabDate + ' / ' + tx(lbl));
+    await go(next); await go(next); chk(W._dailyTabDate === '2026-12-26' && /2026년 12월/.test(tx(lbl)), '월 보기: ▶ 는 한 달 뒤 — ' + W._dailyTabDate + ' / ' + tx(lbl));
+    await go(next); chk(W._dailyTabDate === '2027-01-26' && /2027년 1월/.test(tx(lbl)), '12월 → 다음 해 1월 — ' + W._dailyTabDate);
+    await go(prev); await go(prev); await go(prev); await go(prev); await go(prev); await go(prev); await go(prev); await go(prev); await go(prev); await go(prev); await go(prev); await go(prev);
+    chk(W._dailyTabDate === '2026-01-26', '12번 뒤로 가면 정확히 1년 전 달 — ' + W._dailyTabDate);
+    await go(prev); chk(W._dailyTabDate === '2025-12-26', '1월 → 전 해 12월 — ' + W._dailyTabDate);
+    // 말일 보정 — 31일에서 달을 옮기면 그 달 말일로
+    W._dailyTabDate = '2026-03-31'; W.dailyRenderTab(); await sleep(500);
+    await go(prev); chk(W._dailyTabDate === '2026-02-28', '3/31 에서 이전달 → 2/28(말일 보정) — ' + W._dailyTabDate);
+    W._dailyTabDate = '2026-01-31'; W.dailyRenderTab(); await sleep(500);
+    await go(next); chk(W._dailyTabDate === '2026-02-28', '1/31 에서 다음달 → 2/28 — ' + W._dailyTabDate);
+    W._dailyTabDate = '2028-01-31'; W.dailyRenderTab(); await sleep(500);
+    await go(next); chk(W._dailyTabDate === '2028-02-29', '윤년 1/31 → 2/29 — ' + W._dailyTabDate);
+    // 📅 오늘 — 월 보기에서도 오늘이 든 달로
+    await go(today); chk(W._dailyTabDate === ymd(), '📅 오늘은 오늘로 — ' + W._dailyTabDate);
+    // 하루 보기로 돌아오면 다시 하루씩
+    await go(view);
+    chk(W._dailyView === 'day' && /이전날/.test(tx(prev)), '하루 보기로 돌아오면 라벨도 이전날 — ' + tx(prev));
+    var before = W._dailyTabDate; await go(prev);
+    var d0 = new Date(before + 'T00:00:00'); d0.setDate(d0.getDate() - 1);
+    chk(W._dailyTabDate === ymd(d0), '하루 보기로 돌아오면 ◀ 는 다시 하루씩 — ' + W._dailyTabDate);
+    // 영어
+    W._currentLang = 'en'; await go(view);
+    chk(/Prev Month/.test(tx(prev)) && /Next Month/.test(tx(next)), '영어 월 보기 라벨 — ' + tx(prev) + ' / ' + tx(next));
+    chk(/^\d{4}-\d{2}$/.test(tx(lbl)), '영어 월 보기 날짜 라벨은 YYYY-MM — ' + tx(lbl));
+    W._currentLang = 'ko';
+  } catch (e) { if (e.message !== 'skip') out.push('SETUP ' + e.message); }
+  out.push(pass + '/' + (pass + fail));
+  document.getElementById('out').textContent = out.join('\n');
+};
+</script></body></html>
