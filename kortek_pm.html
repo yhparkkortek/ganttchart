@@ -18,7 +18,7 @@
 <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
 
-<link rel="stylesheet" href="styles.css?v=2026112699q">
+<link rel="stylesheet" href="styles.css?v=2026112701">
 <!-- 💡 [2026-09-04] FOUC 방지: 저장된 테마 CSS를 첫 렌더 전에 즉시 주입.
      styles.css가 파싱된 직후, <body>가 렌더되기 전에 실행되므로
      "청록 → 파랑" 깜빡임 없이 바로 올바른 테마색이 적용된다.
@@ -117,6 +117,7 @@
                 <div class="tb-menu-label" id="settings-group-schedule">🗓️ 일정</div>
                 <button id="overdue-cleanup-btn" class="topbar-menu-item" onclick="window.openOverdueCleanup &amp;&amp; window.openOverdueCleanup(); window.closeTopbarMenu('settings-menu-popup');" title="날짜가 지난 미완료 업무를 한 화면에 모아 정리합니다 (메일에서 들어온 행은 세지 않습니다)">🧹 밀린 업무 정리</button>
                 <button id="holiday-btn" class="topbar-menu-item" onclick="window.openHolidayManager()">🗓️ 휴일 등록</button>
+                <button id="report-match-btn" class="topbar-menu-item" onclick="window.openReportMatchSetting &amp;&amp; window.openReportMatchSetting(); window.closeTopbarMenu('settings-menu-popup');" title="일일보고·주간보고에 올릴 업무 기준 — 그 날(주)에 시작한 업무만 / 기간이 걸친 업무도" data-en-title="Which tasks go into the daily/weekly report — started in range only, or also overlapping">📅 보고 업무 기준</button>
                 <div class="tb-menu-sep"></div>
                 <div class="tb-menu-label" id="settings-group-help">🛠 진단·도움말</div>
                 <button id="modal-pos-reset-btn" class="topbar-menu-item" onclick="window._modalPosReset && window._modalPosReset(); window.closeTopbarMenu('settings-menu-popup');" title="옮기거나 크기를 바꿔 둔 모달 위치를 모두 지웁니다 — 다음에 열 때 기본 위치·크기로 엽니다" data-en-title="Clears every modal position/size you moved or resized — they open at the default next time">🪟 모달 위치 초기화</button>
@@ -864,7 +865,7 @@
         <button id="gantt-today-btn"
             onclick="window.ganttSearchToday && window.ganttSearchToday()"
             onmouseover="this.style.background=(window._cpRoleHex?window._cpRoleHex('hoverBg'):'#a3d9e0');" onmouseout="this.style.background=(window._cpRoleHex?window._cpRoleHex('bg'):'#e0f5f7');"
-            title="오늘 날짜 업무만 펼쳐서 보기 (한 번 더 누르면 해제)" data-i18n-title="gantt-today-hint"
+            title="전체 업무를 펼치고 오늘 위치로 이동" data-i18n-title="gantt-today-hint"
             style="padding:6px 12px; background:#e0f5f7; border:none; color:#00707d; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s; white-space:nowrap; margin-left:4px;">📅 오늘</button>
     </div>
 
@@ -2083,12 +2084,12 @@
 <script src="js/04b-core-app-drive-sync.js?v=2026112531"></script>
 <script src="js/04c-core-app-mail-pipeline.js?v=2026112591"></script>
 <script src="js/04d-core-app-gantt-core.js?v=2026112591"></script>
-<script src="js/04e-core-app-undo-redo.js?v=2026112701"></script>
+<script src="js/04e-core-app-undo-redo.js?v=2026112704b"></script>
 <script src="js/04f-core-app-upload-utils-1.js?v=2026112591"></script>
 <script src="js/04g-core-app-upload-utils-2.js?v=2026112871"></script>
 <script src="js/04h-core-app-upload-utils-3.js?v=2026112699q"></script>
 <script src="js/04i-core-app-upload-utils-4.js?v=2026112801"></script>
-<script src="js/04j-core-app-upload-utils-5.js?v=2026112594"></script>
+<script src="js/04j-core-app-upload-utils-5.js?v=2026112622"></script>
 <script src="js/04k-core-app-filter-export.js?v=2026112501k"></script>
 
 <script src="js/05-drive-sync-optimize.js?v=20261124a4"></script>
@@ -2097,7 +2098,7 @@
 
 <script src="js/07-data-loss-safeguard.js?v=20261124a4"></script>
 
-<script src="js/08-filter-ui.js?v=20261124a4"></script>
+<script src="js/08-filter-ui.js?v=20261125a4"></script>
 
 <script src="js/09-autosave-user-id.js?v=2026112591"></script>
 
@@ -2113,7 +2114,7 @@
 <!-- 14-ai-mail-analysis.js 분리 (토큰 절약 · 협업용): 로딩 순서는 기존과 동일하게 유지 -->
 <script src="js/14a-ai-mail-analysis-1.js?v=2026112585"></script>
 <script src="js/14b-ai-mail-analysis-2.js?v=2026112591"></script>
-<script src="js/14c-task-inbox.js?v=2026112699q"></script>
+<script src="js/14c-task-inbox.js?v=2026112700q"></script>
 <script src="js/14d-distribution-ledger.js?v=2026112591"></script>
 
 
@@ -2686,10 +2687,10 @@
 
 <script src="js/18-mail-analyzer-modal-drag.js?v=20261124a4"></script>
 
-<script src="js/19-shared-modal-drag.js?v=2026112621"></script>
+<script src="js/19-shared-modal-drag.js?v=2026112623"></script>
 <script src="js/19b-dropdown-reorder.js?v=20261125abs"></script>
 
-<script src="js/20-weekly-report.js?v=2026112699q"></script>
+<script src="js/20-weekly-report.js?v=2026112701"></script>
 
 </div> <!-- /#app-main -->
 
@@ -2730,7 +2731,7 @@
     </div>
 </div>
 
-<script src="js/21-color-palette.js?v=2026112865"></script>
+<script src="js/21-color-palette.js?v=2026112866"></script>
 
 <!-- 22-tabs-summary-mctable.js 분리 (토큰 절약 · 협업용): 로딩 순서는 기존과 동일하게 유지 -->
 <script src="js/22a-summary-mctable-parse.js?v=2026112596"></script>
@@ -2753,7 +2754,7 @@
 
 <script src="js/27-topic-contamination.js?v=20261124a4"></script>
 
-<script src="js/26-gantt-search.js?v=2026112508"></script>
+<script src="js/26-gantt-search.js?v=2026112624"></script>
 
 <script src="js/28-new-project-wizard.js?v=2026112801"></script>
 
@@ -2794,15 +2795,17 @@
     <!-- 🔀 저장소 어댑터(Drive ↔ 사내 NAS). 플래그 OFF 기본 — 아무것도 감싸지 않는다 -->
     <script src="js/57-storage-adapter.js?v=2026112591"></script>
     <!-- 📦 Drive → NAS 일괄 이사. 미러는 "쓸 때만" 옮기므로 이게 한 번은 돌아야 한다 -->
-    <script src="js/59-daily-report.js?v=2026112905"></script>
+    <script src="js/59-daily-report.js?v=2026112709"></script>
     <script src="js/60-telegram-qa-bridge.js?v=20261124a4"></script>
     <script src="js/61-mail-evidence.js?v=20261125a1"></script>
-    <script src="js/62-period-summary.js?v=2026112705"></script>
+    <script src="js/62-period-summary.js?v=2026112706"></script>
     <script src="js/78-report-tabs.js?v=2026112691"></script>
     <script src="js/79-fact-table.js?v=2026112699e"></script>
     <script src="js/80-report-row-ops.js?v=2026112602"></script>
     <script src="js/81-fact-dup.js?v=2026112702"></script>
     <script src="js/82-tab-modal-park.js?v=2026112601"></script>
+    <script src="js/83-nav-return.js?v=2026112601"></script>
+    <script src="js/84-report-match-setting.js?v=2026112701"></script>
     <script src="js/63-daily-draft-qa.js?v=20261124a4"></script>
     <script src="js/64-user-switch.js?v=20261124a4"></script>
     <script src="js/65-overdue-cleanup.js?v=2026112571"></script>
@@ -2820,7 +2823,7 @@
     <script src="js/74-mail-routing.js?v=20261125a0"></script>
     <!-- 📋 전자결재 문서 → 프로젝트 배치(74 의 판정기를 쓴다) -->
     <script src="js/75-approval-intake.js?v=2026112594"></script>
-    <script src="js/76-product-spec.js?v=2026112521"></script>
+    <script src="js/76-product-spec.js?v=2026112524"></script>
     <script src="js/77-edid-parse.js?v=2026112501e"></script>
 
 </body>
