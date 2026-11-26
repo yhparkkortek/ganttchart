@@ -111,7 +111,7 @@
         var res = await window.generatePeriodSummary('day');
         ok('프롬프트는 사실 목록만 싣고 #G 근거를 요구한다', prompts.length === 1 && /\[사실 목록\]/.test(prompts[0]) && /#G1 \[/.test(prompts[0]) && /반드시/.test(prompts[0]) && !/완료 \d+/.test(prompts[0]), prompts[0] && prompts[0].slice(0, 300));
         ok('근거 없는 문장 1개 제거 · 2행 유지 · 캐시 저장', res && res.dropped === 1 && res.rows.length === 2 && res.요약.length === 1 && res.요청결정.length === 1 && window.projectMeta.aiPeriodSummary.day.rangeKey === window._psCollectFacts('day').sig, res);
-        ok('화면에 AI 요약 표와 제거 수가 보인다', /패널 단가 회신을 요청받음/.test(body.textContent) && /근거 없는 항목 1개/.test(body.textContent) && document.querySelectorAll('#ps-ai-tbl tbody tr').length === 2);
+        ok('화면에 AI 요약 표와 제거 수가 보인다', /패널 단가 회신을 요청받음/.test(body.textContent) && /근거 없음 1 제거/.test(body.textContent) && document.querySelectorAll('#ps-ai-tbl tbody tr').length === 2);
         ok('보관함에 1건 저장', Object.keys(ARCH).length === 1, Object.keys(ARCH));
         // ♻️ 같은 조건이면 AI 를 다시 부르지 않는다(보관본 재사용)
         if (window.projectMeta.aiPeriodSummary) delete window.projectMeta.aiPeriodSummary.day;
@@ -210,6 +210,9 @@
             ok('"프로젝트를 열어야 바꿀 수 있다" 안내 띠는 없다', !/그 프로젝트를 열어야/.test(document.getElementById('psummary-page').textContent));
             window._psTblSet({ view: 'rows' });
             ok('행 목록 보기로 바꾸면 회의 상자가 없다', !document.getElementById('ps-meet-0'));
+            var st = document.getElementById('ps-sticky');
+            var metaSpan = st && [].slice.call(st.querySelectorAll('span[title]')).filter(function (e) { return /^🤖 요약/.test(e.textContent); })[0];
+            ok('🤖 요약 정보는 📅 기간 줄(메일 건수 옆)에 한 줄로', !!metaSpan && /메일/.test(metaSpan.parentNode.textContent) && (st.innerText.match(/🤖/g) || []).length === 1 && !/건만으로/.test(st.innerText), st && st.innerText.slice(0, 300));
         }
         // 🔁 [2026-11-23 "엑셀에 근거가 2번"] 같은 행의 두 사본(열린 쪽 #G7 · 훑은 쪽 #G200007)을 근거로 집어도 하나로
         var dup = window._psRowsFromAi({ items: [{ 분류: '한 일', 내용: 'x', 근거: ['#G7', '#G200007', '#G7'] }] },

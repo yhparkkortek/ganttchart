@@ -991,11 +991,11 @@
         h.push('<div id="ai-summary-report-content">');
         // 🗜 [2026-11-23 사용자 요청 "컴팩트하게"] 기간 · 건수를 한 줄에, 말은 짧게(뜻은 title 말풍선에).
         // 📌 [2026-11-23 "첨부 영역은 스크롤 시 고정"] 기간 제목 줄은 아래 고정 머리(#ps-sticky)로 간다.
-        var headHtml = ('<div style="display:flex; gap:10px; flex-wrap:wrap; align-items:baseline; margin-bottom:8px;"><div style="font-size:12.5px; font-weight:bold; color:#2c5f8a; white-space:nowrap;">📅 ' + esc(col.range.label) + '</div>' +
+        var headHtml = ('<div style="display:flex; gap:10px; flex-wrap:wrap; align-items:baseline; margin-bottom:4px;"><div style="font-size:12.5px; font-weight:bold; color:#2c5f8a; white-space:nowrap;">📅 ' + esc(col.range.label) + '</div>' +
                '<div style="font-size:11px; color:#777;" title="' + esc(T('메일 유래 업무 / 전체 메일 업무', 'mail-derived tasks / all mail tasks')) + '">' + esc(T('메일 ' + (col.total > col.facts.length ? col.facts.length + '(상한)' : col.facts.length) + '/' + col.scanned + '건' + (col.jiraCount ? ' · JIRA ' + col.jiraCount : '') + (col.projects.length > 1 ? ' · 프로젝트 ' + col.projects.length : '') + (col.filtered ? ' · 필터' : ''), 'Mail ' + col.facts.length + '/' + col.scanned + (col.jiraCount ? ' · JIRA ' + col.jiraCount : '') + (col.projects.length > 1 ? ' · ' + col.projects.length + ' projects' : '') + (col.filtered ? ' · filtered' : ''))) +
                (col.jiraScan && col.jiraScan.busy ? ' <span style="color:#1971c2;">⏳ ' + esc(T('JIRA 확인 중…', 'Checking JIRA…')) + '</span>' : '') +
                (col.jiraScan && col.jiraScan.err ? ' <span style="color:#b1432f;">⚠️ JIRA: ' + esc(col.jiraScan.err) + '</span>' : '') +
-               '</div>' + archivePillHtml() + '</div>');
+               '<!--psmeta--></div>' + archivePillHtml() + '</div>');
         // 🖥 표가 들어가니 모달을 한 번 넓힌다(사람이 줄여 둔 폭은 그 뒤로 건드리지 않는다).
         try {
             var box = pageActive() ? null : document.getElementById('ai-summary-modal'); box = box && box.firstElementChild;
@@ -1065,7 +1065,7 @@
         //    ② 머리에 불투명 팔레트 배경(#e0f5f7 — js/21 이 테마색으로 바꾼다)과 쌓임 순서.
         if (body.id === 'psummary-page') { body.style.display = 'flex'; body.style.flexDirection = 'column'; body.style.overflow = 'hidden'; body.style.minHeight = '0'; }
         body.innerHTML = '<div id="ps-sticky" style="flex-shrink:0; position:relative; z-index:6; background:#e0f5f7; padding-bottom:4px; margin-bottom:6px; border-bottom:1px solid #a3d9e0;">' +
-            toolbarHtml(kind, col) + headHtml + secHtml + '<div id="ps-meet-slot"></div></div>' +
+            toolbarHtml(kind, col) + headHtml.replace('<!--psmeta-->', summaryMetaHtml(shown)) + secHtml + '<div id="ps-meet-slot"></div></div>' +
             '<div id="ps-scroll" style="flex:1; min-height:0; overflow:auto;">' + h.join('') + '</div>';
         if (!(shown && shown.rows.length)) _psMeetHtml = '';   // 표가 없으면 회의 상자도 없다(지난번 것이 남지 않게)
         paintMeet();
@@ -1559,11 +1559,7 @@
         var opt = function (list, cur, allLabel) { return '<option value="">' + esc(allLabel) + '</option>' + list.map(function (v) { return '<option value="' + esc(v) + '"' + (v === cur ? ' selected' : '') + '>' + esc(v) + '</option>'; }).join(''); };
         var selS = function (on) { return window._uiSelectStyle(!!on) + ' max-width:150px;'; };   // 고르면 켜진 표시(다른 필터 상자와 같게)
         var smallBtn = window._uiBtnStyle();
-        var meta = '🤖 ' + esc(T('사실 ' + (s.factCount || 0) + '건만으로', 'from ' + (s.factCount || 0) + ' facts')) + ' · ' + esc(String(s.at || '').replace('T', ' ').slice(0, 16)) +
-            (s.by ? ' · ' + esc(s.by) : '') + (s.dropped ? ' · ' + esc(T('근거 없는 항목 ' + s.dropped + '개 제거', s.dropped + ' ungrounded removed')) : '') +
-            (s.reused ? ' · <b style="color:#2f9e44;">♻️ ' + esc(T('보관본 재사용 (AI 0회)', 'reused (0 AI calls)')) + '</b>' : '') +
-            ((s.pv || 0) < P.promptVer ? ' · <b style="color:#c77700;">⚠️ ' + esc(T('옛 형식 요약 — 🔄 새로 생성하면 회의용 문장으로', 'Old-format summary — regenerate for meeting-style text')) + '</b>' : '') +
-            (s.stale ? ' · <b style="color:#c77700;">⚠️ ' + esc(T('그 뒤 사실이 ' + s.stale.from + '→' + s.stale.to + '건으로 바뀜 — 🔄 새로 생성하면 반영', 'facts changed ' + s.stale.from + '→' + s.stale.to + ' — regenerate to include')) + '</b>' : '');
+        var meta = '';   // 🗜 [2026-11-26] 요약 정보는 기간 제목 줄 한 줄로 옮겼다(summaryMetaHtml)
         // 📚 보관본 안내는 기간 제목 줄로 옮겼다(archivePillHtml).
         var banner = '';
         var _oldBanner = false
@@ -1596,8 +1592,25 @@
             '<span style="flex:1;"></span>' +
             (s.archiveView ? '' : '<button onclick="window._psRegenerate()" style="' + smallBtn + '" title="' + esc(T('보관본을 두고 AI 로 새로 만든다', 'Generate again with AI')) + '">🔄 ' + esc(T('새로 생성', 'Regenerate')) + '</button>') +
             archiveSelectHtml() +
-            '</div>' +
-            '<div style="font-size:10.5px; color:#999; margin-bottom:4px;">' + meta + '</div>';
+            '</div>';
+    }
+    /** 🗜 [2026-11-26 사용자 요청 "안내문 중복을 줄이고 1줄로"] AI 요약 정보 — 기간 제목 줄(📅 … · 메일 N건) 뒤에 이어 붙인다.
+     *  옛 줄은 "🤖 사실 20건만으로 · 시각 · 사람 · ♻️ 보관본 재사용 (AI 0회) · ⚠️ 그 뒤 사실이 20→25건으로 바뀜 — 🔄 새로 생성하면 반영" 으로
+     *  메일 건수와 겹치고 길었다 → 짧은 말 + 자세한 뜻은 말풍선(title). */
+    function summaryMetaHtml(s) {
+        if (!s) return '';
+        var at = String(s.at || '').replace('T', ' ').slice(5, 16);   // 11-26 04:38
+        var tip = T('AI 요약: 사실 ' + (s.factCount || 0) + '건으로 만듦 · ' + String(s.at || '').replace('T', ' ').slice(0, 16) + (s.by ? ' · ' + s.by : '') +
+                    (s.dropped ? ' · 근거 없는 항목 ' + s.dropped + '개 제거' : '') + (s.reused ? ' · 보관본 재사용(AI 0회)' : ''),
+                    'AI summary from ' + (s.factCount || 0) + ' facts · ' + String(s.at || '').replace('T', ' ').slice(0, 16));
+        var parts = ['🤖 ' + esc(T('요약 ', 'Summary ') + at) + (s.by ? ' ' + esc(s.by) : '')];
+        if (s.reused) parts.push('<span style="color:#2f9e44;">♻️ ' + esc(T('보관본', 'archived')) + '</span>');
+        if (s.dropped) parts.push(esc(T('근거 없음 ' + s.dropped + ' 제거', s.dropped + ' ungrounded')));
+        var warn = [];
+        if ((s.pv || 0) < P.promptVer) warn.push(T('옛 형식', 'old format'));
+        if (s.stale) warn.push(T('사실 ' + s.stale.from + '→' + s.stale.to + '건', 'facts ' + s.stale.from + '→' + s.stale.to));
+        if (warn.length) parts.push('<b style="color:#c77700;" title="' + esc(T('🔄 새로 생성하면 반영됩니다', 'Regenerate to include')) + '">⚠️ ' + esc(warn.join(' · ')) + ' — 🔄 ' + esc(T('새로 생성', 'regenerate')) + '</b>');
+        return ' · <span title="' + esc(tip) + '">' + parts.join(' · ') + '</span>';
     }
     /** 📚 보관본을 보는 중이면 기간 제목 줄 오른쪽에 작은 띠(칩과 같은 높이). */
     function archivePillHtml() {
