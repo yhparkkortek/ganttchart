@@ -1023,9 +1023,9 @@
                     + '<td class="' + (window._dateDayCls ? window._dateDayCls(it.updated) : '') + '" style="padding:6px 8px; text-align:center; color:#888;">' + esc((it.updated || '').slice(0, 10)) + '</td>'
                     + '</tr>';
             }).join('')
-            : '<tr><td colspan="' + (sim ? 9 : 8) + '" style="padding:24px; text-align:center; color:#999;">'
+            : '<tr><td colspan="' + (sim ? 9 : 8) + '" style="padding:24px 10px; text-align:center; color:#999; font-size:12.5px;">'
                 + T('필터 조건에 맞는 이슈가 없습니다 — ', 'No issues match the current filters — ')
-                + '<button onclick="window._jiraClearAllFilters(\'search\')" style="border:none; background:none; color:var(--ui-accent, #00707d); cursor:pointer; text-decoration:underline; font-size:12px;">'
+                + '<button onclick="window._jiraClearAllFilters(\'search\')" style="border:none; background:none; color:var(--ui-accent, #00707d); cursor:pointer; text-decoration:underline; font-size:12.5px;">'
                 + T('필터 초기화', 'clear filters') + '</button></td></tr>';
         // ⚠️ 머리글은 스크롤해도 위에 붙어 있게(sticky) — 50줄을 내리다 보면 어느 열인지 잊는다
         var whatNote = (_searchMode === 'text' && _searchNote) ? '<div style="font-size:11px; color:#00707d; margin:6px 0 0;">' + esc(_searchNote) + '</div>' : '';
