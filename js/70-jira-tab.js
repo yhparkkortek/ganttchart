@@ -514,7 +514,7 @@
                 var metaTxt = metaCellText(it);
                 // 🦓 [2026-11-24] 다른 페이지와 같은 흰색 + 팔레트 제브라(tr 에 — hover 의 inline 색이 이기게)
                 return '<tr' + (i % 2 ? ' class="jira-zebra-b"' : '') + ' onclick="window._jiraOpenIssueModal(\'' + esc(it.key) + '\')" style="cursor:pointer; border-bottom:1px solid #f0f0f0;">'
-                    + '<td style="padding:6px 8px; text-align:center; color:#999;">' + (i + 1) + '</td>'
+                    + '<td style="padding:6px 8px; text-align:center; font-size:11.5px; color:#888;">' + (i + 1) + '</td>'
                     + '<td style="padding:6px 8px; color:#00707d; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">' + esc(it.key) + '</td>'
                     + '<td style="padding:6px 8px;">' + esc(it.summary) + '</td>'
                     + '<td style="padding:6px 8px; text-align:center;"><span style="' + window._uiBadgeStyle() + ' background:' + c.bg + '; color:' + c.fg + ';">' + esc(it.status) + '</span></td>'

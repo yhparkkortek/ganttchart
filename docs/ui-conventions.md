@@ -422,8 +422,13 @@ window.bringModalToFront('outer-wrap-id');                  // 열릴 때 즉시
   전부 보통(행 번호는 메타라 내용과 다투지 않게). JIRA **키 칸**만 식별자 중 혼자 굵게 → 보통(테마색은 유지 —
   Project list KTK PN 같은 다른 식별자 칸과 같게).
 - Notice·예약 규칙의 두 줄 칸(굵은 제목 + 작은 회색 설명)은 제목이 그 칸의 머리라 굵게 둔다.
-- 남은 차이(이번엔 굵기만): No. 칸의 **크기·색**이 페이지마다 다르다(Alarm·Notice 11.5 회색 · Address·M.C 12.5 진회색 ·
-  Project list 11 테마색 · JIRA 12.5 연회색).
+
+#### 행 번호(No.) 칸 — 11.5px · 회색 `#888` · 보통 굵기 · 가운데 (2026-11-26)
+- 전엔 페이지마다 달랐다: Alarm·Notice 11.5 회색 · Address·Customer SPEC·M.C 12.5 진회색 · Project list 11 테마색 · JIRA 12.5 연회색.
+  → Alarm·Notice 모양 한 벌로. 행 번호는 메타라 내용보다 한 단계 작고 흐리게.
+- 정하는 곳: `.bm-no`(styles.css — Address·Customer SPEC·M.C 가 같이 쓴다) · `.pl-table td.pl-no` + js/55 의 열 CSS ·
+  js/70 JIRA 연결 표 · js/22c Alarm · js/22b Notice 인라인. 새 표는 `.bm-no` 클래스를 쓰거나 같은 값을 줄 것.
+- 누르면 메뉴가 열리는 No. 칸(Project list 행 메뉴·묶음 선택)도 색으로 표시하지 않는다 — 손가락 커서가 알려 준다.
 
 #### 표 안 선택 체크박스 — 14px (2026-11-24)
 - 페이지 표의 행 선택·전체 선택·켜고 끄는 칸 체크박스는 `width:14px; height:14px;`(Alarm·Notice·간트 AI검색 선택·Summary 주요자재).

@@ -973,7 +973,7 @@ thead th { text-align: center; }
     position: absolute; right: 3px; top: 50%; transform: translateY(-50%);
     margin: 0; font-size: 12px; line-height: 1; white-space: nowrap;
 }
-.pl-table td.pl-no { color: #888; font-size: 11px; }
+.pl-table td.pl-no { color: #888; font-size: 11.5px; }
 
 /* Alarm 탭: 추가 #alarm-view-alarm 래퍼가 사이에 있어 별도 처리.
    JS(_switchAlarmView)가 display:flex/'none' 으로 뷰 전환 — 'flex'를 직접 지정하므로 !important 불필요. */
@@ -1294,7 +1294,8 @@ tbody[id^="sum-materials-rows-"] input { font-size: inherit; font-family: inheri
 .notice-icon-orange:hover { background-color:#e67e22 !important; color:#fff !important; }
 .notice-icon-red:hover { background-color:#e03131 !important; color:#fff !important; }
 /* Brief SPEC / M.C Table: NO 클릭 팝업 + 묶음 선택 */
-.bm-no { cursor:pointer; text-align:center; user-select:none; }
+/* 🔢 [2026-11-26] 행 번호(No.) 칸 한 벌 — 11.5px 회색(Alarm·Notice·Project list·JIRA 와 같게). 전엔 본문 글자(12.5 진회색) 그대로였다. */
+.bm-no { cursor:pointer; text-align:center; user-select:none; font-size:11.5px; color:#888; }
 .bm-no:hover { background-color:#e9ecef; }
 tr.bm-selected > td { background-color:#fff3cd !important; }
 /* 💡 [2026-08-31 신규] 노란 배경만으로는 선택된 행 경계가 잘 안 보인다는 지적 — 위/아래 테두리로
